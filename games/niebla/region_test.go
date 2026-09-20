@@ -68,17 +68,73 @@ func TestRegionLayoutIsSound(t *testing.T) {
 		t.Errorf("the layout has %d rocks and %d bushes, want 4 or more of each",
 			rocks, bushes)
 	}
-	// The attrition-free zone must let the colony mine one resource of each
-	// type in comfort, from deposits generously long.
-	if insideOils < 6 {
-		t.Errorf("only %d oil tiles inside the bubble, want 6 or more", insideOils)
+	// The attrition-free zone must let the colony mine one resource of
+	// each type in comfort: a patch of each sits inside the bubble.
+	if insideOils < 4 {
+		t.Errorf("only %d oil tiles inside the bubble, want 4 or more", insideOils)
 	}
-	if insideVeins < 6 {
-		t.Errorf("only %d lilac tiles inside the bubble, want 6 or more", insideVeins)
+	if insideVeins < 4 {
+		t.Errorf("only %d lilac tiles inside the bubble, want 4 or more", insideVeins)
 	}
 	if fogLineRadius <= coreBubbleRadius {
 		t.Errorf("the fog line at %v is not beyond the bubble at %v",
 			fogLineRadius, coreBubbleRadius)
+	}
+}
+
+// TestDepositsComeInFarPatches pins the deposits' shape and spread: a
+// patch is four tiles, and of each kind at least two patches stand far
+// out, past 7 tiles (over a kilometer) from the core, so the zoomed-in
+// region is empty ground and the hauls out there are long.
+func TestDepositsComeInFarPatches(t *testing.T) {
+	for _, c := range []struct {
+		kind byte
+		name string
+	}{
+		{kindOil, "oil"},
+		{kindLilac, "lilac"},
+	} {
+		seen := map[[2]int]bool{}
+		far := 0
+		for row := 0; row < regionRows; row++ {
+			for col := 0; col < regionCols; col++ {
+				if tileAt(col, row) != c.kind || seen[[2]int{col, row}] {
+					continue
+				}
+				size := 0
+				patchFar := false
+				queue := [][2]int{{col, row}}
+				seen[[2]int{col, row}] = true
+				for len(queue) > 0 {
+					tile := queue[0]
+					queue = queue[1:]
+					size++
+					if tileDistance(tile[0], tile[1]) > 7 {
+						patchFar = true
+					}
+					for _, n := range [4][2]int{
+						{tile[0] + 1, tile[1]},
+						{tile[0] - 1, tile[1]},
+						{tile[0], tile[1] + 1},
+						{tile[0], tile[1] - 1},
+					} {
+						if tileAt(n[0], n[1]) == c.kind && !seen[n] {
+							seen[n] = true
+							queue = append(queue, n)
+						}
+					}
+				}
+				if size != 4 {
+					t.Errorf("a %s patch holds %d tiles, want 4", c.name, size)
+				}
+				if patchFar {
+					far++
+				}
+			}
+		}
+		if far < 2 {
+			t.Errorf("only %d far %s patches, want 2 or more past 7 tiles out", far, c.name)
+		}
 	}
 }
 
@@ -159,18 +215,37 @@ func TestThingsAtKnowsTheRegion(t *testing.T) {
 		t.Fatalf("the layout has no oil pool or no lilac vein to test")
 	}
 
+	// A deposit tile shows its whole patch's card, at the patch's amount.
 	if things := thingsAt(s, firstOil[0], firstOil[1]); len(things) != 1 || things[0].Type != TypeOil {
 		t.Errorf("thingsAt an oil tile returned %v, want one oil thing", things)
-	} else if things[0].Amount != oilPerPoolTile {
-		t.Errorf("an oil tile holds %v, want %v", things[0].Amount, oilPerPoolTile)
-	} else if things[0].ID == "" {
-		t.Errorf("an oil thing without an ID, want one to remember it by")
+	} else {
+		patch, _ := depositAt(firstOil[0], firstOil[1])
+		if things[0].Amount != depositFull(patch) {
+			t.Errorf("the oil patch holds %v, want %v", things[0].Amount, depositFull(patch))
+		}
+		if things[0].ID == "" {
+			t.Errorf("an oil thing without an ID, want one to remember it by")
+		}
+		// Another tile of the same patch shows the same card: the patch
+		// is one thing.
+		other, ok := otherPatchTile(patch, firstOil)
+		if !ok {
+			t.Fatalf("the oil patch has no second tile to test with")
+		}
+		again := thingsAt(s, other[0], other[1])
+		if len(again) != 1 || again[0].ID != things[0].ID {
+			t.Errorf("thingsAt %v, %v returned %v, want the patch's one card %v",
+				other[0], other[1], again, things[0])
+		}
 	}
 
 	if things := thingsAt(s, firstLilac[0], firstLilac[1]); len(things) != 1 || things[0].Type != TypeLilac {
 		t.Errorf("thingsAt a lilac tile returned %v, want one lilac thing", things)
-	} else if things[0].Amount != lilacPerVeinTile {
-		t.Errorf("a lilac tile holds %v, want %v", things[0].Amount, lilacPerVeinTile)
+	} else {
+		patch, _ := depositAt(firstLilac[0], firstLilac[1])
+		if things[0].Amount != depositFull(patch) {
+			t.Errorf("the lilac patch holds %v, want %v", things[0].Amount, depositFull(patch))
+		}
 	}
 
 	core := thingsAt(s, coreCol, coreRow)
@@ -201,6 +276,18 @@ func TestThingsAtKnowsTheRegion(t *testing.T) {
 				id, col, row)
 		}
 	}
+}
+
+// otherPatchTile returns another tile of the given deposit patch.
+func otherPatchTile(d Deposit, not [2]int) ([2]int, bool) {
+	for row := d.Row; row < d.Row+d.Rows; row++ {
+		for col := d.Col; col < d.Col+d.Cols; col++ {
+			if col != not[0] || row != not[1] {
+				return [2]int{col, row}, true
+			}
+		}
+	}
+	return [2]int{}, false
 }
 
 func TestTileAtWorldUndoesProject(t *testing.T) {
@@ -252,8 +339,8 @@ func TestCatalogColorsAreStable(t *testing.T) {
 		t.Errorf("the oil entry reads %q, %q, want \"Oil pool\", \"L\"",
 			info.Name, info.Unit)
 	}
-	if got := catalogInfo(TypeCore).summarize(Thing{Amount: coreBubbleMeters()}); got != "r = 20 m" {
-		t.Errorf("the core's headline is %q, want \"r = 20 m\"", got)
+	if got := catalogInfo(TypeCore).summarize(Thing{Amount: coreBubbleMeters()}); got != "r = 800 m" {
+		t.Errorf("the core's headline is %q, want \"r = 800 m\"", got)
 	}
 	if got := catalogInfo(TypeOil).summarize(Thing{Amount: oilPerPoolTile}); got != "900 L" {
 		t.Errorf("the oil headline is %q, want \"900 L\"", got)

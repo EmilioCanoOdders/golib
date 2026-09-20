@@ -54,12 +54,25 @@ type tooltip struct {
 	col, row int
 	x, y     float32
 	w, h     float32
+	lone     bool // the tile holds one thing, whose card starts open
 	rows     []tooltipRow
+}
+
+// cardOpen says whether a card stands open in the panel: a lone card and
+// the primary things (deposits, buildings, the core) start open, the
+// rest start folded, and a stored click overrides the default.
+func cardOpen(info ThingInfo, lone bool, expanded map[string]bool, id string) bool {
+	if over, ok := expanded[id]; ok {
+		return over
+	}
+	return info.Primary || lone
 }
 
 // tooltipLayout lays the picked tile's panel out. The camera decides where
 // the tile's corner lands, so the panel follows the tile while the view
-// moves. Deposit cards that still hold something get their robot button.
+// moves. Cards start open on their own: the tile's primary thing and, on
+// a tile with a single thing, that thing. Deposit cards that still hold
+// something get their robot button.
 func tooltipLayout(
 	s *State,
 	camera *golib.Camera,
@@ -67,16 +80,19 @@ func tooltipLayout(
 	expanded map[string]bool,
 ) tooltip {
 	t := tooltip{col: col, row: row, w: tooltipWidth}
+	things := thingsAt(s, col, row)
+	t.lone = len(things) == 1
 	t.rows = append(t.rows, tooltipRow{header: true})
-	for _, thing := range thingsAt(s, col, row) {
+	for _, thing := range things {
 		info := catalogInfo(thing.Type)
+		open := cardOpen(info, t.lone, expanded, thing.ID)
 		t.rows = append(t.rows, tooltipRow{
 			thing:   thing,
 			title:   true,
-			open:    expanded[thing.ID],
+			open:    open,
 			summary: info.summarize(thing),
 		})
-		if !expanded[thing.ID] {
+		if !open {
 			continue
 		}
 		for _, detail := range info.Details(s, thing) {

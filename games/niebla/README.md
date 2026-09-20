@@ -10,14 +10,17 @@ From the GoLib repository root:
 ```text
 ./golib run niebla          # play it
 ./golib test niebla         # go vet + go test
-./golib shot niebla 12 700 --input "Mouse@5:616,348 MouseLeft@6 Mouse@7:700,360 MouseLeft@8 Mouse@9:700,426 MouseLeft@10"
+./golib shot niebla 30 --input "Mouse@5:568,372 MouseLeft@6 Mouse@7:700,386 MouseLeft@8 Mouse@9:678,450 MouseLeft@10"
 ```
 
-The shot above picks the oil pool at tile (11, 12), expands its card and
-presses its send robot button: (616, 348) is the tile's center on screen,
-(700, 360) the card's title row, (700, 426) the button. The camera at rest
-centers the view on world point (640, 372) — the screen and the world
-differ, `camera.ToWorld` does the mapping.
+The shot above picks the safe oil pool at tile (11, 14), expands its card
+and presses its send robot button: (568, 372) is the tile's center on
+screen, (700, 386) the card's title row, (678, 450) the button. The frame
+shows the card expanded, offering recall robot. The camera at rest centers
+the view on world point (640, 372) — the middle of its bounds — so screen
+and world differ by (0, -12) at rest zoom; click targets in scripted shots
+aim at a tile's center (`projectTile` + half a tile, plus that offset),
+never its corner, whose tile depends on float rounding.
 
 ## Files
 
@@ -28,8 +31,8 @@ differ, `camera.ToWorld` does the mapping.
 | `state.go` | The simulation's state: robots, stock, what remains of each deposit, build jobs; `newGame`, which deals the starting region |
 | `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`) and `Apply`, the only door into the state |
 | `sim_robots.go` | The robots' rules and tuning: what a robot does each tick, build jobs first, its post second |
-| `region.go` | The hand-made 25x25 layout, the isometric `project`, tile helpers; pure Go, no drawing |
-| `things.go` | What a tile holds: `Thing` snapshots out of layout plus state, `tileAtWorld`, the SI quantities; pure Go, no drawing |
+| `region.go` | The hand-made 25x25 layout, the isometric `project`, tile helpers, the deposit patches flooded out of the layout; pure Go, no drawing |
+| `things.go` | What a tile holds: `Thing` snapshots out of layout plus state (a deposit tile shows its whole patch), `tileAtWorld`, the SI quantities; pure Go, no drawing |
 | `catalog.go` | The entity database: per thing type its name, color, unit and card lines, plus the stable-color fallback |
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
 | `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons; tile highlights |
@@ -45,10 +48,11 @@ game is a visualization, determinism) hold since slice 4, in a first,
 robot-sized form:
 
 - `State` (`state.go`) is the whole game: robots by ID, the stores, what
-  remains of each deposit tile (a `"col,row"`-keyed grid over the static
-  layout — deposits become entities when buildings need neighbors), and
-  the build jobs, which nothing marks yet but every robot obeys. It has
-  no pointers, channels or functions, so it serializes as it is.
+  remains of each deposit patch (one key per patch, flooded once out of
+  the static layout in `region.go` — deposits become entities when
+  buildings need neighbors), and the build jobs, which nothing marks yet
+  but every robot obeys. It has no pointers, channels or functions, so
+  it serializes as it is.
 - Actions (`actions.go`) are structs (`Tick`, `SendRobot`, `RecallRobot`);
   `Apply` mutates the state it is given — one owner, no copies — and is
   total and deterministic, so a seed plus an action log replays a game.
@@ -85,10 +89,25 @@ the last), so spans land where one `DrawText` call would put them.
 ### Units
 
 The world speaks SI: one world unit is one meter (`unitMeters`), so a tile
-is 5 m across (25 m²), the core's pole is 5 m across and 14 m tall, its
-bubble radius is 20 m. Oil is liters, lilac is kilograms (`si` turns 1500 kg
-into `1.5 t`, so nobody ever reads `kkg`). Amounts live at the top of
-`things.go`.
+is 200 m across (4 ha) and the region 5 km from side to side, the core's
+pole is 10 m across and 14 m tall, and its bubble radius is 800 m. Oil is
+liters, lilac is kilograms (`si` turns 12000 kg into `12.0 t`, so nobody
+ever reads `kkg`). The per-tile amounts (900 L, 3000 kg) are the deposits'
+density; a patch of four tiles holds four of them (a whole vein: 12 t).
+Robots are fast rovers with small arms (30 m/s, 30 L or 20 kg a trip), so
+a worked deposit shows a constant coming and going. Amounts live at the
+top of `things.go`.
+
+### Deposit patches
+
+A vein is one thing however many tiles it spans. `findDeposits`
+(`region.go`) floods the layout once, at startup, into `regionDeposits`
+(static data, never state) and `depositAt` maps any tile to its patch.
+`State.Drain` holds one entry per patch, keyed by the patch's top corner
+tile; a robot's post is one tile of the patch, and working it drains the
+whole patch — one robot per patch, one card per patch, one big scar when
+it runs dry. `draw.go` paints each patch as one continuous body that
+shrinks with what remains of it.
 
 ### Tile picking
 
@@ -103,22 +122,28 @@ would leave the screen.
 
 One geometry, two users: `tooltipLayout` builds the row list, and `Update`
 hit-tests it (`contains`, `cardAt`, `buttonAt`) while `Draw` paints it.
-Clicking a tile selects it; clicking a card's title toggles its details; an
-expanded deposit card carries a send robot / recall robot button; a right
-click that never moved more than 4 px deselects (a drag is a pan, not a
-cancel). The camera rests centered on world point (640, 372) — screen and
-world differ by (0, -12) at rest zoom; click targets in scripted shots aim
+Cards start open on their own: a tile's primary thing (deposits, the
+core, later buildings — `Primary` in the catalog) and, on a tile with a
+single thing, that thing. A click on a title folds or opens from where
+the card stands (`cardOpen` gives the default, the scene's `expanded` map
+stores the click). Clicking a tile selects it; an expanded deposit card
+carries a send robot / recall robot button; a right click that never
+moved more than 4 px deselects (a drag is a pan, not a cancel). The
+camera rests centered on world point (640, 372) — screen and world
+differ by (0, -12) at rest zoom; click targets in scripted shots aim
 at a tile's center (`projectTile` + half a tile), never its corner, whose
 tile depends on float rounding.
 
 ## Testing
 
-`region_test.go` pins the layout's placement rules, the projection's round
-trip, the things a tile holds, the SI formatter and the catalog's stability.
-`markup_test.go` covers the parser (nesting, unknown tags, unclosed color),
-the tooltip layout's rows and hit testing, and the cards' robot buttons.
-`world_test.go` drives the simulation with no window: the starting robots,
-a haul's conservation (store + remaining = deposit), who takes a post,
-build-job priority, recall, dry deposits, replay determinism and the JSON
+`region_test.go` pins the layout's placement rules, the deposit patches
+(shape and spread), the projection's round trip, the things a tile holds,
+the SI formatter and the catalog's stability. `markup_test.go` covers the
+parser (nesting, unknown tags, unclosed color), the tooltip layout's rows
+and hit testing, and the cards' robot buttons. `world_test.go` drives the
+simulation with no window: the starting robots, a haul's conservation
+(store + patch remaining = patch full), the patch law (one robot per
+vein, sends on its other tiles change nothing), who takes a post,
+build-job priority, recall, dry patches, replay determinism and the JSON
 round trip. Visual checks are shots with scripted clicks; see the command
 above.

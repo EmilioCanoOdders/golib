@@ -18,6 +18,7 @@ type ThingInfo struct {
 	Name    string
 	Color   golib.Color
 	Unit    string                               // the SI unit of the type's Amount
+	Primary bool                                 // the card starts open: deposits, buildings, the core
 	Summary func(amount float64) string          // the card's headline; default si()
 	Details func(s *State, thing Thing) []Detail // the expanded card's lines
 }
@@ -39,33 +40,36 @@ func (info ThingInfo) summarize(thing Thing) string {
 // catalog holds an entry per thing type so far.
 var catalog = map[ThingType]ThingInfo{
 	TypeOil: {
-		Name:  "Oil pool",
-		Color: oilColor,
-		Unit:  "L",
+		Name:    "Oil pool",
+		Color:   oilColor,
+		Unit:    "L",
+		Primary: true,
 		Details: func(s *State, thing Thing) []Detail {
 			return []Detail{
 				{"amount", fmt.Sprintf("[oil]%s[/]", si(thing.Amount, "L"))},
-				{"tile", tileAreaLabel},
-				{"state", depositState(thing.Amount, oilPerPoolTile)},
+				{"pool", fmt.Sprintf("%d by %d m", thing.Cols*unitsPerTile, thing.Rows*unitsPerTile)},
+				{"state", depositState(thing.Amount, float64(thing.Cols*thing.Rows)*oilPerPoolTile)},
 			}
 		},
 	},
 	TypeLilac: {
-		Name:  "Lilac vein",
-		Color: lilacColor,
-		Unit:  "kg",
+		Name:    "Lilac vein",
+		Color:   lilacColor,
+		Unit:    "kg",
+		Primary: true,
 		Details: func(s *State, thing Thing) []Detail {
 			return []Detail{
 				{"amount", fmt.Sprintf("[lilac]%s[/]", si(thing.Amount, "kg"))},
-				{"tile", tileAreaLabel},
-				{"state", depositState(thing.Amount, lilacPerVeinTile)},
+				{"vein", fmt.Sprintf("%d by %d m", thing.Cols*unitsPerTile, thing.Rows*unitsPerTile)},
+				{"state", depositState(thing.Amount, float64(thing.Cols*thing.Rows)*lilacPerVeinTile)},
 			}
 		},
 	},
 	TypeCore: {
-		Name:  "Repelling core",
-		Color: coreGlowColor,
-		Unit:  "m",
+		Name:    "Repelling core",
+		Color:   coreGlowColor,
+		Unit:    "m",
+		Primary: true,
 		Summary: func(amount float64) string {
 			return "r = " + si(amount, "m")
 		},

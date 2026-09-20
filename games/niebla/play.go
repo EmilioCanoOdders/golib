@@ -7,18 +7,25 @@ import (
 	"golib"
 )
 
-// Camera tuning. Zoom rests on whole steps so shapes and, later, pixel art
-// stay square, and glides between them; at zoomIn a robot's 1 u fills about
-// 40 screen pixels. Panning keeps its speed on the screen, not in the world,
-// so it glides the same at every zoom.
+// Camera tuning, after R.U.S.E.: the wheel moves between whole stops and
+// each stop doubles the zoom, so the range is huge — stop 0 shows the
+// whole region with its deposits as icons, stop 5 shows about 80 m of
+// ground. The zoom glides from stop to stop; only at rest is it a whole
+// power of two, so shapes stay square. Panning keeps its speed on the
+// screen, not in the world, so it glides the same at every zoom.
 const (
-	zoomOut = 1
-	zoomIn  = 4
+	zoomOut = 0 // the stop that shows the whole region
+	zoomIn  = 5 // the stop that shows the ground
 
 	panSpeed = 480 // screen pixels per second
 
-	zoomGlide = 0.1 // seconds for the zoom to close most of the way to its next step
+	zoomGlide = 0.1 // seconds for the zoom to close most of the way to its next stop
 )
+
+// zoomOfStop returns the zoom a stop stands for: two to the stop's power.
+func zoomOfStop(stop float32) float32 {
+	return float32(math.Exp2(float64(stop)))
+}
 
 // playScene shows the region through a camera. The camera and the
 // selection are view, not state: they live here, outside the
@@ -31,16 +38,16 @@ type playScene struct {
 	glow, crt, soft *golib.Shader
 	filterOn        bool
 	camera          *golib.Camera
-	zoom            float32       // the zoom on screen, gliding toward zoomLevel
-	zoomLevel       float32       // the whole-step zoom the wheel last asked for
+	zoom            float32       // the zoom on screen, gliding toward zoomOfStop(zoomStop)
+	zoomStop        float32       // the whole stop the wheel last asked for
 	anchorWorld     golib.Vector2 // while gliding, the point kept under the cursor
 	anchorScreen    golib.Vector2
 	dragging        bool          // the right button is down and moving the view
 	dragFrom        golib.Vector2 // where the cursor stood at the last drag update
 	mouse           golib.Vector2 // where the pointer stands, to light buttons
 
-	picked       bool            // a tile is selected and shows its panel
-	pickedCol    int             // the selected tile
+	picked       bool // a tile is selected and shows its panel
+	pickedCol    int  // the selected tile
 	pickedRow    int
 	expanded     map[string]bool // which cards stand open, by thing ID
 	hovering     bool            // the pointer is over the region
@@ -67,7 +74,7 @@ func newPlayScene() *playScene {
 	s.setFilters(true)
 	s.camera = golib.NewCamera(screenWidth, screenHeight)
 	s.camera.Bounds = regionOnScreen()
-	s.zoom, s.zoomLevel = zoomOut, zoomOut
+	s.zoomStop, s.zoom = zoomOut, zoomOfStop(zoomOut)
 	s.camera.Zoom = s.zoom
 	s.camera.Snap()
 	return s
@@ -144,33 +151,32 @@ func (s *playScene) panCamera(input *golib.Input, dt float32) {
 	s.camera.Target.Y += dy / float32(walked) * step
 }
 
-// zoomCamera glides the zoom to the whole step the wheel asks for, keeping
-// the point under the cursor under it while it moves. The in-between zooms
-// only exist while gliding: at rest the zoom is a whole number again.
+// zoomCamera glides the zoom to the stop the wheel asks for, keeping the
+// point under the cursor under it while it moves. The in-between zooms
+// only exist while gliding: at rest the zoom is a whole power of two.
 func (s *playScene) zoomCamera(input *golib.Input, dt float32) {
 	if notches := input.MouseWheel(); notches != 0 {
-		level := golib.Clamp(s.zoomLevel+float32(int(notches)), zoomOut, zoomIn)
-		if level != s.zoomLevel {
-			s.zoomLevel = level
+		stop := golib.Clamp(s.zoomStop+float32(int(notches)), zoomOut, zoomIn)
+		if stop != s.zoomStop {
+			s.zoomStop = stop
 			mx, my := input.MousePosition()
 			s.anchorWorld = s.camera.ToWorld(mx, my)
 			s.anchorScreen = golib.Vector2{X: mx, Y: my}
 		}
 	}
-	if s.zoom == s.zoomLevel {
-		return
-	}
-	keep := float32(math.Exp(float64(-dt / zoomGlide)))
-	s.zoom += (s.zoomLevel - s.zoom) * (1 - keep)
-	if math.Abs(float64(s.zoomLevel-s.zoom)) < 0.001 {
-		s.zoom = s.zoomLevel
-	}
-	s.camera.Zoom = s.zoom
-	// Where the center must sit for the anchor to stay under the cursor:
-	// the anchor minus the cursor's offset from the middle.
-	s.camera.Target = golib.Vector2{
-		X: s.anchorWorld.X - (s.anchorScreen.X-screenWidth/2)/s.zoom,
-		Y: s.anchorWorld.Y - (s.anchorScreen.Y-screenHeight/2)/s.zoom,
+	if target := zoomOfStop(s.zoomStop); s.zoom != target {
+		keep := float32(math.Exp(float64(-dt / zoomGlide)))
+		s.zoom += (target - s.zoom) * (1 - keep)
+		if math.Abs(float64(target-s.zoom)) < 0.001 {
+			s.zoom = target
+		}
+		s.camera.Zoom = s.zoom
+		// Where the center must sit for the anchor to stay under the
+		// cursor: the anchor minus the cursor's offset from the middle.
+		s.camera.Target = golib.Vector2{
+			X: s.anchorWorld.X - (s.anchorScreen.X-screenWidth/2)/s.zoom,
+			Y: s.anchorWorld.Y - (s.anchorScreen.Y-screenHeight/2)/s.zoom,
+		}
 	}
 }
 
@@ -219,7 +225,10 @@ func (s *playScene) updateInspection(input *golib.Input) {
 					return
 				}
 				if thing, ok := panel.cardAt(mx, my); ok {
-					s.expanded[thing.ID] = !s.expanded[thing.ID]
+					// A click folds or opens from where the card stands:
+					// the default for its kind, or the last click's choice.
+					open := cardOpen(catalogInfo(thing.Type), panel.lone, s.expanded, thing.ID)
+					s.expanded[thing.ID] = !open
 				}
 				return
 			}
@@ -271,10 +280,10 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	screen.SetCamera(s.camera)
 	drawRegion(s.state, screen, s.zoom)
 	if s.hovering && (!s.picked || s.hoverCol != s.pickedCol || s.hoverRow != s.pickedRow) {
-		drawTileHighlight(screen, s.hoverCol, s.hoverRow, 1, hoveredTileColor)
+		drawTileHighlight(screen, s.hoverCol, s.hoverRow, 1.5/s.zoom, hoveredTileColor)
 	}
 	if s.picked {
-		drawTileHighlight(screen, s.pickedCol, s.pickedRow, 2, pickedTileColor)
+		drawTileHighlight(screen, s.pickedCol, s.pickedRow, 2/s.zoom, pickedTileColor)
 	}
 	screen.SetCamera(nil)
 	screen.DrawText("niebla", 16, 16, 20, textColor)

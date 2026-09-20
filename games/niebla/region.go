@@ -10,11 +10,13 @@ const (
 	tileW = 48 // tile width, in screen pixels
 	tileH = 24 // tile height, in screen pixels
 
-	// The world measures itself in units: a robot is 1 u, the core's pole
-	// is 5 u across, a typical building covers 10 u, and a vein reaches
-	// 30 u. Five units to the tile lands the pole on one tile and a
-	// building on two by two.
-	unitsPerTile = 5
+	// The world measures itself in units, and one unit is one meter
+	// (things.go). A tile is 200 u across, so the region is 5 km from
+	// side to side and a deposit patch of four tiles is 400 m aside.
+	// Zoomed out the whole region fits on the screen as icons, zoomed in
+	// a tile fills it. A robot is 6 u across, the core's pole 10 u, a
+	// future building 40 u.
+	unitsPerTile = 200
 
 	coreCol = 12 // where the core sits
 	coreRow = 12
@@ -48,31 +50,39 @@ const (
 )
 
 // regionLayout is the hand-made region, Tiled-informed, drawn in code for
-// now: one rune per tile, ground everywhere but for the oil pools, the lilac
-// veins and the core. Every row is regionCols runes wide.
+// now: one rune per tile, ground everywhere but for the oil pools, the
+// lilac veins and the core. Every row is regionCols runes wide.
+//
+// Deposits come in patches of four tiles, two by two. One oil pool and
+// one lilac vein sit inside the bubble, off the core, so the colony can
+// mine both in comfort whatever the fog does; the other four patches
+// stand in the empty band near the region's edge, 1.5 to 2 km from the
+// core, where the zoomed-out view shows them as icons and the zoomed-in
+// view makes the walk between them long. Rocks and bushes dot the ground
+// between bubble and edge, never inside the bubble.
 var regionLayout = []string{
 	".........................",
 	".........................",
 	".........................",
-	".........................",
+	"...........b.............",
+	".........b.....b.........",
 	".................r.......",
-	"......b.........ooo......",
-	"......L.........ooo......",
-	".....r.L.........r.......",
-	"....b...L...L............",
-	".......b....L....b.......",
-	"...r........L........r...",
-	".......b....L....b.......",
-	"...LL...ooooCoooo........",
-	".......b....L.....b......",
-	"...r........L........r...",
-	".....ooo....L...b........",
-	"....rooo....L.....oob....",
-	".......b........L.ob.....",
-	"........rb.......L.......",
-	"......b.....r.....b......",
-	".........................",
-	".........................",
+	".....oo..........oo......",
+	".....oo..........oo......",
+	"....r....................",
+	"....................b....",
+	"..............LL.........",
+	"..............LL.........",
+	"............C............",
+	"...b.....................",
+	"..........oo.........r...",
+	".....b....oo.............",
+	"................r........",
+	"........b.........LL.....",
+	".....LL...........LL.....",
+	".....LL...r..............",
+	"........r....b...........",
+	"..............r..........",
 	".........................",
 	".........................",
 	".........................",
@@ -120,4 +130,105 @@ func jitter(col, row, salt int) float32 {
 func ellipseSemiAxes(radius float32) (halfW, halfH float32) {
 	k := radius * float32(math.Sqrt2) / 2
 	return k * tileW, k * tileH
+}
+
+// Deposit is one vein or pool: a patch of deposit tiles the colony treats
+// as a single thing, however many tiles it spans. One robot works a whole
+// patch, one card describes it, and what remains of it lives in the state
+// under one key, the bounding box's top corner tile.
+type Deposit struct {
+	Kind       byte // kindOil or kindLilac
+	Col, Row   int  // the bounding box's top corner tile
+	Cols, Rows int  // its extent, in tiles
+} // regionDeposits is every patch of the layout, found once by flooding
+// connected deposit tiles. Like the layout itself, it is static data the
+// view and the rules read freely; it never enters the state.
+var regionDeposits = findDeposits()
+
+// depositIndex maps each deposit tile to its patch's place in
+// regionDeposits: the runtime lookup the tile grid can't give in O(1).
+var depositIndex = buildDepositIndex()
+
+// findDeposits floods the layout for connected patches of oil or lilac.
+func findDeposits() []Deposit {
+	seen := map[[2]int]bool{}
+	var deposits []Deposit
+	for row := 0; row < regionRows; row++ {
+		for col := 0; col < regionCols; col++ {
+			kind := tileAt(col, row)
+			if kind != kindOil && kind != kindLilac || seen[[2]int{col, row}] {
+				continue
+			}
+			d := Deposit{Kind: kind, Col: col, Row: row, Cols: 1, Rows: 1}
+			queue := [][2]int{{col, row}}
+			seen[[2]int{col, row}] = true
+			for len(queue) > 0 {
+				t := queue[0]
+				queue = queue[1:]
+				if t[0] < d.Col {
+					d.Cols += d.Col - t[0]
+					d.Col = t[0]
+				}
+				if t[0] > d.Col+d.Cols-1 {
+					d.Cols += t[0] - (d.Col + d.Cols - 1)
+				}
+				if t[1] < d.Row {
+					d.Rows += d.Row - t[1]
+					d.Row = t[1]
+				}
+				if t[1] > d.Row+d.Rows-1 {
+					d.Rows += t[1] - (d.Row + d.Rows - 1)
+				}
+				for _, n := range [4][2]int{
+					{t[0] + 1, t[1]},
+					{t[0] - 1, t[1]},
+					{t[0], t[1] + 1},
+					{t[0], t[1] - 1},
+				} {
+					if tileAt(n[0], n[1]) == kind && !seen[n] {
+						seen[n] = true
+						queue = append(queue, n)
+					}
+				}
+			}
+			deposits = append(deposits, d)
+		}
+	}
+	return deposits
+}
+
+func buildDepositIndex() map[[2]int]int {
+	index := make(map[[2]int]int, regionCols*regionRows)
+	for i, d := range regionDeposits {
+		for row := d.Row; row < d.Row+d.Rows; row++ {
+			for col := d.Col; col < d.Col+d.Cols; col++ {
+				index[[2]int{col, row}] = i
+			}
+		}
+	}
+	return index
+}
+
+// depositAt returns the patch a tile belongs to, and whether it holds one.
+func depositAt(col, row int) (Deposit, bool) {
+	i, ok := depositIndex[[2]int{col, row}]
+	if !ok {
+		return Deposit{}, false
+	}
+	return regionDeposits[i], true
+}
+
+// depositKey names a patch's remaining amount inside State.Drain.
+func depositKey(d Deposit) string {
+	return drainKey(d.Col, d.Row)
+}
+
+// depositFull returns what a patch holds at first, in its SI unit: its
+// per-tile density times its tiles.
+func depositFull(d Deposit) float64 {
+	tiles := float64(d.Cols * d.Rows)
+	if d.Kind == kindOil {
+		return tiles * oilPerPoolTile
+	}
+	return tiles * lilacPerVeinTile
 }

@@ -18,7 +18,7 @@ type State struct {
 	NextID int64              // the ID the next robot gets
 	Robots map[int64]Robot    // the colony, by ID
 	Stock  Stock              // what the core's stores hold
-	Drain  map[string]float64 // what remains in each deposit tile, by "col,row"
+	Drain  map[string]float64 // what remains in each deposit patch, by key
 	Jobs   []Job              // build jobs, oldest first; nothing marks them yet
 }
 
@@ -30,11 +30,12 @@ type Stock struct {
 
 // Robot is one worker. It carries no plan: every tick the rules (see
 // sim_robots.go) derive what it does from the state, so a save reproduces
-// its future.
+// its future. Its post is one tile of a deposit patch, and working it
+// drains the whole patch.
 type Robot struct {
 	ID        int64
 	X, Y      float64   // position, in units (1 u = 1 m)
-	PostCol   int       // the deposit tile it was sent to; -1 when free
+	PostCol   int       // the tile of the patch it was sent to; -1 when free
 	PostRow   int       //
 	WorkTicks int64     // ticks of loading left at its post
 	Carry     float64   // what it carries, in the cargo's SI unit
@@ -55,16 +56,11 @@ func (r Robot) hasPost() bool {
 	return r.PostCol >= 0
 }
 
-// atPost reports whether the robot's post is this tile.
-func (r Robot) atPost(col, row int) bool {
-	return r.PostCol == col && r.PostRow == row
-}
-
 func (r *Robot) clearPost() {
 	r.PostCol, r.PostRow = -1, -1
 }
 
-// newGame deals the starting region: every deposit full, and the
+// newGame deals the starting region: every deposit patch full, and the
 // starting robots idle by the core.
 func newGame() *State {
 	s := &State{
@@ -72,15 +68,8 @@ func newGame() *State {
 		Robots: map[int64]Robot{},
 		Drain:  map[string]float64{},
 	}
-	for row := 0; row < regionRows; row++ {
-		for col := 0; col < regionCols; col++ {
-			switch tileAt(col, row) {
-			case kindOil:
-				s.Drain[drainKey(col, row)] = oilPerPoolTile
-			case kindLilac:
-				s.Drain[drainKey(col, row)] = lilacPerVeinTile
-			}
-		}
+	for _, d := range regionDeposits {
+		s.Drain[depositKey(d)] = depositFull(d)
 	}
 	for i := 0; i < startingRobots; i++ {
 		s.spawnRobot()

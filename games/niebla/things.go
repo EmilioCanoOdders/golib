@@ -6,20 +6,18 @@ import (
 )
 
 // The world speaks SI: one unit of the world is one meter, so a tile is
-// 5 m across, oil is measured in liters and lilac in kilograms.
+// 200 m across, oil is measured in liters and lilac in kilograms. The
+// per-tile amounts are the deposits' density: a patch of four tiles holds
+// four of them (a whole vein, 12 t of lilac).
 const (
 	unitMeters = 1 // one world unit, in m
 
-	oilPerPoolTile   = 900 // liters of oil in one pool tile
-	lilacPerVeinTile = 300 // kilograms of lilac in one vein tile
+	oilPerPoolTile   = 900  // liters of oil in one pool tile
+	lilacPerVeinTile = 3000 // kilograms of lilac in one vein tile
 
-	corePoleAcross = unitsPerTile * unitMeters // m across the core's pole
-	coreHeight     = 14                        // m of pole above the ground
+	corePoleAcross = 10 // m across the core's pole
+	coreHeight     = 14 // m of pole above the ground
 )
-
-// tileAreaLabel says how much ground one tile is, in SI.
-var tileAreaLabel = fmt.Sprintf("%d by %d m",
-	unitsPerTile*unitMeters, unitsPerTile*unitMeters)
 
 // coreBubbleMeters returns the core's bubble radius in meters.
 func coreBubbleMeters() float64 {
@@ -48,28 +46,28 @@ type Detail struct {
 
 // Thing is one thing the world holds, seen from a tile: the view-side
 // snapshot the cards render. It carries no behavior; what it means and
-// how it reads live in the catalog. Robots come from the state; the
-// deposits' amounts are what remains of them in it.
+// how it reads live in the catalog. Robots come from the state; a
+// deposit's amount is what remains of its whole patch in it.
 type Thing struct {
 	Type    ThingType
 	ID      string  // stable in the region, so views can remember it
 	Amount  float64 // the type's headline quantity, in its SI unit
 	Caption string  // a headline that replaces the summary, a robot's task
 	Ref     int64   // the entity's ID in the state, for robots
+	Cols    int     // deposits: the patch's extent, in tiles
+	Rows    int     //
 }
 
 // thingsAt returns the things standing on a tile, deposits first, then
-// the robots on it by ID. Rocks and bushes are decoration, so they have
-// no card yet.
+// the robots on it by ID. A deposit tile shows its whole patch's card:
+// the vein is one thing, however many tiles it spans. Rocks and bushes
+// are decoration, so they have no card yet.
 func thingsAt(s *State, col, row int) []Thing {
 	var things []Thing
 	switch tileAt(col, row) {
-	case kindOil:
-		thing := oilAt(col, row)
-		thing.Amount = remainingAt(s, col, row)
-		things = append(things, thing)
-	case kindLilac:
-		thing := lilacAt(col, row)
+	case kindOil, kindLilac:
+		d, _ := depositAt(col, row)
+		thing := depositThing(d)
 		thing.Amount = remainingAt(s, col, row)
 		things = append(things, thing)
 	case kindCore:
@@ -83,19 +81,19 @@ func thingsAt(s *State, col, row int) []Thing {
 	return things
 }
 
-func oilAt(col, row int) Thing {
-	return Thing{
-		Type:   TypeOil,
-		ID:     fmt.Sprintf("oil@%d,%d", col, row),
-		Amount: oilPerPoolTile,
+// depositThing is a patch's card: named for its kind, ID'd by its top
+// corner tile, carrying its extent so the card can say how much ground
+// the patch covers.
+func depositThing(d Deposit) Thing {
+	kind := TypeOil
+	if d.Kind == kindLilac {
+		kind = TypeLilac
 	}
-}
-
-func lilacAt(col, row int) Thing {
 	return Thing{
-		Type:   TypeLilac,
-		ID:     fmt.Sprintf("lilac@%d,%d", col, row),
-		Amount: lilacPerVeinTile,
+		Type: kind,
+		ID:   fmt.Sprintf("%s@%d,%d", kind, d.Col, d.Row),
+		Cols: d.Cols,
+		Rows: d.Rows,
 	}
 }
 

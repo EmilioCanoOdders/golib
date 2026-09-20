@@ -66,17 +66,58 @@ func TestSentRobotHaulsOilHome(t *testing.T) {
 	if _, owned := postOwner(s, col, row); !owned {
 		t.Fatal("nobody took the oil post")
 	}
-	runTicks(s, 1200) // there, loading, and back: about 7 s of walking
-	if s.Stock.Oil <= 0 {
-		t.Fatalf("after 20 s of hauling the stores hold %v L of oil", s.Stock.Oil)
+	// The nearest pool is the safe one inside the bubble: half a minute
+	// out at robotSpeed, a little more back with the load.
+	for i := 0; i < 60*400 && s.Stock.Oil <= 0; i++ {
+		Apply(s, Tick{})
 	}
+	if s.Stock.Oil <= 0 {
+		t.Fatalf("after 400 s of hauling the stores hold %v L of oil", s.Stock.Oil)
+	}
+	patch, _ := depositAt(col, row)
+	total := depositFull(patch)
 	left := remainingAt(s, col, row)
-	if left >= oilPerPoolTile {
+	if left >= total {
 		t.Errorf("the pool still holds %v L, want it drained by the hauling", left)
 	}
-	if sum := s.Stock.Oil + left; math.Abs(sum-oilPerPoolTile) > 0.0001 {
+	if sum := s.Stock.Oil + left; math.Abs(sum-total) > 0.0001 {
 		t.Errorf("the stores hold %v L and the pool %v L, want them to sum to %v",
-			s.Stock.Oil, left, oilPerPoolTile)
+			s.Stock.Oil, left, total)
+	}
+}
+
+// TestDepositPatchIsOneUnit pins the patch law: sending a robot to any
+// tile of a vein claims the whole vein, a second send on another of its
+// tiles changes nothing, and recalling from any tile frees it.
+func TestDepositPatchIsOneUnit(t *testing.T) {
+	s := newGame()
+	col, row, ok := nearestTileOf(kindOil)
+	if !ok {
+		t.Fatal("the region has no oil to test with")
+	}
+	patch, _ := depositAt(col, row)
+	other, ok := otherPatchTile(patch, [2]int{col, row})
+	if !ok {
+		t.Fatal("the oil patch has no second tile to test with")
+	}
+	Apply(s, SendRobot{Col: col, Row: row})
+	first, owned := postOwner(s, col, row)
+	if !owned {
+		t.Fatal("nobody took the oil patch")
+	}
+	Apply(s, SendRobot{Col: other[0], Row: other[1]})
+	again, owned := postOwner(s, other[0], other[1])
+	if !owned || again.ID != first.ID {
+		t.Errorf("the patch's second tile answered %v, want the same robot %d",
+			again, first.ID)
+	}
+	if len(s.Robots) != startingRobots {
+		t.Fatalf("the colony grew to %d robots, want %d",
+			len(s.Robots), startingRobots)
+	}
+	Apply(s, RecallRobot{Col: other[0], Row: other[1]})
+	if _, owned := postOwner(s, col, row); owned {
+		t.Error("the patch survived a recall from its other tile")
 	}
 }
 
@@ -126,22 +167,25 @@ func TestDryDepositReleasesItsRobot(t *testing.T) {
 	if !ok {
 		t.Fatal("the region has no lilac to test with")
 	}
+	patch, _ := depositAt(col, row)
+	// Shrink the vein to five loads, so the test stays quick: the robot
+	// must still empty the whole patch, and be released when the last
+	// load is picked.
+	full := robotCarryLilac * 5
+	s.Drain[depositKey(patch)] = full
 	Apply(s, SendRobot{Col: col, Row: row})
-	// A vein tile holds five loads; haul every one of them home. The
-	// post is released when the last load is picked, so the wait ends
-	// when the stores hold the whole vein.
-	for i := 0; i < 60*300 && s.Stock.Lilac < lilacPerVeinTile; i++ {
+	for i := 0; i < 60*400 && s.Stock.Lilac < full; i++ {
 		Apply(s, Tick{})
 	}
 	if _, owned := postOwner(s, col, row); owned {
-		t.Fatal("the robot keeps a dry post")
+		t.Fatal("the robot keeps a dry patch")
 	}
 	if left := remainingAt(s, col, row); left > 0 {
 		t.Errorf("the drained vein still holds %v kg", left)
 	}
-	if s.Stock.Lilac != lilacPerVeinTile {
+	if s.Stock.Lilac != full {
 		t.Errorf("the stores hold %v kg, want the whole vein, %v",
-			s.Stock.Lilac, lilacPerVeinTile)
+			s.Stock.Lilac, full)
 	}
 }
 
@@ -167,8 +211,9 @@ func TestBuildJobsComeFirst(t *testing.T) {
 		t.Errorf("the robot ignored the build job: its distance to it went %v to %v",
 			d0, d1)
 	}
-	// It raises the job before it goes back to its own post.
-	for i := 0; i < 60*30 && len(s.Jobs) > 0; i++ {
+	// It raises the job before it goes back to its own post: the walk
+	// there and back is a few minutes at robotSpeed.
+	for i := 0; i < 60*400 && len(s.Jobs) > 0; i++ {
 		Apply(s, Tick{})
 	}
 	if len(s.Jobs) != 0 {
@@ -177,7 +222,7 @@ func TestBuildJobsComeFirst(t *testing.T) {
 	if s.Stock.Oil > 0 {
 		t.Errorf("the stores hold %v L before the job is done, want none", s.Stock.Oil)
 	}
-	for i := 0; i < 60*60 && s.Stock.Oil == 0; i++ {
+	for i := 0; i < 60*500 && s.Stock.Oil == 0; i++ {
 		Apply(s, Tick{})
 	}
 	if s.Stock.Oil == 0 {

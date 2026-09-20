@@ -7,10 +7,22 @@ import (
 	"golib"
 )
 
-// propZoom is the zoom from which rocks and bushes are drawn: at whole
-// region view they are a speck of noise, and their appearing as you zoom in
-// is the detail the zoom is for.
-const propZoom = 2
+// propZoom is the zoom from which rocks and bushes are drawn: zoomed out
+// they are a speck of noise, and their growing as you zoom in is the
+// detail the zoom is for.
+const propZoom = 4
+
+// dotRadius returns the drawing radius, in projected pixels, of a world
+// radius given in units, never smaller than minPx pixels on the screen:
+// things show as points while the view is far out and grow to their true
+// size as it closes in.
+func dotRadius(units, zoom, minPx float32) float32 {
+	r := units * unitW
+	if min := minPx / zoom; r < min {
+		r = min
+	}
+	return r
+}
 
 // drawRegion paints the still region and the robots on it: the ground
 // inside the fog line, the core and its bubble, and the fog standing
@@ -18,10 +30,11 @@ const propZoom = 2
 func drawRegion(s *State, screen *golib.Screen, zoom float32) {
 	screen.Clear(fogColor)
 	drawGround(s, screen, zoom)
-	drawRobots(s, screen)
+	drawDeposits(s, screen)
+	drawRobots(s, screen, zoom)
 	drawFogCover(screen)
-	drawFogLine(screen)
-	drawCoreAndBubble(screen)
+	drawFogLine(screen, zoom)
+	drawCoreAndBubble(screen, zoom)
 }
 
 func drawGround(s *State, screen *golib.Screen, zoom float32) {
@@ -38,18 +51,6 @@ func drawGround(s *State, screen *golib.Screen, zoom float32) {
 			}
 			screen.DrawPolygon(tileDiamond(x, y), color)
 			switch tileAt(col, row) {
-			case kindOil:
-				if remainingAt(s, col, row) > 0 {
-					drawOil(screen, x, y)
-				} else {
-					drawScar(screen, x, y)
-				}
-			case kindLilac:
-				if remainingAt(s, col, row) > 0 {
-					drawLilac(screen, x, y)
-				} else {
-					drawScar(screen, x, y)
-				}
 			case kindRock:
 				if zoom >= propZoom {
 					drawRock(screen, x, y, col, row)
@@ -112,58 +113,102 @@ func scaledDiamond(cx, cy, scale float32) []golib.Vector2 {
 	}
 }
 
-func drawOil(screen *golib.Screen, x, y float32) {
-	cx, cy := x, y+tileH/2
-	screen.DrawPolygon(scaledDiamond(cx, cy, 0.64), oilDarkColor)
-	screen.DrawPolygon(scaledDiamond(cx, cy, 0.46), oilColor)
+// patchCorners returns the center and half sizes of a patch's union
+// diamond, the shape its tiles make together on the screen.
+func patchCorners(d Deposit) (cx, cy, halfW, halfH float32) {
+	x, y := projectTile(float32(d.Col), float32(d.Row))
+	cx = x + float32(d.Cols-d.Rows)*tileW/4
+	cy = y + float32(d.Cols+d.Rows)*tileH/4
+	halfW = float32(d.Cols+d.Rows) * tileW / 4
+	halfH = float32(d.Cols+d.Rows) * tileH / 4
+	return cx, cy, halfW, halfH
 }
 
-func drawLilac(screen *golib.Screen, x, y float32) {
-	cx, cy := x, y+tileH/2
-	screen.DrawPolygon(scaledDiamond(cx, cy, 0.55), lilacDarkColor)
-	screen.DrawTriangle(cx-5, cy+3, cx-2, cy-11, cx+2, cy+3, lilacColor)
-	screen.DrawTriangle(cx+2, cy+3, cx+5, cy-6, cx+8, cy+3, lilacLightColor)
+// patchDiamond returns a patch-shaped diamond around a center.
+func patchDiamond(cx, cy, halfW, halfH float32) []golib.Vector2 {
+	return []golib.Vector2{
+		{X: cx, Y: cy - halfH},
+		{X: cx + halfW, Y: cy},
+		{X: cx, Y: cy + halfH},
+		{X: cx - halfW, Y: cy},
+	}
 }
 
-// drawRock draws a rock about one unit across, at the middle of its tile but
-// for the jitter. Two facets, dark against the light.
+// drawDeposits paints each patch as one continuous body: a pool as one
+// sheet of oil, a vein as one shelf of lilac rock with crystal clusters
+// over its tiles. The body shrinks as the robots drain the patch, and a
+// dry patch leaves one big scar.
+func drawDeposits(s *State, screen *golib.Screen) {
+	for _, d := range regionDeposits {
+		cx, cy, halfW, halfH := patchCorners(d)
+		fill := float32(s.Drain[depositKey(d)] / depositFull(d))
+		if fill <= 0 {
+			screen.DrawPolygon(patchDiamond(cx, cy, halfW*0.3, halfH*0.3), scarColor)
+			continue
+		}
+		k := 0.45 + 0.55*fill
+		if d.Kind == kindOil {
+			screen.DrawPolygon(patchDiamond(cx, cy, halfW*0.82*k, halfH*0.82*k), oilDarkColor)
+			screen.DrawPolygon(patchDiamond(cx, cy, halfW*0.6*k, halfH*0.6*k), oilColor)
+			continue
+		}
+		screen.DrawPolygon(patchDiamond(cx, cy, halfW*0.78*k, halfH*0.78*k), lilacDarkColor)
+		for row := d.Row; row < d.Row+d.Rows; row++ {
+			for col := d.Col; col < d.Col+d.Cols; col++ {
+				drawCrystals(screen, col, row, k)
+			}
+		}
+	}
+}
+
+// drawCrystals draws a vein tile's crystal clusters, scaled by the
+// patch's fill, off the tile's middle by a stable jitter so the clusters
+// spread over the shelf instead of marching in step.
+func drawCrystals(screen *golib.Screen, col, row int, k float32) {
+	x, y := projectTile(float32(col), float32(row))
+	cx := x + jitter(col, row, 5)*6
+	cy := y + tileH/2 + jitter(col, row, 6)*4
+	screen.DrawTriangle(cx-5*k, cy+3*k, cx-2*k, cy-11*k, cx+2*k, cy+3*k, lilacColor)
+	screen.DrawTriangle(cx+2*k, cy+3*k, cx+5*k, cy-6*k, cx+8*k, cy+3*k, lilacLightColor)
+}
+
+// drawRock draws a rock 6 u (6 m) across, at the middle of its tile but
+// for the jitter. Two facets, dark against the light; world-sized, so it
+// grows from a pebble to a boulder as the view closes in.
 func drawRock(screen *golib.Screen, x, y float32, col, row int) {
 	cx := x + jitter(col, row, 1)*3*unitW
 	cy := y + tileH/2 + jitter(col, row, 2)*2*unitH
+	u := 3 * unitW // the rock's half width
 	screen.DrawPolygon([]golib.Vector2{
-		{X: cx - 5, Y: cy + 3},
-		{X: cx - 2, Y: cy - 6},
-		{X: cx + 4, Y: cy - 3},
-		{X: cx + 5, Y: cy + 3},
+		{X: cx - u, Y: cy + 0.6*u},
+		{X: cx - 0.4*u, Y: cy - 1.2*u},
+		{X: cx + 0.8*u, Y: cy - 0.6*u},
+		{X: cx + u, Y: cy + 0.6*u},
 	}, rockColor)
 	screen.DrawPolygon([]golib.Vector2{
-		{X: cx - 2, Y: cy - 6},
-		{X: cx + 4, Y: cy - 3},
-		{X: cx + 1, Y: cy + 1},
-		{X: cx - 2, Y: cy - 2},
+		{X: cx - 0.4*u, Y: cy - 1.2*u},
+		{X: cx + 0.8*u, Y: cy - 0.6*u},
+		{X: cx + 0.2*u, Y: cy + 0.2*u},
+		{X: cx - 0.4*u, Y: cy - 0.4*u},
 	}, rockLightColor)
 }
 
-// drawBush draws a bush of three circles about a unit and a half across, at
-// the middle of its tile but for the jitter.
+// drawBush draws a bush of three circles 6 u across, at the middle of its
+// tile but for the jitter. World-sized, like the rock.
 func drawBush(screen *golib.Screen, x, y float32, col, row int) {
 	cx := x + jitter(col, row, 3)*3*unitW
 	cy := y + tileH/2 + jitter(col, row, 4)*2*unitH
-	screen.DrawCircle(cx-3, cy, 3, bushColor)
-	screen.DrawCircle(cx+3, cy, 3, bushColor)
-	screen.DrawCircle(cx, cy-3, 3, bushLightColor)
-}
-
-// drawScar marks a deposit tile the robots emptied: a shallow dark
-// patch where the pool or the crystals used to be.
-func drawScar(screen *golib.Screen, x, y float32) {
-	cx, cy := x, y+tileH/2
-	screen.DrawPolygon(scaledDiamond(cx, cy, 0.3), scarColor)
+	r := 1.5 * unitW
+	screen.DrawCircle(cx-r, cy, r, bushColor)
+	screen.DrawCircle(cx+r, cy, r, bushColor)
+	screen.DrawCircle(cx, cy-r, r, bushLightColor)
 }
 
 // drawRobots paints the robots, back to front, each a dark body with a
-// lit top and a glowing eye, its cargo as a colored pack on its back.
-func drawRobots(s *State, screen *golib.Screen) {
+// lit top and a glowing eye, its cargo as a colored pack on its back. A
+// robot is 6 u across and the region is 5 km, so far out it is a point:
+// dotRadius keeps it a few pixels wide until the view closes in.
+func drawRobots(s *State, screen *golib.Screen, zoom float32) {
 	type spot struct {
 		id int64
 		p  golib.Vector2
@@ -178,35 +223,40 @@ func drawRobots(s *State, screen *golib.Screen) {
 	for _, sp := range spots {
 		r := s.Robots[sp.id]
 		p := sp.p
-		screen.DrawCircle(p.X, p.Y+unitH*0.4, unitW*0.55, robotShadowColor)
-		screen.DrawCircle(p.X, p.Y, unitW*0.5, robotDarkColor)
-		screen.DrawCircle(p.X, p.Y, unitW*0.34, robotColor)
+		R := dotRadius(3, zoom, 3) // the body's radius, in projected pixels
+		screen.DrawCircle(p.X, p.Y+R*0.5, R*1.1, robotShadowColor)
+		screen.DrawCircle(p.X, p.Y, R, robotDarkColor)
+		screen.DrawCircle(p.X, p.Y, R*0.68, robotColor)
 		if r.Carry > 0 {
 			cargo := lilacColor
 			if r.Cargo == TypeOil {
 				cargo = oilColor
 			}
-			screen.DrawCircle(p.X+unitW*0.42, p.Y+unitH*0.12, unitW*0.22, cargo)
+			screen.DrawCircle(p.X+R*0.84, p.Y+R*0.24, R*0.44, cargo)
 		}
-		screen.DrawCircle(p.X, p.Y-unitW*0.28, unitW*0.14, coreGlowColor)
+		screen.DrawCircle(p.X, p.Y-R*0.56, R*0.28, coreGlowColor)
 	}
 }
 
-func drawCoreAndBubble(screen *golib.Screen) {
+func drawCoreAndBubble(screen *golib.Screen, zoom float32) {
 	cx, cy := projectTile(coreCol, coreRow)
 	cy += tileH / 2
-	// The pole is 5 u across: one whole tile.
+	// The pad is the core's whole tile; the pole's glow is world-sized,
+	// a point of light until the view closes in. The outlines keep their
+	// thickness on the screen, not in the world: inside the bubble they
+	// would grow into roads.
 	fillEllipse(screen, cx, cy, coreBubbleRadius, bubbleColor)
-	ellipseOutline(screen, cx, cy, coreBubbleRadius, 3, bubbleEdgeColor)
+	ellipseOutline(screen, cx, cy, coreBubbleRadius, 3/zoom, bubbleEdgeColor)
 	screen.DrawPolygon(scaledDiamond(cx, cy, 1), coreColor)
-	screen.DrawCircle(cx, cy, unitW, coreGlowColor)
-	screen.DrawCircle(cx, cy, unitW/2, coreColor)
+	glow := dotRadius(4, zoom, 3.5)
+	screen.DrawCircle(cx, cy, glow, coreGlowColor)
+	screen.DrawCircle(cx, cy, glow*0.5, coreColor)
 }
 
-func drawFogLine(screen *golib.Screen) {
+func drawFogLine(screen *golib.Screen, zoom float32) {
 	cx, cy := projectTile(coreCol, coreRow)
 	cy += tileH / 2
-	ellipseOutline(screen, cx, cy, fogLineRadius, 3,
+	ellipseOutline(screen, cx, cy, fogLineRadius, 3/zoom,
 		golib.WithOpacity(fogBandColor, 0.55))
 }
 

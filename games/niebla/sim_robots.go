@@ -7,15 +7,18 @@ import (
 
 // Tuning: the robots' numbers, with units in the name. The starting
 // robots work for nothing; charge and upkeep arrive with built robots.
+// A robot is a small, fast rover, 6 u across: it shuttles like an ant,
+// carrying a little and coming back for more, so a worked deposit shows
+// a constant coming and going.
 const (
 	startingRobots = 2 // robots the core starts with
 
-	robotSpeed      = 3.0  // units (m) per second
+	robotSpeed      = 30.0 // units (m) per second
 	robotLoadTicks  = 150  // ticks of loading at a deposit: 2.5 s
-	robotCarryOil   = 90.0 // liters per trip
-	robotCarryLilac = 60.0 // kilograms per trip
+	robotCarryOil   = 30.0 // liters per trip
+	robotCarryLilac = 20.0 // kilograms per trip
 
-	robotParkRadius = 3.5  // units, the idle ring around the core
+	robotParkRadius = 150.0             // units, the idle ring around the core: past the core tile, so the far view shows the dots spread around it
 	goldenAngle     = 2.399963229728653 // spreads the parking spots
 )
 
@@ -86,12 +89,18 @@ func (r *Robot) walkTowards(x, y float64) bool {
 	return false
 }
 
-// takeLoad fills the robot's arms from its post and sends it home with
-// them. A post that ran dry releases the robot.
+// takeLoad fills the robot's arms from its post's patch and sends it
+// home with them. A patch that ran dry releases the robot.
 func (s *State) takeLoad(r *Robot) {
-	remaining := remainingAt(s, r.PostCol, r.PostRow)
+	d, ok := depositAt(r.PostCol, r.PostRow)
+	if !ok {
+		r.clearPost()
+		return
+	}
+	key := depositKey(d)
+	remaining := s.Drain[key]
 	capacity := robotCarryLilac
-	if tileAt(r.PostCol, r.PostRow) == kindOil {
+	if d.Kind == kindOil {
 		capacity = robotCarryOil
 	}
 	take := math.Min(capacity, remaining)
@@ -99,10 +108,9 @@ func (s *State) takeLoad(r *Robot) {
 		r.clearPost()
 		return
 	}
-	key := drainKey(r.PostCol, r.PostRow)
 	s.Drain[key] = remaining - take
 	r.Carry = take
-	if tileAt(r.PostCol, r.PostRow) == kindOil {
+	if d.Kind == kindOil {
 		r.Cargo = TypeOil
 	} else {
 		r.Cargo = TypeLilac
@@ -154,17 +162,28 @@ func oldestJob(s *State) (Job, bool) {
 	return s.Jobs[0], true
 }
 
-// remainingAt returns what is left in a deposit tile; a tile that holds
-// no deposit has nothing.
+// remainingAt returns what is left in the deposit patch a tile belongs
+// to; a tile that holds no deposit has nothing.
 func remainingAt(s *State, col, row int) float64 {
-	return s.Drain[drainKey(col, row)]
+	d, ok := depositAt(col, row)
+	if !ok {
+		return 0
+	}
+	return s.Drain[depositKey(d)]
 }
 
-// postOwner returns the robot whose post is this tile.
+// postOwner returns the robot whose post is a tile of the deposit patch
+// the given tile belongs to: a patch has one robot.
 func postOwner(s *State, col, row int) (Robot, bool) {
+	want, ok := depositAt(col, row)
+	if !ok {
+		return Robot{}, false
+	}
 	for _, id := range sortedRobotIDs(s) {
-		if r := s.Robots[id]; r.atPost(col, row) {
-			return r, true
+		if r := s.Robots[id]; r.hasPost() {
+			if d, ok := depositAt(r.PostCol, r.PostRow); ok && d == want {
+				return r, true
+			}
 		}
 	}
 	return Robot{}, false

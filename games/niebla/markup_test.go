@@ -92,8 +92,8 @@ func TestTooltipLayoutRowsAndCards(t *testing.T) {
 	details := 0
 	for _, r := range panel.rows {
 		if r.title {
-			if r.summary != "r = 20 m" {
-				t.Errorf("the core card's headline is %q, want \"r = 20 m\"", r.summary)
+			if r.summary != "r = 800 m" {
+				t.Errorf("the core card's headline is %q, want \"r = 800 m\"", r.summary)
 			}
 		} else if !r.header && r.button == "" {
 			details++
@@ -114,6 +114,54 @@ func TestTooltipLayoutRowsAndCards(t *testing.T) {
 	}
 }
 
+func TestPrimaryCardsStartOpen(t *testing.T) {
+	camera := golib.NewCamera(screenWidth, screenHeight)
+	s := newGame()
+	// The core's card starts open with no clicks: its details are there.
+	panel := tooltipLayout(s, camera, coreCol, coreRow, map[string]bool{})
+	details := 0
+	for _, r := range panel.rows {
+		if !r.header && !r.title && r.button == "" {
+			details++
+		}
+	}
+	if details != 8 {
+		t.Errorf("the core's card starts with %d details shown, want 8", details)
+	}
+
+	// A deposit's card starts open, button included, with no clicks.
+	col, row, ok := nearestTileOf(kindOil)
+	if !ok {
+		t.Fatal("the region has no oil to test with")
+	}
+	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
+	if panel.findButton(buttonSend) == nil {
+		t.Error("the oil patch's card starts folded, want it open with its button")
+	}
+
+	// A robot alone on a tile starts open; the same robot beside a
+	// deposit starts folded, for the deposit is the card that opens.
+	r := s.Robots[1]
+	col, row = robotTile(r)
+	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
+	if panel.findButton(buttonSend) != nil {
+		t.Fatal("the robot's tile has a deposit, want bare ground to test with")
+	}
+	if len(panel.rows) < 3 {
+		t.Fatal("the lone robot's card starts folded, want it open")
+	}
+	oilCol, oilRow, _ := nearestTileOf(kindOil)
+	cx, cy := tileCenterUnits(oilCol, oilRow)
+	r.X, r.Y = cx, cy
+	s.Robots[1] = r
+	panel = tooltipLayout(s, camera, oilCol, oilRow, map[string]bool{})
+	for _, thing := range panel.rows {
+		if thing.title && thing.open && thing.thing.Type == TypeRobot {
+			t.Error("the robot's card starts open beside a deposit, want it folded")
+		}
+	}
+}
+
 func TestTooltipOffersRobotButtons(t *testing.T) {
 	camera := golib.NewCamera(screenWidth, screenHeight)
 	s := newGame()
@@ -121,7 +169,10 @@ func TestTooltipOffersRobotButtons(t *testing.T) {
 	if !ok {
 		t.Fatal("the region has no oil to test with")
 	}
-	open := map[string]bool{fmt.Sprintf("oil@%d,%d", col, row): true}
+	// The card belongs to the whole patch, so its ID carries the patch's
+	// top corner tile, not the tile clicked.
+	patch, _ := depositAt(col, row)
+	open := map[string]bool{fmt.Sprintf("oil@%d,%d", patch.Col, patch.Row): true}
 	panel := tooltipLayout(s, camera, col, row, open)
 	if thing, label, ok := panel.buttonAt(panel.x+1, panel.y+1); ok {
 		t.Errorf("the panel's corner hit %v's %q button, want nothing", thing, label)
@@ -145,8 +196,7 @@ func TestTooltipOffersRobotButtons(t *testing.T) {
 	}
 	// A dry deposit has nobody to send.
 	drained := newGame()
-	key := drainKey(col, row)
-	drained.Drain[key] = 0
+	drained.Drain[depositKey(patch)] = 0
 	panel = tooltipLayout(drained, camera, col, row, open)
 	if panel.findButton(buttonSend) != nil || panel.findButton(buttonRecall) != nil {
 		t.Error("a dry deposit still offers a robot button")
