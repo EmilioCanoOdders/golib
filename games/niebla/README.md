@@ -10,11 +10,19 @@ From the GoLib repository root:
 ```text
 ./golib run niebla          # play it
 ./golib test niebla         # go vet + go test
-./golib shot niebla 30 --input "Mouse@5:568,372 MouseLeft@6 Mouse@7:700,386 MouseLeft@8 Mouse@9:678,450 MouseLeft@10"
+./golib shot niebla 30      # the menu, with the player's number
+./golib shot niebla 120 --input "Enter@1"   # reach the region: Play is Enter
 ```
 
-The shot above picks the safe oil pool at tile (11, 14), expands its card
-and presses its send robot button: (568, 372) is the tile's center on
+A shot starts on the menu; `Enter@1` presses Play (or click it: `Mouse@5:640,390
+MouseLeft@6`). Inside the region:
+
+```text
+./golib shot niebla 120 --input "Enter@1 Mouse@5:568,372 MouseLeft@6 Mouse@7:700,386 MouseLeft@8 Mouse@9:678,450 MouseLeft@10"
+```
+
+The clicks pick the safe oil pool at tile (11, 14), expand its card
+and press its send robot button: (568, 372) is the tile's center on
 screen, (700, 386) the card's title row, (678, 450) the button. The frame
 shows the card expanded, offering recall robot. The camera at rest centers
 the view on world point (640, 372) — the middle of its bounds — so screen
@@ -26,8 +34,11 @@ never its corner, whose tile depends on float rounding.
 
 | File | Holds |
 | --- | --- |
-| `main.go` | `main`, screen size, every color of the game |
-| `play.go` | The play scene: input to actions plus one `Tick` per update; the camera, the selection, the marking blueprint and the open cards live here, never serialized |
+| `main.go` | `main` — who is playing, then the menu scene —, screen size, every color of the game, the monitor filters (made once, shared by the scenes) |
+| `menu.go` | The title screen: the game's name, the player's number, Play and Quit; the `menuButton` hit-testing both scenes' menus use |
+| `identity.go` | Who is playing: the machine's ID (registry value, platform UUID or `/etc/machine-id`), hashed with the game's salt into `player`, the number the menu shows and a later server hands tokens out by |
+| `store.go` | The local database (SQLite): players, saves and the machine table; `saveBase`/`resumeState`, the scenes' door into it; the DB path, `:memory:` under `golib shot` |
+| `play.go` | The play scene: input to actions plus one `Tick` per update; the camera, the selection, the marking blueprint and the open cards live here, never serialized; Esc saves and returns to the menu, autosave every `autosaveTicks` |
 | `radial.go` | The build menu: the radial of blueprints a click on empty ground opens |
 | `state.go` | The simulation's state: robots (core or built), buildings, stock, what remains of each deposit, build jobs; `newGame`, which deals the starting region |
 | `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`) and `Apply`, the only door into the state |
@@ -45,6 +56,8 @@ never its corner, whose tile depends on float rounding.
 | `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
 | `fog_test.go` | The fog driven directly: cycles, the first swell on schedule, the pressed line, the bubble's margin, the pushed band's drag, the swell's burn, the HUD's forecast |
+| `identity_test.go` | The identity derived from a machine ID: stable, distinct, and the parsers of what `reg query`, `ioreg` and the machine-id files say |
+| `store_test.go` | The database driven directly: an identity kept across runs, the fallback one too, the token column waiting empty, a base saved and loaded back whole, a second save replacing the first, one player's save invisible to another, the DB path's rules |
 
 ## Architecture
 
@@ -142,6 +155,50 @@ every silo and warehouse. A robot hauling into a full store stands at
 the core trying again each tick (its card says waiting for storage), and
 deposits what fits when a silo opens room.
 
+### The lifecycle, identity and the local database
+
+The game boots on the **menu** (`menu.go`): the game's name, the player's
+number, Play and Quit. Play carries the player to their base as they left
+it — `resumeState` loads the last save, or deals a new region when there
+is none. Esc in the region saves and returns to the menu; the region also
+saves itself every `autosaveTicks` (900, 15 s), so a window closed without
+ceremony loses less than that. The menu is the only screen where Esc
+quits.
+
+**Identity** (`identity.go`): the machine says who is playing. Its
+system ID — Windows' `MachineGuid`, macOS' `IOPlatformUUID`, Linux'
+`/etc/machine-id` — hashed with `playerIDSalt`, is `player`: 64 hex
+characters, stable across runs, and never shown or sent in raw form. The
+menu shows its first eight as `#30E99076`; the database and a later
+server use the whole thing. A machine that won't say who it is gets a
+random identity, kept in the database's `machine` table, so it is still
+stable from then on. Identity is per machine, not per human: two players
+on one computer share a number, and an avatar picker is the later answer.
+
+**The database** (`store.go`) is SQLite through `modernc.org/sqlite`
+(pure Go — this project has no C compiler), one file at the player's
+settings folder, in `GoLib games/niebla/`, the same place a GoLib dist
+build keeps its saves, so a debug build and a dist one share the base.
+The schema is the schema a server keeps, on one machine for now:
+
+- `players` — one row per identity, with `source` (`machine` or
+  `random`), `created_at`, and a `token` column that stays empty until a
+  server hands one out at first contact. The client is already shaped
+  for that moment: resolve, register, then authenticate by identity.
+- `saves` — the whole `State` as one JSON value per player and slot
+  (`region` for now), with the tick and the time it was written. The
+  server will hold one authoritative region per player the same way.
+- `machine` — key-value for what belongs to this machine alone (the
+  fallback identity lives here).
+
+Under `golib shot` and `go test` the database is `:memory:`: shots and
+tests never touch the player's base, and `golib shot --save` still
+starts a game deep in a state — `resumeState` takes the seeded `state`
+value over whatever the database has. Two caveats: the driver doesn't
+build for the browser (`js/wasm`), so a web build of this game will get
+its store from a server or the browser's own, not this file; and the
+simulation itself never reads the clock — only the saves' timestamps do.
+
 ### Entity catalog
 
 `catalog.go` holds one `ThingInfo` per `ThingType`: name, color, the SI unit
@@ -235,5 +292,13 @@ silo opens room. `fog_test.go` does the same for the fog slice: the
 cycles tick, the first swell rises on schedule and drains whole, the
 line presses in and never reaches the bubble, the pushed band drags
 more, a swell burns outside but not inside, and the HUD forecasts.
+`identity_test.go` pins the identity: stable for a machine, distinct
+between machines, 64 hex characters, and the three parsers of what the
+systems report. `store_test.go` pins the database: an identity (and a
+fallback one) kept across runs, a fresh player's token waiting empty, a
+base saved and loaded back whole, a second save replacing the first,
+one player's save invisible to another, and the DB path's rules
+(`:memory:` under `golib shot`, the settings folder otherwise, a
+missing one is an error).
 Visual checks are shots with scripted clicks; see the
 command above.

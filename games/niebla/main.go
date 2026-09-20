@@ -2,8 +2,16 @@
 //
 // Read it in this order:
 //
-//   - main.go (this file) starts the game: main calls golib.Run with the
-//     first scene. The screen's size and the game's colors are here.
+//   - main.go (this file) starts the game: main works out who is
+//     playing, then calls golib.Run with the menu scene. The screen's
+//     size, the game's colors and the monitor filters are here.
+//   - menu.go is the title screen: the player's number, and Play, which
+//     carries them to the base as they left it.
+//   - identity.go says who is playing: the machine's ID, hashed with the
+//     game's salt into the number the menu shows — the identity a later
+//     server hands tokens out by.
+//   - store.go is the local database (SQLite, the schema a later server
+//     keeps): players, saves, and the glue saveBase and resumeState.
 //   - play.go is the play scene: Update turns input into actions and
 //     sends one Tick per update, Draw draws the region through the
 //     camera, and the camera and the selection live here, never
@@ -114,7 +122,9 @@ var (
 // The monitor filters, run over the whole picture after every Draw, in this
 // order: a glow, a whisper of a tube screen and a soft rounding of the
 // pixels. Both the glow and the CRT are adapted from games/asteroids, turned
-// down. The player switches all three with F2.
+// down. Every scene runs under them; the player switches all three with F2.
+// They are made in main, once: a shader needs the window's GPU, so they can't
+// be package variables, and the scenes share the one set.
 var (
 	//go:embed shaders/glow.fs
 	glowSource string
@@ -126,6 +136,21 @@ var (
 	softSource string
 )
 
+var monitor struct {
+	glow, crt, soft *golib.Shader
+	on              bool
+}
+
+// setFilters turns the monitor filters on and off.
+func setFilters(on bool) {
+	monitor.on = on
+	if on {
+		golib.SetPostProcess(monitor.glow, monitor.crt, monitor.soft)
+	} else {
+		golib.SetPostProcess()
+	}
+}
+
 // The screen effect settings, sent to the shaders as uniforms. Softer than
 // games/asteroids' 2.4 and 0.2.
 const (
@@ -134,6 +159,20 @@ const (
 )
 
 func main() {
+	monitor.glow = golib.NewShader(glowSource)
+	monitor.crt = golib.NewShader(crtSource)
+	monitor.soft = golib.NewShader(softSource)
+	monitor.glow.SetUniform("strength", glowStrength)
+	monitor.crt.SetUniform("curvature", crtCurvature)
+	monitor.soft.SetUniform("amount", 0.35)
+
+	resolvePlayer()
+	defer func() {
+		if db != nil {
+			db.close()
+		}
+	}()
+
 	config := golib.Config{
 		Title: "niebla", Width: screenWidth, Height: screenHeight,
 		PixelArt: true,
@@ -141,7 +180,7 @@ func main() {
 		// for a game that should keep playing in the background.
 		PauseUnfocused: true,
 	}
-	if err := golib.Run(newPlayScene(), config); err != nil {
+	if err := golib.Run(newMenuScene(), config); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -27,6 +27,11 @@ func zoomOfStop(stop float32) float32 {
 	return float32(math.Exp2(float64(stop)))
 }
 
+// autosaveTicks is how often the base saves itself: 900 ticks, 15
+// seconds of game time, so a window closed without ceremony loses less
+// than that. Leaving to the menu saves at once.
+const autosaveTicks = 900
+
 // playScene shows the region through a camera. The camera and the
 // selection are view, not state: they live here, outside the
 // simulation, and never get serialized. The simulation's state does:
@@ -35,16 +40,17 @@ func zoomOfStop(stop float32) float32 {
 type playScene struct {
 	state *State
 
-	glow, crt, soft *golib.Shader
-	filterOn        bool
-	camera          *golib.Camera
-	zoom            float32       // the zoom on screen, gliding toward zoomOfStop(zoomStop)
-	zoomStop        float32       // the whole stop the wheel last asked for
-	anchorWorld     golib.Vector2 // while gliding, the point kept under the cursor
-	anchorScreen    golib.Vector2
-	dragging        bool          // the right button is down and moving the view
-	dragFrom        golib.Vector2 // where the cursor stood at the last drag update
-	mouse           golib.Vector2 // where the pointer stands, to light buttons
+	camera       *golib.Camera
+	zoom         float32       // the zoom on screen, gliding toward zoomOfStop(zoomStop)
+	zoomStop     float32       // the whole stop the wheel last asked for
+	anchorWorld  golib.Vector2 // while gliding, the point kept under the cursor
+	anchorScreen golib.Vector2
+	dragging     bool          // the right button is down and moving the view
+	dragFrom     golib.Vector2 // where the cursor stood at the last drag update
+	mouse        golib.Vector2 // where the pointer stands, to light buttons
+
+	savedTicks int64 // ticks since the base last saved itself
+	saveFailed bool  // the last autosave couldn't be written
 
 	picked       bool // a tile is selected and shows its panel
 	pickedCol    int  // the selected tile
@@ -56,28 +62,25 @@ type playScene struct {
 	hovering     bool // the pointer is over the region
 	hoverCol     int  // the tile under the pointer
 	hoverRow     int
-	hoverCellCol int  // the cell under the pointer, the cursor
-	hoverCellRow int  //
+	hoverCellCol int // the cell under the pointer, the cursor
+	hoverCellRow int //
 	hoverCell    bool // the pointer is over a cell
 	rightWasDown bool
 	rightFrom    golib.Vector2 // where the right button went down
 }
 
-// newPlayScene turns the monitor filters on: the glow runs first, so the CRT
-// scans the glowing picture, and the soft rounding goes last, so it rounds
-// the whole result.
-func newPlayScene() *playScene {
+// newPlayScene takes up the base it is given, dealing a new one when
+// none came — the menu hands in the player's save, or nil for a new
+// region. The monitor filters are already on: the menu, where every
+// visit to this scene starts, put them up.
+func newPlayScene(state *State) *playScene {
+	if state == nil {
+		state = newGame()
+	}
 	s := &playScene{
-		state:    newGame(),
-		glow:     golib.NewShader(glowSource),
-		crt:      golib.NewShader(crtSource),
-		soft:     golib.NewShader(softSource),
+		state:    state,
 		expanded: map[string]bool{},
 	}
-	s.glow.SetUniform("strength", glowStrength)
-	s.crt.SetUniform("curvature", crtCurvature)
-	s.soft.SetUniform("amount", 0.35)
-	s.setFilters(true)
 	s.camera = golib.NewCamera(screenWidth, screenHeight)
 	s.camera.Bounds = regionOnScreen()
 	s.zoomStop, s.zoom = zoomOut, zoomOfStop(zoomOut)
@@ -86,22 +89,14 @@ func newPlayScene() *playScene {
 	return s
 }
 
-func (s *playScene) setFilters(on bool) {
-	s.filterOn = on
-	if on {
-		golib.SetPostProcess(s.glow, s.crt, s.soft)
-	} else {
-		golib.SetPostProcess()
-	}
-}
-
 func (s *playScene) Update(input *golib.Input, dt float32) {
 	mx, my := input.MousePosition()
 	s.mouse = golib.Vector2{X: mx, Y: my}
-	// No key quits by itself, not even Esc: the game calls golib.Quit when
-	// it wants to end.
+	// Esc or Back saves the base and returns to the menu, the way out of
+	// the region. No other key quits, and the menu is where quitting from.
 	if input.KeyPressed(golib.KeyEscape) || input.GamepadPressed(0, golib.GamepadBack) {
-		golib.Quit()
+		s.saveNow()
+		golib.SwitchScene(newMenuScene())
 		return
 	}
 	// F11 or Alt+Enter switches fullscreen. The screen keeps its size: GoLib
@@ -113,12 +108,26 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 	}
 	// F2 turns the monitor filters on and off.
 	if input.KeyPressed(golib.KeyF2) {
-		s.setFilters(!s.filterOn)
+		setFilters(!monitor.on)
 	}
 	s.updateCamera(input, dt)
 	s.updateInspection(input)
 	// The loop is the clock: one tick of simulation per update.
 	Apply(s.state, Tick{})
+	s.savedTicks++
+	if s.savedTicks >= autosaveTicks {
+		s.saveNow()
+	}
+}
+
+// saveNow writes the base to the local database, when saving is on, and
+// remembers a failure so the HUD can say so.
+func (s *playScene) saveNow() {
+	s.savedTicks = 0
+	if db == nil {
+		return
+	}
+	s.saveFailed = saveBase(s.state) != nil
 }
 
 // updateCamera pans with WASD, the arrows or the left stick, drags with the
@@ -363,7 +372,7 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	screen.DrawText("niebla", 16, 16, 20, textColor)
 	drawMarkup(screen, s.hudLine(), 16, 44, 12, textColor)
 	screen.DrawText(
-		"click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a tile, Esc quits, F11 fullscreen, F2 filter",
+		"click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a tile, Esc saves and returns to the menu, F11 fullscreen, F2 filter",
 		16, float32(screen.Height())-30, 10, textColor,
 	)
 	if s.picked && !s.radial {
@@ -387,6 +396,9 @@ func (s *playScene) hudLine() string {
 		fog += "   swell"
 	case s.state.Fog.NextIn <= 1:
 		fog += "   swell next cycle"
+	}
+	if s.saveFailed {
+		fog += "   save failed"
 	}
 	return fmt.Sprintf("[oil]%s / %s[/]   [lilac]%s / %s[/]   [dim]%d robots[/]   %s",
 		si(s.state.Stock.Oil, "L"), si(oilCap(s.state), "L"),
