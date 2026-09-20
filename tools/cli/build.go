@@ -106,11 +106,29 @@ func (c *cli) buildGame(game string) string {
 			return ""
 		}
 	}
-	err := c.goRun(dir, "build", "-o", exe, ".")
+	// On Unix the game a golib run left open may still be running from
+	// the executable this build replaces, and linking onto a running
+	// binary is "text file busy". Link to a sibling and swap it in with
+	// a rename, which a running game survives. Windows keeps the direct
+	// path, where the libraries' syncFile already spares a running game.
+	target := exe
+	if c.goos != "windows" {
+		target = filepath.Join(outDir, "."+filepath.Base(exe)+".new")
+	}
+	err := c.goRun(dir, "build", "-o", target, ".")
 	removeResources()
 	if err != nil {
+		if c.goos != "windows" {
+			os.Remove(target)
+		}
 		c.check("fail", fmt.Sprintf("build failed for games/%s (see the Go errors above)", game))
 		return ""
+	}
+	if target != exe {
+		if err := os.Rename(target, exe); err != nil {
+			c.check("fail", fmt.Sprintf("cannot put the new build of games/%s in place: %v", game, err))
+			return ""
+		}
 	}
 	synced, err := c.syncRaylib(dir)
 	if err != nil {
