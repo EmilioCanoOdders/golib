@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"sort"
 
 	"golib"
 )
@@ -11,17 +12,19 @@ import (
 // is the detail the zoom is for.
 const propZoom = 2
 
-// drawRegion paints the still region: the ground inside the fog line, the
-// core and its bubble, and the fog standing beyond the line. It reads the
-// layout and changes nothing.
-func drawRegion(screen *golib.Screen, zoom float32) {
+// drawRegion paints the still region and the robots on it: the ground
+// inside the fog line, the core and its bubble, and the fog standing
+// beyond the line. It reads the state and changes nothing.
+func drawRegion(s *State, screen *golib.Screen, zoom float32) {
 	screen.Clear(fogColor)
-	drawGround(screen, zoom)
+	drawGround(s, screen, zoom)
+	drawRobots(s, screen)
+	drawFogCover(screen)
 	drawFogLine(screen)
 	drawCoreAndBubble(screen)
 }
 
-func drawGround(screen *golib.Screen, zoom float32) {
+func drawGround(s *State, screen *golib.Screen, zoom float32) {
 	for row := 0; row < regionRows; row++ {
 		for col := 0; col < regionCols; col++ {
 			distance := tileDistance(col, row)
@@ -36,9 +39,17 @@ func drawGround(screen *golib.Screen, zoom float32) {
 			screen.DrawPolygon(tileDiamond(x, y), color)
 			switch tileAt(col, row) {
 			case kindOil:
-				drawOil(screen, x, y)
+				if remainingAt(s, col, row) > 0 {
+					drawOil(screen, x, y)
+				} else {
+					drawScar(screen, x, y)
+				}
 			case kindLilac:
-				drawLilac(screen, x, y)
+				if remainingAt(s, col, row) > 0 {
+					drawLilac(screen, x, y)
+				} else {
+					drawScar(screen, x, y)
+				}
 			case kindRock:
 				if zoom >= propZoom {
 					drawRock(screen, x, y, col, row)
@@ -48,10 +59,23 @@ func drawGround(screen *golib.Screen, zoom float32) {
 					drawBush(screen, x, y, col, row)
 				}
 			}
-			if cover := fogCover(distance); cover > 0 {
-				screen.DrawPolygon(tileDiamond(x, y),
-					golib.WithOpacity(fogColor, cover))
+		}
+	}
+}
+
+// drawFogCover lays the fog over everything, tile by tile, fading in
+// past the line. It runs after the robots, so whatever walks into the
+// fog is swallowed by it.
+func drawFogCover(screen *golib.Screen) {
+	for row := 0; row < regionRows; row++ {
+		for col := 0; col < regionCols; col++ {
+			cover := fogCover(tileDistance(col, row))
+			if cover <= 0 {
+				continue
 			}
+			x, y := projectTile(float32(col), float32(row))
+			screen.DrawPolygon(tileDiamond(x, y),
+				golib.WithOpacity(fogColor, cover))
 		}
 	}
 }
@@ -128,6 +152,44 @@ func drawBush(screen *golib.Screen, x, y float32, col, row int) {
 	screen.DrawCircle(cx-3, cy, 3, bushColor)
 	screen.DrawCircle(cx+3, cy, 3, bushColor)
 	screen.DrawCircle(cx, cy-3, 3, bushLightColor)
+}
+
+// drawScar marks a deposit tile the robots emptied: a shallow dark
+// patch where the pool or the crystals used to be.
+func drawScar(screen *golib.Screen, x, y float32) {
+	cx, cy := x, y+tileH/2
+	screen.DrawPolygon(scaledDiamond(cx, cy, 0.3), scarColor)
+}
+
+// drawRobots paints the robots, back to front, each a dark body with a
+// lit top and a glowing eye, its cargo as a colored pack on its back.
+func drawRobots(s *State, screen *golib.Screen) {
+	type spot struct {
+		id int64
+		p  golib.Vector2
+	}
+	spots := make([]spot, 0, len(s.Robots))
+	for _, id := range sortedRobotIDs(s) {
+		r := s.Robots[id]
+		x, y := project(float32(r.X), float32(r.Y))
+		spots = append(spots, spot{id, golib.Vector2{X: x, Y: y}})
+	}
+	sort.Slice(spots, func(i, j int) bool { return spots[i].p.Y < spots[j].p.Y })
+	for _, sp := range spots {
+		r := s.Robots[sp.id]
+		p := sp.p
+		screen.DrawCircle(p.X, p.Y+unitH*0.4, unitW*0.55, robotShadowColor)
+		screen.DrawCircle(p.X, p.Y, unitW*0.5, robotDarkColor)
+		screen.DrawCircle(p.X, p.Y, unitW*0.34, robotColor)
+		if r.Carry > 0 {
+			cargo := lilacColor
+			if r.Cargo == TypeOil {
+				cargo = oilColor
+			}
+			screen.DrawCircle(p.X+unitW*0.42, p.Y+unitH*0.12, unitW*0.22, cargo)
+		}
+		screen.DrawCircle(p.X, p.Y-unitW*0.28, unitW*0.14, coreGlowColor)
+	}
 }
 
 func drawCoreAndBubble(screen *golib.Screen) {

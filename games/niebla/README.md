@@ -10,41 +10,58 @@ From the GoLib repository root:
 ```text
 ./golib run niebla          # play it
 ./golib test niebla         # go vet + go test
-./golib shot niebla 10 --input "Mouse@5:640,360 MouseLeft@6"
+./golib shot niebla 12 700 --input "Mouse@5:616,348 MouseLeft@6 Mouse@7:700,360 MouseLeft@8 Mouse@9:700,426 MouseLeft@10"
 ```
 
-The shot above clicks the core tile at rest zoom: the screen center is
-(640, 360), and the camera at rest centers the view on world point
-(640, 372) — the two differ, `camera.ToWorld` does the mapping.
+The shot above picks the oil pool at tile (11, 12), expands its card and
+presses its send robot button: (616, 348) is the tile's center on screen,
+(700, 360) the card's title row, (700, 426) the button. The camera at rest
+centers the view on world point (640, 372) — the screen and the world
+differ, `camera.ToWorld` does the mapping.
 
 ## Files
 
 | File | Holds |
 | --- | --- |
 | `main.go` | `main`, screen size, every color of the game |
-| `play.go` | The play scene: input to camera moves and inspection picks; the camera and the selection live here, never serialized |
+| `play.go` | The play scene: input to actions plus one `Tick` per update; the camera, the selection and the open cards live here, never serialized |
+| `state.go` | The simulation's state: robots, stock, what remains of each deposit, build jobs; `newGame`, which deals the starting region |
+| `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`) and `Apply`, the only door into the state |
+| `sim_robots.go` | The robots' rules and tuning: what a robot does each tick, build jobs first, its post second |
 | `region.go` | The hand-made 25x25 layout, the isometric `project`, tile helpers; pure Go, no drawing |
-| `things.go` | What a tile holds: `Thing` snapshots from the layout, `tileAtWorld`, the SI quantities; pure Go, no drawing |
+| `things.go` | What a tile holds: `Thing` snapshots out of layout plus state, `tileAtWorld`, the SI quantities; pure Go, no drawing |
 | `catalog.go` | The entity database: per thing type its name, color, unit and card lines, plus the stable-color fallback |
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
-| `inspect.go` | The inspection panel: layout, hit testing, painting; tile highlights |
-| `draw.go` | The region painter: ground, fog, core, bubble, props |
+| `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons; tile highlights |
+| `draw.go` | The region painter: ground, robots, fog, core, bubble, props |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
-| `markup_test.go` | Markup parser and tooltip layout tests |
+| `markup_test.go` | Markup parser and tooltip layout/button tests |
+| `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
 
 ## Architecture
 
 DESIGN.md's four laws (one serializable state, actions in/state out, the
-game is a visualization, determinism) are the target; the simulation has not
-landed yet. What exists today, and where it will plug in:
+game is a visualization, determinism) hold since slice 4, in a first,
+robot-sized form:
 
-- The region is static data (`regionLayout`), read by everyone. When the
-  simulation arrives, `thingsAt` stops reading the layout and reads the
-  state; nothing else in the view layer changes.
-- View state, never serialized: the camera, the picked tile, which cards
-  stand open (`playScene.expanded`, keyed by `Thing.ID`).
+- `State` (`state.go`) is the whole game: robots by ID, the stores, what
+  remains of each deposit tile (a `"col,row"`-keyed grid over the static
+  layout — deposits become entities when buildings need neighbors), and
+  the build jobs, which nothing marks yet but every robot obeys. It has
+  no pointers, channels or functions, so it serializes as it is.
+- Actions (`actions.go`) are structs (`Tick`, `SendRobot`, `RecallRobot`);
+  `Apply` mutates the state it is given — one owner, no copies — and is
+  total and deterministic, so a seed plus an action log replays a game.
+- The robots carry no plan: `stepRobot` (`sim_robots.go`) derives each
+  tick what one does, in priority order (carry home, finish loading,
+  oldest build job, own post, idle by the core). Anything that iterates
+  entities iterates them in sorted ID order.
+- The play scene sends input actions and one `Tick` per update; `Draw`
+  only reads. View state — camera, picked tile, open cards, pointer —
+  lives in the scene and never serializes.
 - The catalog and the markup palette are view-side metadata, not state:
-  package-level tables, like a schema.
+  package-level tables, like a schema. Card lines read the state, so
+  they can say what remains in a deposit and what a robot is doing.
 
 ### Entity catalog
 
@@ -85,14 +102,23 @@ would leave the screen.
 ### Inspection panel
 
 One geometry, two users: `tooltipLayout` builds the row list, and `Update`
-hit-tests it (`contains`, `cardAt`) while `Draw` paints it. Clicking a tile
-selects it; clicking a card's title toggles its details; a right click that
-never moved more than 4 px deselects (a drag is a pan, not a cancel).
+hit-tests it (`contains`, `cardAt`, `buttonAt`) while `Draw` paints it.
+Clicking a tile selects it; clicking a card's title toggles its details; an
+expanded deposit card carries a send robot / recall robot button; a right
+click that never moved more than 4 px deselects (a drag is a pan, not a
+cancel). The camera rests centered on world point (640, 372) — screen and
+world differ by (0, -12) at rest zoom; click targets in scripted shots aim
+at a tile's center (`projectTile` + half a tile), never its corner, whose
+tile depends on float rounding.
 
 ## Testing
 
 `region_test.go` pins the layout's placement rules, the projection's round
 trip, the things a tile holds, the SI formatter and the catalog's stability.
-`markup_test.go` covers the parser (nesting, unknown tags, unclosed color)
-and the tooltip layout's rows and hit testing. Visual checks are shots with
-scripted clicks; see the command above.
+`markup_test.go` covers the parser (nesting, unknown tags, unclosed color),
+the tooltip layout's rows and hit testing, and the cards' robot buttons.
+`world_test.go` drives the simulation with no window: the starting robots,
+a haul's conservation (store + remaining = deposit), who takes a post,
+build-job priority, recall, dry deposits, replay determinism and the JSON
+round trip. Visual checks are shots with scripted clicks; see the command
+above.

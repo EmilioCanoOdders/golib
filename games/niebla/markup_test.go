@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	"golib"
@@ -74,8 +75,9 @@ func TestParseMarkupUnclosed(t *testing.T) {
 }
 
 func TestTooltipLayoutRowsAndCards(t *testing.T) {
+	s := newGame()
 	camera := golib.NewCamera(screenWidth, screenHeight)
-	panel := tooltipLayout(camera, coreCol, coreRow, map[string]bool{})
+	panel := tooltipLayout(s, camera, coreCol, coreRow, map[string]bool{})
 	titles := 0
 	for _, r := range panel.rows {
 		if r.title {
@@ -86,19 +88,19 @@ func TestTooltipLayoutRowsAndCards(t *testing.T) {
 		t.Fatalf("the core tile laid %d card titles, want 1", titles)
 	}
 	open := map[string]bool{"core@12,12": true}
-	panel = tooltipLayout(camera, coreCol, coreRow, open)
+	panel = tooltipLayout(s, camera, coreCol, coreRow, open)
 	details := 0
 	for _, r := range panel.rows {
 		if r.title {
 			if r.summary != "r = 20 m" {
 				t.Errorf("the core card's headline is %q, want \"r = 20 m\"", r.summary)
 			}
-		} else if !r.header {
+		} else if !r.header && r.button == "" {
 			details++
 		}
 	}
-	if details != 5 {
-		t.Errorf("the expanded core card shows %d details, want 5", details)
+	if details != 8 {
+		t.Errorf("the expanded core card shows %d details, want 8", details)
 	}
 	if !panel.contains(panel.x+1, panel.y+1) || panel.contains(panel.x-1, panel.y) {
 		t.Errorf("contains answers wrongly around the panel's edges")
@@ -109,5 +111,44 @@ func TestTooltipLayoutRowsAndCards(t *testing.T) {
 	}
 	if _, ok := panel.cardAt(panel.x+10, panel.y+tooltipPad+textRow/2); ok {
 		t.Errorf("cardAt the header found a card, want none")
+	}
+}
+
+func TestTooltipOffersRobotButtons(t *testing.T) {
+	camera := golib.NewCamera(screenWidth, screenHeight)
+	s := newGame()
+	col, row, ok := nearestTileOf(kindOil)
+	if !ok {
+		t.Fatal("the region has no oil to test with")
+	}
+	open := map[string]bool{fmt.Sprintf("oil@%d,%d", col, row): true}
+	panel := tooltipLayout(s, camera, col, row, open)
+	if thing, label, ok := panel.buttonAt(panel.x+1, panel.y+1); ok {
+		t.Errorf("the panel's corner hit %v's %q button, want nothing", thing, label)
+	}
+	button := panel.findButton(buttonSend)
+	if button == nil {
+		t.Fatal("the expanded oil card offers no send button")
+	}
+	mid := golib.Vector2{X: button.bx + button.bw/2, Y: button.by + button.bh/2}
+	if _, label, ok := panel.buttonAt(mid.X, mid.Y); !ok || label != buttonSend {
+		t.Errorf("buttonAt its own button gave %q, %v", label, ok)
+	}
+	// Sent for, the same card asks for the robot back.
+	Apply(s, SendRobot{Col: col, Row: row})
+	panel = tooltipLayout(s, camera, col, row, open)
+	if panel.findButton(buttonSend) != nil {
+		t.Error("an occupied post still offers to send a robot")
+	}
+	if panel.findButton(buttonRecall) == nil {
+		t.Error("an occupied post offers no recall")
+	}
+	// A dry deposit has nobody to send.
+	drained := newGame()
+	key := drainKey(col, row)
+	drained.Drain[key] = 0
+	panel = tooltipLayout(drained, camera, col, row, open)
+	if panel.findButton(buttonSend) != nil || panel.findButton(buttonRecall) != nil {
+		t.Error("a dry deposit still offers a robot button")
 	}
 }

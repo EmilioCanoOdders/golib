@@ -10,26 +10,30 @@ import (
 // ThingInfo is the catalog's entry for a thing type: what it is called, the
 // color everything about it is written in, and the lines its card shows.
 // The catalog is metadata, never state: it is the database the views read
-// to print any entity. A type it has no entry for still gets a name and a
-// stable color out of the fallback, so new things print the moment they
-// exist and get dressed later.
+// to print any entity. The card lines read the state, so they can say
+// what remains in a deposit or what a robot is doing. A type it has no
+// entry for still gets a name and a stable color out of the fallback, so
+// new things print the moment they exist and get dressed later.
 type ThingInfo struct {
 	Name    string
 	Color   golib.Color
-	Unit    string                      // the SI unit of the type's Amount
-	Summary func(amount float64) string // the card's headline; default si()
-	Details func(thing Thing) []Detail  // the expanded card's lines
+	Unit    string                               // the SI unit of the type's Amount
+	Summary func(amount float64) string          // the card's headline; default si()
+	Details func(s *State, thing Thing) []Detail // the expanded card's lines
 }
 
-// summarize returns the card's headline for a thing's amount.
-func (info ThingInfo) summarize(amount float64) string {
+// summarize returns the card's headline for a thing.
+func (info ThingInfo) summarize(thing Thing) string {
+	if thing.Caption != "" {
+		return thing.Caption
+	}
 	if info.Summary != nil {
-		return info.Summary(amount)
+		return info.Summary(thing.Amount)
 	}
 	if info.Unit == "" {
-		return fmt.Sprintf("%.0f", amount)
+		return fmt.Sprintf("%.0f", thing.Amount)
 	}
-	return si(amount, info.Unit)
+	return si(thing.Amount, info.Unit)
 }
 
 // catalog holds an entry per thing type so far.
@@ -38,11 +42,11 @@ var catalog = map[ThingType]ThingInfo{
 		Name:  "Oil pool",
 		Color: oilColor,
 		Unit:  "L",
-		Details: func(Thing) []Detail {
+		Details: func(s *State, thing Thing) []Detail {
 			return []Detail{
-				{"amount", fmt.Sprintf("[oil]%s[/]", si(oilPerPoolTile, "L"))},
+				{"amount", fmt.Sprintf("[oil]%s[/]", si(thing.Amount, "L"))},
 				{"tile", tileAreaLabel},
-				{"state", "intact"},
+				{"state", depositState(thing.Amount, oilPerPoolTile)},
 			}
 		},
 	},
@@ -50,11 +54,11 @@ var catalog = map[ThingType]ThingInfo{
 		Name:  "Lilac vein",
 		Color: lilacColor,
 		Unit:  "kg",
-		Details: func(Thing) []Detail {
+		Details: func(s *State, thing Thing) []Detail {
 			return []Detail{
-				{"amount", fmt.Sprintf("[lilac]%s[/]", si(lilacPerVeinTile, "kg"))},
+				{"amount", fmt.Sprintf("[lilac]%s[/]", si(thing.Amount, "kg"))},
 				{"tile", tileAreaLabel},
-				{"state", "intact"},
+				{"state", depositState(thing.Amount, lilacPerVeinTile)},
 			}
 		},
 	},
@@ -65,16 +69,58 @@ var catalog = map[ThingType]ThingInfo{
 		Summary: func(amount float64) string {
 			return "r = " + si(amount, "m")
 		},
-		Details: func(Thing) []Detail {
+		Details: func(s *State, thing Thing) []Detail {
 			return []Detail{
 				{"height", si(coreHeight, "m")},
 				{"pole", si(corePoleAcross, "m") + " across"},
 				{"bubble", "r = " + si(coreBubbleMeters(), "m")},
 				{"upkeep", "none"},
 				{"integrity", "[core]indestructible[/]"},
+				{"oil store", fmt.Sprintf("[oil]%s[/]", si(s.Stock.Oil, "L"))},
+				{"lilac store", fmt.Sprintf("[lilac]%s[/]", si(s.Stock.Lilac, "kg"))},
+				{"robots", fmt.Sprintf("%d", len(s.Robots))},
 			}
 		},
 	},
+	TypeRobot: {
+		Name:  "Robot",
+		Color: robotColor,
+		Details: func(s *State, thing Thing) []Detail {
+			r, ok := s.Robots[thing.Ref]
+			if !ok {
+				return nil
+			}
+			details := []Detail{
+				{"task", robotCaption(s, r)},
+			}
+			if r.Carry > 0 {
+				unit, kind := "kg", r.Cargo
+				if kind == TypeOil {
+					unit = "L"
+				}
+				details = append(details, Detail{
+					"carrying", fmt.Sprintf("[%s]%s[/]", kind, si(r.Carry, unit)),
+				})
+			}
+			if r.hasPost() {
+				details = append(details, Detail{
+					"post", fmt.Sprintf("tile %d, %d", r.PostCol, r.PostRow),
+				})
+			}
+			return details
+		},
+	},
+}
+
+// depositState says how a deposit tile reads after the robots worked it.
+func depositState(amount, full float64) string {
+	switch {
+	case amount <= 0:
+		return "dry"
+	case amount < full:
+		return "worked"
+	}
+	return "intact"
 }
 
 // catalogInfo returns the entry for a thing type. A type the catalog has no

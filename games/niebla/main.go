@@ -4,18 +4,28 @@
 //
 //   - main.go (this file) starts the game: main calls golib.Run with the
 //     first scene. The screen's size and the game's colors are here.
-//   - play.go is the play scene: Update answers the keys and drives the
-//     camera and the tile inspection, Draw draws the region through it.
-//   - region.go holds the hand-made region and the isometric projection, as
-//     plain Go with no drawing, so that region_test.go can test it.
-//   - things.go holds what a tile holds: the things' snapshot and the SI
-//     units, as plain Go with no drawing.
+//   - play.go is the play scene: Update turns input into actions and
+//     sends one Tick per update, Draw draws the region through the
+//     camera, and the camera and the selection live here, never
+//     serialized.
+//   - state.go holds the simulation's state, the one serializable value
+//     the whole game is, and newGame, which deals the starting region.
+//   - actions.go holds the actions (Tick, SendRobot, RecallRobot) and
+//     Apply, the only door into the state.
+//   - sim_robots.go holds the robots' rules and their tuning: what a
+//     robot does each tick, build jobs first, its post second.
+//   - region.go holds the hand-made region and the isometric projection,
+//     as plain Go with no drawing, so that region_test.go can test it.
+//   - things.go holds what a tile holds: the things' snapshot out of the
+//     state and the SI units, as plain Go with no drawing.
 //   - catalog.go is the entity database: per thing type, its name, its
 //     color and its card's lines, with a stable-color fallback for types
 //     it has no entry for yet.
 //   - markup.go writes text in colors: the "[name]...[/]" markup.
-//   - inspect.go lays out and paints the tile inspection panel.
-//   - draw.go paints the region.
+//   - inspect.go lays out and paints the tile inspection panel, with the
+//     cards' buttons.
+//   - draw.go paints the region and the robots.
+//   - world_test.go drives the simulation directly, no window needed.
 //
 // games/platformer is a complete example, with a title, pause and win scenes,
 // and a world larger than the screen, seen through a golib.Camera.
@@ -53,6 +63,10 @@ var (
 	rockLightColor   = golib.Color{R: 144, G: 150, B: 162, A: 255}
 	bushColor        = golib.Color{R: 92, G: 106, B: 92, A: 255}
 	bushLightColor   = golib.Color{R: 114, G: 130, B: 110, A: 255}
+	scarColor        = golib.Color{R: 54, G: 60, B: 72, A: 255}
+	robotColor       = golib.Color{R: 208, G: 216, B: 228, A: 255}
+	robotDarkColor   = golib.Color{R: 58, G: 66, B: 80, A: 255}
+	robotShadowColor = golib.Color{R: 40, G: 46, B: 58, A: 90}
 	coreColor        = golib.Color{R: 32, G: 36, B: 46, A: 255}
 	coreGlowColor    = golib.Color{R: 255, G: 244, B: 214, A: 255}
 	bubbleColor      = golib.Color{R: 168, G: 216, B: 255, A: 46}
@@ -68,6 +82,9 @@ var (
 	panelDimColor    = golib.Color{R: 148, G: 156, B: 172, A: 255}
 	pickedTileColor  = golib.Color{R: 255, G: 244, B: 214, A: 255}
 	hoveredTileColor = golib.Color{R: 255, G: 255, B: 255, A: 90}
+	buttonColor      = golib.Color{R: 34, G: 39, B: 50, A: 255}
+	buttonEdgeColor  = golib.Color{R: 190, G: 226, B: 255, A: 120}
+	buttonHoverColor = golib.Color{R: 52, G: 60, B: 76, A: 255}
 )
 
 // The monitor filters, run over the whole picture after every Draw, in this

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 
 	"golib"
@@ -19,9 +20,14 @@ const (
 	zoomGlide = 0.1 // seconds for the zoom to close most of the way to its next step
 )
 
-// playScene shows the region through a camera. The camera is view, not
-// state: it lives here, outside the simulation, and never gets serialized.
+// playScene shows the region through a camera. The camera and the
+// selection are view, not state: they live here, outside the
+// simulation, and never get serialized. The simulation's state does:
+// Update turns input into actions and sends one Tick per update, and
+// Draw renders the state and changes nothing.
 type playScene struct {
+	state *State
+
 	glow, crt, soft *golib.Shader
 	filterOn        bool
 	camera          *golib.Camera
@@ -31,9 +37,10 @@ type playScene struct {
 	anchorScreen    golib.Vector2
 	dragging        bool          // the right button is down and moving the view
 	dragFrom        golib.Vector2 // where the cursor stood at the last drag update
+	mouse           golib.Vector2 // where the pointer stands, to light buttons
 
-	picked       bool // a tile is selected and shows its panel
-	pickedCol    int  // the selected tile
+	picked       bool            // a tile is selected and shows its panel
+	pickedCol    int             // the selected tile
 	pickedRow    int
 	expanded     map[string]bool // which cards stand open, by thing ID
 	hovering     bool            // the pointer is over the region
@@ -48,6 +55,7 @@ type playScene struct {
 // the whole result.
 func newPlayScene() *playScene {
 	s := &playScene{
+		state:    newGame(),
 		glow:     golib.NewShader(glowSource),
 		crt:      golib.NewShader(crtSource),
 		soft:     golib.NewShader(softSource),
@@ -75,6 +83,8 @@ func (s *playScene) setFilters(on bool) {
 }
 
 func (s *playScene) Update(input *golib.Input, dt float32) {
+	mx, my := input.MousePosition()
+	s.mouse = golib.Vector2{X: mx, Y: my}
 	// No key quits by itself, not even Esc: the game calls golib.Quit when
 	// it wants to end.
 	if input.KeyPressed(golib.KeyEscape) || input.GamepadPressed(0, golib.GamepadBack) {
@@ -94,6 +104,8 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 	}
 	s.updateCamera(input, dt)
 	s.updateInspection(input)
+	// The loop is the clock: one tick of simulation per update.
+	Apply(s.state, Tick{})
 }
 
 // updateCamera pans with WASD, the arrows or the left stick, drags with the
@@ -187,9 +199,10 @@ func (s *playScene) dragCamera(input *golib.Input) {
 }
 
 // updateInspection picks the tile under the pointer with the left button,
-// cancels with a right click that never became a drag, and expands or folds
-// a card when a click lands on its title. The camera has already moved, so
-// the hover follows the view the frame it changes.
+// cancels with a right click that never became a drag, expands or folds
+// a card when a click lands on its title, and acts when a click lands on
+// a card's button. The camera has already moved, so the hover follows
+// the view the frame it changes.
 func (s *playScene) updateInspection(input *golib.Input) {
 	mx, my := input.MousePosition()
 	world := s.camera.ToWorld(mx, my)
@@ -199,8 +212,12 @@ func (s *playScene) updateInspection(input *golib.Input) {
 
 	if input.MousePressed(golib.MouseLeft) {
 		if s.picked {
-			panel := tooltipLayout(s.camera, s.pickedCol, s.pickedRow, s.expanded)
+			panel := tooltipLayout(s.state, s.camera, s.pickedCol, s.pickedRow, s.expanded)
 			if panel.contains(mx, my) {
+				if _, label, ok := panel.buttonAt(mx, my); ok {
+					s.pressButton(label)
+					return
+				}
 				if thing, ok := panel.cardAt(mx, my); ok {
 					s.expanded[thing.ID] = !s.expanded[thing.ID]
 				}
@@ -224,6 +241,17 @@ func (s *playScene) updateInspection(input *golib.Input) {
 	s.rightWasDown = down
 }
 
+// pressButton applies the action a card's button asks for on the picked
+// tile.
+func (s *playScene) pressButton(label string) {
+	switch label {
+	case buttonSend:
+		Apply(s.state, SendRobot{Col: s.pickedCol, Row: s.pickedRow})
+	case buttonRecall:
+		Apply(s.state, RecallRobot{Col: s.pickedCol, Row: s.pickedRow})
+	}
+}
+
 // regionOnScreen returns where the region's diamond lands on the screen, the
 // rectangle the camera's view stays inside.
 func regionOnScreen() golib.Rectangle {
@@ -241,7 +269,7 @@ func regionOnScreen() golib.Rectangle {
 // pixels. It reads the state and never changes it.
 func (s *playScene) Draw(screen *golib.Screen) {
 	screen.SetCamera(s.camera)
-	drawRegion(screen, s.zoom)
+	drawRegion(s.state, screen, s.zoom)
 	if s.hovering && (!s.picked || s.hoverCol != s.pickedCol || s.hoverRow != s.pickedRow) {
 		drawTileHighlight(screen, s.hoverCol, s.hoverRow, 1, hoveredTileColor)
 	}
@@ -250,11 +278,21 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	}
 	screen.SetCamera(nil)
 	screen.DrawText("niebla", 16, 16, 20, textColor)
+	drawMarkup(screen, s.hudLine(), 16, 44, 12, textColor)
 	screen.DrawText(
-		"wheel zooms, WASD or arrows or right-drag pans, left-click inspects a tile, Esc quits, F11 fullscreen, F2 filter",
+		"wheel zooms, WASD or arrows or right-drag pans, left-click inspects a tile (cards open and act), Esc quits, F11 fullscreen, F2 filter",
 		16, float32(screen.Height())-30, 10, textColor,
 	)
 	if s.picked {
-		drawTooltip(screen, tooltipLayout(s.camera, s.pickedCol, s.pickedRow, s.expanded))
+		panel := tooltipLayout(s.state, s.camera, s.pickedCol, s.pickedRow, s.expanded)
+		drawTooltip(screen, panel, s.mouse.X, s.mouse.Y)
 	}
+}
+
+// hudLine is the strip of stores and hands under the game's name.
+func (s *playScene) hudLine() string {
+	return fmt.Sprintf("[oil]%s[/]   [lilac]%s[/]   [dim]%d robots[/]",
+		si(s.state.Stock.Oil, "L"),
+		si(s.state.Stock.Lilac, "kg"),
+		len(s.state.Robots))
 }

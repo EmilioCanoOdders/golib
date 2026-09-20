@@ -140,6 +140,7 @@ func TestCirclesFlattenAsTheProjectionSays(t *testing.T) {
 }
 
 func TestThingsAtKnowsTheRegion(t *testing.T) {
+	s := newGame()
 	var firstOil, firstLilac [2]int
 	foundOil, foundLilac := false, false
 	for row := 0; row < regionRows && !(foundOil && foundLilac); row++ {
@@ -158,7 +159,7 @@ func TestThingsAtKnowsTheRegion(t *testing.T) {
 		t.Fatalf("the layout has no oil pool or no lilac vein to test")
 	}
 
-	if things := thingsAt(firstOil[0], firstOil[1]); len(things) != 1 || things[0].Type != TypeOil {
+	if things := thingsAt(s, firstOil[0], firstOil[1]); len(things) != 1 || things[0].Type != TypeOil {
 		t.Errorf("thingsAt an oil tile returned %v, want one oil thing", things)
 	} else if things[0].Amount != oilPerPoolTile {
 		t.Errorf("an oil tile holds %v, want %v", things[0].Amount, oilPerPoolTile)
@@ -166,13 +167,13 @@ func TestThingsAtKnowsTheRegion(t *testing.T) {
 		t.Errorf("an oil thing without an ID, want one to remember it by")
 	}
 
-	if things := thingsAt(firstLilac[0], firstLilac[1]); len(things) != 1 || things[0].Type != TypeLilac {
+	if things := thingsAt(s, firstLilac[0], firstLilac[1]); len(things) != 1 || things[0].Type != TypeLilac {
 		t.Errorf("thingsAt a lilac tile returned %v, want one lilac thing", things)
 	} else if things[0].Amount != lilacPerVeinTile {
 		t.Errorf("a lilac tile holds %v, want %v", things[0].Amount, lilacPerVeinTile)
 	}
 
-	core := thingsAt(coreCol, coreRow)
+	core := thingsAt(s, coreCol, coreRow)
 	if len(core) != 1 || core[0].Type != TypeCore {
 		t.Fatalf("thingsAt the core returned %v, want one core thing", core)
 	}
@@ -181,8 +182,24 @@ func TestThingsAtKnowsTheRegion(t *testing.T) {
 			core[0].Amount, coreBubbleMeters())
 	}
 
-	if things := thingsAt(0, 0); things != nil {
+	if things := thingsAt(s, 0, 0); things != nil {
 		t.Errorf("thingsAt bare ground returned %v, want none", things)
+	}
+
+	// Each robot's card shows on the tile it stands on.
+	for _, id := range sortedRobotIDs(s) {
+		r := s.Robots[id]
+		col, row := robotTile(r)
+		found := false
+		for _, thing := range thingsAt(s, col, row) {
+			if thing.Type == TypeRobot && thing.Ref == id {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("robot %d stands on tile %d, %d but its card is missing",
+				id, col, row)
+		}
 	}
 }
 
@@ -235,10 +252,13 @@ func TestCatalogColorsAreStable(t *testing.T) {
 		t.Errorf("the oil entry reads %q, %q, want \"Oil pool\", \"L\"",
 			info.Name, info.Unit)
 	}
-	if got := catalogInfo(TypeCore).summarize(coreBubbleMeters()); got != "r = 20 m" {
+	if got := catalogInfo(TypeCore).summarize(Thing{Amount: coreBubbleMeters()}); got != "r = 20 m" {
 		t.Errorf("the core's headline is %q, want \"r = 20 m\"", got)
 	}
-	if got := catalogInfo(TypeOil).summarize(oilPerPoolTile); got != "900 L" {
+	if got := catalogInfo(TypeOil).summarize(Thing{Amount: oilPerPoolTile}); got != "900 L" {
 		t.Errorf("the oil headline is %q, want \"900 L\"", got)
+	}
+	if got := catalogInfo(TypeRobot).summarize(Thing{Caption: "oil run"}); got != "oil run" {
+		t.Errorf("the robot headline is %q, want its caption \"oil run\"", got)
 	}
 }
