@@ -37,11 +37,11 @@ The game is a deterministic simulation first, and a picture of it second. These 
 3. **The game is a visualization.** `Update` reads input and produces actions; `Draw` renders the current state and changes nothing. All rules live in the simulation files, free of `golib.Input` and `golib.Screen`, so tests drive them directly.
 4. **Determinism.** The simulation never reads the clock (dt is 1/60), never reads globals, and iterates entities in sorted ID order. Gameplay randomness comes from the state's own PRNG (a seed plus counter inside `State`), so a save reproduces its future; `golib.RandomInt`/`RandomFloat` are for looks only (cosmetic particles, menu clouds). A seed plus an action log replays any game - which is also the future multiplayer server: one authoritative sim, clients send actions, receive states.
 
-Consequence for file layout: `state.go` (types), `actions.go` (action types + `Apply`), `sim_*.go` (rules per domain), `world_test.go` (tests call the sim directly); `play.go`/`draw.go` are views.
+Consequence for file layout: `state.go` (types), `actions.go` (action types + `Apply`), `sim_*.go` (rules per domain), `world_test.go` (tests call the sim directly); `play.go`/`draw.go` are views. The simulation has not landed yet; today `region.go`/`things.go` hold the world as static data, and `catalog.go` (the entity database), `markup.go` (colored text) and `inspect.go` (the inspection panel) are view-side metadata, never state. [README.md](./README.md) is the technical map of the code.
 
 ## Screens
 - **Title:** the region under the fog, the game's name, Play / Quit.
-- **Play:** the isometric region, the camera panning and zooming, the bubble drawn over the ground, robots shuttling, the fog line visible and creeping, resource counters on top.
+- **Play:** the isometric region, the camera panning and zooming, the bubble drawn over the ground, robots shuttling, the fog line visible and creeping, resource counters on top. A click inspects a tile: a panel lists what stands there, one expandable card per thing, named and colored by the catalog.
 - **Pause:** the frozen region under a message. The fog does not advance while paused.
 - **Colony lost** (later): when the core is somehow unreachable, or the player quits the region.
 
@@ -51,7 +51,7 @@ Consequence for file layout: `state.go` (types), `actions.go` (action types + `A
 | WASD or arrows | Pan the camera |
 | Mouse wheel | Zoom toward the cursor, gliding between whole steps (pixel art stays square at rest) |
 | Mouse right, held | Drag the view: grab the ground and move it |
-| Mouse left | Select / mark: place blueprint, mark harvest, pick robot |
+| Mouse left | Select / mark: inspect a tile (a click on a card expands it), place blueprint, mark harvest, pick robot |
 | Mouse right, clicked | Cancel marking / deselect |
 | Esc | Pause and resume |
 | F11 or Alt+Enter | Fullscreen on and off |
@@ -76,6 +76,8 @@ Pinned as code lands, all at the top of the sim files with units in the name: `f
 
 The region layout's placement rules, tested in `region_test.go`: oil, lilac and the core inside the fog line; the two seams crossing under the core generously inside the bubble; rocks and bushes on ground outside the bubble, so the comfort zone stays clear, sitting off their tile's middle by a stable jitter.
 
+The world speaks SI: `unitMeters` 1 (one world unit is one meter, in `things.go`, so a tile is 5 m across, 25 m²), `oilPerPoolTile` 900 L, `lilacPerVeinTile` 300 kg, `coreHeight` 14 m; the core's card headlines its bubble radius (20 m). Each thing type gets its color from the catalog in `catalog.go`, which falls back to a color hashed from the type's name, stable forever, for types it has no entry for yet. Text colors itself with the `[name]...[/]` markup of `markup.go`; the palette holds one color per thing type plus `dim`, `light` and `fog`. In `inspect.go`: `tooltipWidth` 260 px, `titleSize`/`textSize` 12/10, the panel anchored to the tile's projected corner (it flips to the tile's left near the screen's right edge).
+
 Robots and building, decided for the next slice: the starting robots work for nothing and build the first buildings in comfort; every robot built afterwards consumes oil each cycle, and each building's construction effort grows with its complexity, so growing the colony asks for more units. Entities will carry float positions in units; the tile a thing belongs to is computed from them, and the cell index that lookups need is a runtime structure rebuilt on load, never part of the serialized state.
 
 ## Later
@@ -94,3 +96,4 @@ Robots and building, decided for the next slice: the starting robots work for no
 - 2026-09-20: the filter becomes the asteroids pair, turned down: `glow.fs` with its threshold at 0.8 (the pale fog outshines the oil, so only the core, the bubble's edge and the text glow) at strength 0.9, and `crt.fs` without flicker, scanlines at 0.96, a lighter vignette and curvature 0.08. The soft rounding runs last.
 - 2026-09-20: slice 2, the camera: WASD, arrows or left stick pan, and the wheel zooms in whole steps from 1 to 4, anchored on the cursor, the view bounded to the region. The world took its unit (`unitsPerTile` 5, with the proportions it pins: robot 1 u, pole 5 u, building 10 u, vein 30 u), `project` speaks units, and the core's pole now fills its whole tile. Rocks and bushes dot the ground from zoom 2 on, off their tile's middle by a stable jitter. The cell-and-offset model is decided and written down, waiting for the robots.
 - 2026-09-20: first feel pass: the zoom glides between its whole steps instead of jumping (`zoomGlide`), still anchored on the cursor, and holding the right button drags the view like a grabbed map, both working together.
+- 2026-09-20: slice 3, tile inspection: a click picks a tile (right-click cancels, a drag never does) and a panel lists what stands there, one card per thing, headlined by its amount, expandable on click to its details. The entity database lands in `catalog.go` (name, color, unit, card lines per type; a stable hashed color for types it has no entry for), the `[name]...[/]` color markup in `markup.go`, the panel in `inspect.go`. The world took its SI units (1 u = 1 m; oil in L, lilac in kg) in `things.go`; the two seams and the core have fichas. Technical notes moved to [README.md](./README.md).

@@ -19,7 +19,7 @@ const (
 	coreCol = 12 // where the core sits
 	coreRow = 12
 
-	coreBubbleRadius = 4.0 // tiles; nothing is digested inside it
+	coreBubbleRadius = 4.0  // tiles; nothing is digested inside it
 	fogLineRadius    = 10.5 // tiles; the fog's front stands here, for now
 	fogFadeTiles     = 2.4  // tiles; how far the fog fades in past the line
 )

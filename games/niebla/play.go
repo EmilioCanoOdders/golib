@@ -31,6 +31,16 @@ type playScene struct {
 	anchorScreen    golib.Vector2
 	dragging        bool          // the right button is down and moving the view
 	dragFrom        golib.Vector2 // where the cursor stood at the last drag update
+
+	picked       bool // a tile is selected and shows its panel
+	pickedCol    int  // the selected tile
+	pickedRow    int
+	expanded     map[string]bool // which cards stand open, by thing ID
+	hovering     bool            // the pointer is over the region
+	hoverCol     int             // the tile under the pointer
+	hoverRow     int
+	rightWasDown bool
+	rightFrom    golib.Vector2 // where the right button went down
 }
 
 // newPlayScene turns the monitor filters on: the glow runs first, so the CRT
@@ -38,9 +48,10 @@ type playScene struct {
 // the whole result.
 func newPlayScene() *playScene {
 	s := &playScene{
-		glow: golib.NewShader(glowSource),
-		crt:  golib.NewShader(crtSource),
-		soft: golib.NewShader(softSource),
+		glow:     golib.NewShader(glowSource),
+		crt:      golib.NewShader(crtSource),
+		soft:     golib.NewShader(softSource),
+		expanded: map[string]bool{},
 	}
 	s.glow.SetUniform("strength", glowStrength)
 	s.crt.SetUniform("curvature", crtCurvature)
@@ -82,6 +93,7 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 		s.setFilters(!s.filterOn)
 	}
 	s.updateCamera(input, dt)
+	s.updateInspection(input)
 }
 
 // updateCamera pans with WASD, the arrows or the left stick, drags with the
@@ -174,6 +186,44 @@ func (s *playScene) dragCamera(input *golib.Input) {
 	s.dragFrom = golib.Vector2{X: mx, Y: my}
 }
 
+// updateInspection picks the tile under the pointer with the left button,
+// cancels with a right click that never became a drag, and expands or folds
+// a card when a click lands on its title. The camera has already moved, so
+// the hover follows the view the frame it changes.
+func (s *playScene) updateInspection(input *golib.Input) {
+	mx, my := input.MousePosition()
+	world := s.camera.ToWorld(mx, my)
+	col, row, inside := tileAtWorld(world.X, world.Y)
+	s.hovering = inside
+	s.hoverCol, s.hoverRow = col, row
+
+	if input.MousePressed(golib.MouseLeft) {
+		if s.picked {
+			panel := tooltipLayout(s.camera, s.pickedCol, s.pickedRow, s.expanded)
+			if panel.contains(mx, my) {
+				if thing, ok := panel.cardAt(mx, my); ok {
+					s.expanded[thing.ID] = !s.expanded[thing.ID]
+				}
+				return
+			}
+		}
+		s.picked = inside
+		s.pickedCol, s.pickedRow = col, row
+	}
+
+	// A right click is a press and a release within a few pixels; anything
+	// more was a drag, and drags don't deselect.
+	down := input.MouseDown(golib.MouseRight)
+	if down && !s.rightWasDown {
+		s.rightFrom = golib.Vector2{X: mx, Y: my}
+	}
+	if s.rightWasDown && !down &&
+		math.Abs(float64(mx-s.rightFrom.X)) < 4 && math.Abs(float64(my-s.rightFrom.Y)) < 4 {
+		s.picked = false
+	}
+	s.rightWasDown = down
+}
+
 // regionOnScreen returns where the region's diamond lands on the screen, the
 // rectangle the camera's view stays inside.
 func regionOnScreen() golib.Rectangle {
@@ -192,10 +242,19 @@ func regionOnScreen() golib.Rectangle {
 func (s *playScene) Draw(screen *golib.Screen) {
 	screen.SetCamera(s.camera)
 	drawRegion(screen, s.zoom)
+	if s.hovering && (!s.picked || s.hoverCol != s.pickedCol || s.hoverRow != s.pickedRow) {
+		drawTileHighlight(screen, s.hoverCol, s.hoverRow, 1, hoveredTileColor)
+	}
+	if s.picked {
+		drawTileHighlight(screen, s.pickedCol, s.pickedRow, 2, pickedTileColor)
+	}
 	screen.SetCamera(nil)
 	screen.DrawText("niebla", 16, 16, 20, textColor)
 	screen.DrawText(
-		"wheel zooms, WASD or arrows or right-drag pans, Esc quits, F11 fullscreen, F2 filter",
+		"wheel zooms, WASD or arrows or right-drag pans, left-click inspects a tile, Esc quits, F11 fullscreen, F2 filter",
 		16, float32(screen.Height())-30, 10, textColor,
 	)
+	if s.picked {
+		drawTooltip(screen, tooltipLayout(s.camera, s.pickedCol, s.pickedRow, s.expanded))
+	}
 }

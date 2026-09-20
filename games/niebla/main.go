@@ -5,9 +5,16 @@
 //   - main.go (this file) starts the game: main calls golib.Run with the
 //     first scene. The screen's size and the game's colors are here.
 //   - play.go is the play scene: Update answers the keys and drives the
-//     camera, Draw draws the region through it.
+//     camera and the tile inspection, Draw draws the region through it.
 //   - region.go holds the hand-made region and the isometric projection, as
 //     plain Go with no drawing, so that region_test.go can test it.
+//   - things.go holds what a tile holds: the things' snapshot and the SI
+//     units, as plain Go with no drawing.
+//   - catalog.go is the entity database: per thing type, its name, its
+//     color and its card's lines, with a stable-color fallback for types
+//     it has no entry for yet.
+//   - markup.go writes text in colors: the "[name]...[/]" markup.
+//   - inspect.go lays out and paints the tile inspection panel.
 //   - draw.go paints the region.
 //
 // games/platformer is a complete example, with a title, pause and win scenes,
@@ -51,6 +58,16 @@ var (
 	bubbleColor      = golib.Color{R: 168, G: 216, B: 255, A: 46}
 	bubbleEdgeColor  = golib.Color{R: 190, G: 226, B: 255, A: 130}
 	textColor        = golib.Color{R: 40, G: 44, B: 54, A: 255}
+
+	// The inspection panel: a dark plate with light text, so the cards'
+	// colors read over any ground. The picked tile keeps the core's warm
+	// white.
+	panelColor       = golib.Color{R: 24, G: 27, B: 35, A: 235}
+	panelEdgeColor   = golib.Color{R: 190, G: 226, B: 255, A: 70}
+	panelTextColor   = golib.Color{R: 232, G: 236, B: 244, A: 255}
+	panelDimColor    = golib.Color{R: 148, G: 156, B: 172, A: 255}
+	pickedTileColor  = golib.Color{R: 255, G: 244, B: 214, A: 255}
+	hoveredTileColor = golib.Color{R: 255, G: 255, B: 255, A: 90}
 )
 
 // The monitor filters, run over the whole picture after every Draw, in this

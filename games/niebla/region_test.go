@@ -138,3 +138,107 @@ func TestCirclesFlattenAsTheProjectionSays(t *testing.T) {
 			got, want, 1/want)
 	}
 }
+
+func TestThingsAtKnowsTheRegion(t *testing.T) {
+	var firstOil, firstLilac [2]int
+	foundOil, foundLilac := false, false
+	for row := 0; row < regionRows && !(foundOil && foundLilac); row++ {
+		for col := 0; col < regionCols; col++ {
+			if !foundOil && tileAt(col, row) == kindOil {
+				firstOil = [2]int{col, row}
+				foundOil = true
+			}
+			if !foundLilac && tileAt(col, row) == kindLilac {
+				firstLilac = [2]int{col, row}
+				foundLilac = true
+			}
+		}
+	}
+	if !foundOil || !foundLilac {
+		t.Fatalf("the layout has no oil pool or no lilac vein to test")
+	}
+
+	if things := thingsAt(firstOil[0], firstOil[1]); len(things) != 1 || things[0].Type != TypeOil {
+		t.Errorf("thingsAt an oil tile returned %v, want one oil thing", things)
+	} else if things[0].Amount != oilPerPoolTile {
+		t.Errorf("an oil tile holds %v, want %v", things[0].Amount, oilPerPoolTile)
+	} else if things[0].ID == "" {
+		t.Errorf("an oil thing without an ID, want one to remember it by")
+	}
+
+	if things := thingsAt(firstLilac[0], firstLilac[1]); len(things) != 1 || things[0].Type != TypeLilac {
+		t.Errorf("thingsAt a lilac tile returned %v, want one lilac thing", things)
+	} else if things[0].Amount != lilacPerVeinTile {
+		t.Errorf("a lilac tile holds %v, want %v", things[0].Amount, lilacPerVeinTile)
+	}
+
+	core := thingsAt(coreCol, coreRow)
+	if len(core) != 1 || core[0].Type != TypeCore {
+		t.Fatalf("thingsAt the core returned %v, want one core thing", core)
+	}
+	if core[0].Amount != coreBubbleMeters() {
+		t.Errorf("the core's headline is %v, want the bubble radius %v",
+			core[0].Amount, coreBubbleMeters())
+	}
+
+	if things := thingsAt(0, 0); things != nil {
+		t.Errorf("thingsAt bare ground returned %v, want none", things)
+	}
+}
+
+func TestTileAtWorldUndoesProject(t *testing.T) {
+	for _, c := range [][2]int{
+		{0, 0}, {regionCols - 1, regionRows - 1}, {coreCol, coreRow}, {7, 3},
+	} {
+		x, y := projectTile(float32(c[0])+0.5, float32(c[1])+0.5)
+		col, row, inside := tileAtWorld(x, y)
+		if col != c[0] || row != c[1] || !inside {
+			t.Errorf("the middle of tile %d, %d lands back on %d, %d, inside %v",
+				c[0], c[1], col, row, inside)
+		}
+	}
+	if _, _, inside := tileAtWorld(regionOriginX-4000, regionOriginY); inside {
+		t.Errorf("a point far from the region landed inside it")
+	}
+}
+
+func TestSiFormatsInternational(t *testing.T) {
+	cases := []struct {
+		value float64
+		unit  string
+		want  string
+	}{
+		{900, "L", "900 L"},
+		{300, "kg", "300 kg"},
+		{20, "m", "20 m"},
+		{14.5, "m", "14.5 m"},
+		{1200, "L", "1.2 kL"},
+		{1500, "kg", "1.5 t"},
+	}
+	for _, c := range cases {
+		if got := si(c.value, c.unit); got != c.want {
+			t.Errorf("si(%v, %q) = %q, want %q", c.value, c.unit, got, c.want)
+		}
+	}
+}
+
+func TestCatalogColorsAreStable(t *testing.T) {
+	for _, kind := range []ThingType{TypeOil, TypeLilac, TypeCore, "robot"} {
+		if catalogInfo(kind).Color != catalogInfo(kind).Color {
+			t.Errorf("the color of %q changes between reads", kind)
+		}
+	}
+	if name := catalogInfo("robot").Name; name != "Robot" {
+		t.Errorf("a type without an entry is named %q, want \"Robot\"", name)
+	}
+	if info := catalogInfo(TypeOil); info.Name != "Oil pool" || info.Unit != "L" {
+		t.Errorf("the oil entry reads %q, %q, want \"Oil pool\", \"L\"",
+			info.Name, info.Unit)
+	}
+	if got := catalogInfo(TypeCore).summarize(coreBubbleMeters()); got != "r = 20 m" {
+		t.Errorf("the core's headline is %q, want \"r = 20 m\"", got)
+	}
+	if got := catalogInfo(TypeOil).summarize(oilPerPoolTile); got != "900 L" {
+		t.Errorf("the oil headline is %q, want \"900 L\"", got)
+	}
+}
