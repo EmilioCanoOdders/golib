@@ -94,8 +94,20 @@ var catalog = map[ThingType]ThingInfo{
 			if !ok {
 				return nil
 			}
+			model := "core"
+			if r.Kind == RobotBuilt {
+				model = "factory"
+			}
 			details := []Detail{
 				{"task", robotCaption(s, r)},
+				{"model", model},
+			}
+			if r.Kind == RobotBuilt {
+				details = append(details, Detail{
+					"tank",
+					fmt.Sprintf("[oil]%s[/] / %s",
+						si(r.Tank, "L"), si(robotTankLiters, "L")),
+				})
 			}
 			if r.Carry > 0 {
 				unit, kind := "kg", r.Cargo
@@ -112,6 +124,79 @@ var catalog = map[ThingType]ThingInfo{
 				})
 			}
 			return details
+		},
+	},
+	TypeFactory: {
+		Name:    "Robot factory",
+		Color:   factoryColor,
+		Primary: true,
+		Summary: func(amount float64) string {
+			return "builds robots"
+		},
+		Details: func(s *State, thing Thing) []Detail {
+			return []Detail{
+				{"robot cost", fmt.Sprintf("[lilac]%s[/] + [oil]%s[/]",
+					si(robotCostLilac, "kg"), si(robotCostOil, "L"))},
+				{"pace", "one per " + si(factoryRobotTicks/60, "s")},
+				{"robots", fmt.Sprintf("%d", len(s.Robots))},
+			}
+		},
+	},
+	TypeCharger: {
+		Name:    "Robot charger",
+		Color:   chargerColor,
+		Primary: true,
+		Summary: func(amount float64) string {
+			return "refills tanks"
+		},
+		Details: func(s *State, thing Thing) []Detail {
+			return []Detail{
+				{"pace", si(chargerRefillPerSec, "L") + "/s"},
+				{"serves", "the colony's stores"},
+				{"low tank", fmt.Sprintf("at %s", si(robotTankLiters*robotLowTankAt, "L"))},
+			}
+		},
+	},
+	TypeSilo: {
+		Name:    "Oil silo",
+		Color:   siloColor,
+		Unit:    "L",
+		Primary: true,
+		Details: func(s *State, thing Thing) []Detail {
+			return []Detail{
+				{"adds", fmt.Sprintf("[oil]%s[/]", si(siloOilCap, "L"))},
+				{"colony oil", fmt.Sprintf("[oil]%s[/] / %s",
+					si(s.Stock.Oil, "L"), si(oilCap(s), "L"))},
+			}
+		},
+	},
+	TypeWarehouse: {
+		Name:    "Mineral warehouse",
+		Color:   warehouseColor,
+		Unit:    "kg",
+		Primary: true,
+		Details: func(s *State, thing Thing) []Detail {
+			return []Detail{
+				{"adds", fmt.Sprintf("[lilac]%s[/]", si(warehouseLilacCap, "kg"))},
+				{"colony lilac", fmt.Sprintf("[lilac]%s[/] / %s",
+					si(s.Stock.Lilac, "kg"), si(lilacCap(s), "kg"))},
+			}
+		},
+	},
+	TypeProtector: {
+		Name:    "Shadow protector",
+		Color:   protectorColor,
+		Unit:    "m",
+		Primary: true,
+		Summary: func(amount float64) string {
+			return "r = " + si(amount, "m")
+		},
+		Details: func(s *State, thing Thing) []Detail {
+			return []Detail{
+				{"bubble", "r = " + si(protectorBubbleMeters(), "m")},
+				{"shelters", "buildings and robots"},
+				{"upkeep", "none"},
+			}
 		},
 	},
 }

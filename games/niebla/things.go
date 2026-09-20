@@ -24,6 +24,12 @@ func coreBubbleMeters() float64 {
 	return float64(coreBubbleRadius * unitsPerTile * unitMeters)
 }
 
+// protectorBubbleMeters returns a shadow protector's bubble radius in
+// meters.
+func protectorBubbleMeters() float64 {
+	return float64(protectorBubbleTiles * unitsPerTile * unitMeters)
+}
+
 // ThingType names a kind of thing the world can hold: a resource in the
 // ground, a building, a robot. The catalog (catalog.go) holds what each
 // type is called and the color it is written in.
@@ -35,7 +41,30 @@ const (
 	TypeLilac ThingType = "lilac"
 	TypeCore  ThingType = "core"
 	TypeRobot ThingType = "robot"
+
+	TypeFactory   ThingType = "factory"
+	TypeCharger   ThingType = "charger"
+	TypeSilo      ThingType = "silo"
+	TypeWarehouse ThingType = "warehouse"
+	TypeProtector ThingType = "protector"
 )
+
+// buildingType maps a building kind to the thing type its cards read.
+func buildingType(kind BuildingKind) ThingType {
+	switch kind {
+	case BuildingFactory:
+		return TypeFactory
+	case BuildingCharger:
+		return TypeCharger
+	case BuildingSilo:
+		return TypeSilo
+	case BuildingWarehouse:
+		return TypeWarehouse
+	case BuildingProtector:
+		return TypeProtector
+	}
+	return TypeRobot
+}
 
 // Detail is one line of a thing's expanded card: a label and a value. The
 // value may carry markup, such as "[oil]900 L[/]".
@@ -58,10 +87,10 @@ type Thing struct {
 	Rows    int     //
 }
 
-// thingsAt returns the things standing on a tile, deposits first, then
-// the robots on it by ID. A deposit tile shows its whole patch's card:
-// the vein is one thing, however many tiles it spans. Rocks and bushes
-// are decoration, so they have no card yet.
+// thingsAt returns the things standing on a tile: its building or deposit
+// first, then the robots on it by ID. A deposit tile shows its whole
+// patch's card: the vein is one thing, however many tiles it spans.
+// Rocks and bushes are decoration, so they have no card yet.
 func thingsAt(s *State, col, row int) []Thing {
 	var things []Thing
 	switch tileAt(col, row) {
@@ -73,12 +102,24 @@ func thingsAt(s *State, col, row int) []Thing {
 	case kindCore:
 		things = append(things, coreAt(col, row))
 	}
-	for _, id := range sortedRobotIDs(s) {
-		if r := s.Robots[id]; r.standsOn(col, row) {
-			things = append(things, robotThing(s, r))
-		}
+	for _, b := range buildingsOnTile(s, col, row) {
+		things = append(things, buildingThing(b))
+	}
+	for _, r := range robotsOnTile(s, col, row) {
+		things = append(things, robotThing(s, r))
 	}
 	return things
+}
+
+// robotsOnTile returns the robots standing on a tile, in ID order.
+func robotsOnTile(s *State, col, row int) []Robot {
+	var found []Robot
+	for _, id := range sortedRobotIDs(s) {
+		if r := s.Robots[id]; r.standsOn(col, row) {
+			found = append(found, r)
+		}
+	}
+	return found
 }
 
 // depositThing is a patch's card: named for its kind, ID'd by its top
@@ -105,6 +146,22 @@ func coreAt(col, row int) Thing {
 	}
 }
 
+// buildingThing is a raised building's card, ID'd by its entity ID so it
+// stays the same card across saves. The catalog says what each kind's
+// card reads; the factory's caption counts down its robot when busy.
+func buildingThing(b Building) Thing {
+	kind := buildingType(b.Kind)
+	thing := Thing{
+		Type: kind,
+		ID:   fmt.Sprintf("%s-%d", kind, b.ID),
+		Ref:  b.ID,
+	}
+	if b.Kind == BuildingFactory && b.Work > 0 {
+		thing.Caption = fmt.Sprintf("building robot, %d s", b.Work/60)
+	}
+	return thing
+}
+
 // standsOn reports whether the robot's position falls on this tile.
 func (r Robot) standsOn(col, row int) bool {
 	c, rw := robotTile(r)
@@ -127,7 +184,12 @@ func robotCaption(s *State, r Robot) string {
 	_, hasJob := oldestJob(s)
 	switch {
 	case r.Carry > 0:
+		if word := storageWord(s, r); word != "" {
+			return word
+		}
 		return "hauling " + cargoWord(r.Cargo)
+	case chargeStatus(s, r) != "":
+		return chargeStatus(s, r)
 	case r.WorkTicks > 0:
 		return "loading " + postWord(r)
 	case hasJob:
@@ -137,6 +199,26 @@ func robotCaption(s *State, r Robot) string {
 	default:
 		return "idle"
 	}
+}
+
+// storageWord names a robot standing at the core with a full store and
+// cargo in its arms.
+func storageWord(s *State, r Robot) string {
+	if r.Carry <= 0 {
+		return ""
+	}
+	x, y := parkSpot(r.ID)
+	if math.Hypot(r.X-x, r.Y-y) >= 0.5 {
+		return ""
+	}
+	full := oilCap(s) - s.Stock.Oil
+	if r.Cargo == TypeLilac {
+		full = lilacCap(s) - s.Stock.Lilac
+	}
+	if full < 0.0001 {
+		return "waiting for storage"
+	}
+	return ""
 }
 
 func postWord(r Robot) string {

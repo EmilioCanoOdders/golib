@@ -31,10 +31,237 @@ func drawRegion(s *State, screen *golib.Screen, zoom float32) {
 	screen.Clear(fogColor)
 	drawGround(s, screen, zoom)
 	drawDeposits(s, screen)
+	drawBuildings(s, screen, zoom)
 	drawRobots(s, screen, zoom)
 	drawFogCover(screen)
 	drawFogLine(screen, zoom)
-	drawCoreAndBubble(screen, zoom)
+	drawJobs(s, screen, zoom)
+	drawBubbles(s, screen, zoom)
+}
+
+// mid blends two colors halfway, for a box face between light and shade.
+func mid(a, b golib.Color) golib.Color {
+	mix := func(x, y uint8) uint8 { return uint8((int(x) + int(y)) / 2) }
+	return golib.Color{
+		R: mix(a.R, b.R), G: mix(a.G, b.G), B: mix(a.B, b.B), A: a.A,
+	}
+}
+
+// drawBuildings paints the colony's structures, back to front, each an
+// isometric body standing on its cell. Like the robots, they never
+// shrink under an icon size on the screen: far out they are little
+// marked blocks, and the view closes in on their true 40 u.
+func drawBuildings(s *State, screen *golib.Screen, zoom float32) {
+	type spot struct {
+		id int64
+		y  float32
+	}
+	spots := make([]spot, 0, len(s.Buildings))
+	for _, id := range sortedBuildingIDs(s) {
+		b := s.Buildings[id]
+		_, y := projectBuilding(b)
+		spots = append(spots, spot{id, y})
+	}
+	sort.Slice(spots, func(i, j int) bool { return spots[i].y < spots[j].y })
+	for _, sp := range spots {
+		b := s.Buildings[sp.id]
+		gx, gy := projectBuilding(b)
+		across, height := buildingSize(b.Kind)
+		k := buildingIcon(across, height, zoom)
+		drawBuilding(screen, b, gx, gy, across*k, height*k)
+	}
+}
+
+// buildingIcon returns the factor that lifts a body's true size until it
+// clears the icon minimum on the screen — the same law the robots obey —
+// easing back to one as the view closes in.
+func buildingIcon(across, height, zoom float32) float32 {
+	const (
+		iconW = 9.0 // the smallest a building reads on the screen
+		iconH = 6.0 //
+	)
+	k := float32(1)
+	if w := across * unitW; w < iconW/zoom {
+		k = iconW / zoom / w
+	}
+	if h := height * unitH; h*k < iconH/zoom {
+		k = iconH / zoom / h
+	}
+	return k
+}
+
+// projectBuilding returns where a building's ground center lands on the
+// screen.
+func projectBuilding(b Building) (gx, gy float32) {
+	x, y := cellCenterUnits(b.Col, b.Row)
+	return project(float32(x), float32(y))
+}
+
+// drawJobs paints the build sites: the part already built rises from the
+// ground in solid colors, wrapped in the wireframe of the whole body, so
+// the building grows bottom-up inside its scaffold. The work's progress
+// bar sits under the cell. It runs after the fog, so a site in the mist
+// stays visible — the colony's work shows through.
+func drawJobs(s *State, screen *golib.Screen, zoom float32) {
+	for _, job := range s.Jobs {
+		gx, gy := projectBuilding(Building{Col: job.Col, Row: job.Row})
+		info := catalogInfo(buildingType(job.Kind))
+		// The cell's ground diamond, in the kind's color.
+		screen.DrawPolygonOutline(scaledDiamond(gx, gy, buildingCell/unitsPerTile),
+			1.5/zoom, info.Color)
+		across, height := buildingSize(job.Kind)
+		k := buildingIcon(across, height, zoom)
+		across, height = across*k, height*k
+		// The built part, from the ground up.
+		done := golib.Clamp(1-float32(job.Left)/float32(buildingWorkTicks), 0, 1)
+		if done > 0 {
+			drawBuilding(screen, Building{Kind: job.Kind}, gx, gy,
+				across, height*done)
+		}
+		// The scaffold: the whole body, in wireframe.
+		hw := across * unitW / 2
+		hh := across * unitH / 2
+		hy := height * unitH
+		wire := func(points []golib.Vector2) {
+			screen.DrawPolygonOutline(points, 1.5/zoom, info.Color)
+		}
+		wire([]golib.Vector2{
+			{X: gx, Y: gy - hy - hh}, {X: gx + hw, Y: gy - hy},
+			{X: gx, Y: gy - hy + hh}, {X: gx - hw, Y: gy - hy},
+		})
+		wire([]golib.Vector2{
+			{X: gx, Y: gy - hy + hh}, {X: gx + hw, Y: gy - hy},
+			{X: gx + hw, Y: gy}, {X: gx, Y: gy + hh},
+		})
+		wire([]golib.Vector2{
+			{X: gx - hw, Y: gy - hy}, {X: gx, Y: gy - hy + hh},
+			{X: gx, Y: gy + hh}, {X: gx - hw, Y: gy},
+		})
+		// The progress bar: the site's width, filling with the work done.
+		w := across * unitW
+		y := gy + hh + 4/zoom
+		screen.DrawRectangle(
+			golib.Rectangle{X: gx - w/2, Y: y, Width: w, Height: 3 / zoom}, scarColor)
+		if done > 0 {
+			screen.DrawRectangle(
+				golib.Rectangle{X: gx - w/2, Y: y, Width: w * done, Height: 3 / zoom},
+				info.Color)
+		}
+	}
+}
+
+// buildingSize returns a kind's body: its footprint across and its
+// height, both in world units. Every footprint fits the 25 u cell.
+func buildingSize(kind BuildingKind) (across, height float32) {
+	switch kind {
+	case BuildingFactory:
+		return 24, 14
+	case BuildingCharger:
+		return 16, 12
+	case BuildingSilo:
+		return 22, 22
+	case BuildingWarehouse:
+		return 25, 13
+	case BuildingProtector:
+		return 8, 24
+	}
+	return 20, 10
+}
+
+func drawBuilding(
+	screen *golib.Screen,
+	b Building,
+	gx, gy, across, height float32,
+) {
+	switch b.Kind {
+	case BuildingFactory:
+		isoBox(screen, gx, gy, across, height,
+			factoryColor, mid(factoryColor, factoryDark), factoryDark)
+		// The chimney, a narrow stack at the works' corner.
+		isoBox(screen, gx+across*unitW*0.22, gy-height*unitH*0.22,
+			across*0.22, height*1.6, factoryColor, factoryDark, factoryDark)
+	case BuildingCharger:
+		isoBox(screen, gx, gy, across, height*0.6,
+			chargerColor, mid(chargerColor, chargerDark), chargerDark)
+		glow := across * unitW * 0.3
+		screen.DrawCircle(gx, gy-height*unitH*0.8, glow, chargerColor)
+		screen.DrawCircle(gx, gy-height*unitH*0.8, glow*0.5, oilColor)
+	case BuildingSilo:
+		// Three stacked tiers, each narrower: a silo.
+		tier := across
+		for i := 0; i < 3; i++ {
+			h := height / 3
+			isoBox(screen, gx, gy-float32(i)*h*unitH, tier, h,
+				siloColor, mid(siloColor, siloDark), siloDark)
+			tier *= 0.72
+		}
+	case BuildingWarehouse:
+		isoBox(screen, gx, gy, across, height*0.75,
+			warehouseColor, mid(warehouseColor, warehouseDark), warehouseDark)
+		isoBox(screen, gx, gy-height*0.75*unitH, across*0.45, height*0.35,
+			warehouseColor, warehouseDark, warehouseDark)
+	case BuildingProtector:
+		isoBox(screen, gx, gy, across, height,
+			protectorColor, mid(protectorColor, protectorDark), protectorDark)
+		glow := across * unitW * 0.7 // world-sized, like the core's
+		screen.DrawCircle(gx, gy-(height+2)*unitH, glow, protectorColor)
+		screen.DrawCircle(gx, gy-(height+2)*unitH, glow*0.5, bubbleEdgeColor)
+	}
+}
+
+// isoBox draws an isometric box of a square footprint, across units on a
+// side and height units tall, standing on the ground point gx, gy: a lit
+// top, a side in shade and one halfway between.
+func isoBox(
+	screen *golib.Screen,
+	gx, gy, across, height float32,
+	top, right, left golib.Color,
+) {
+	hw := across * unitW / 2
+	hh := across * unitH / 2
+	hy := height * unitH
+	screen.DrawPolygon([]golib.Vector2{
+		{X: gx, Y: gy - hy - hh},
+		{X: gx + hw, Y: gy - hy},
+		{X: gx, Y: gy - hy + hh},
+		{X: gx - hw, Y: gy - hy},
+	}, top)
+	screen.DrawPolygon([]golib.Vector2{
+		{X: gx, Y: gy - hy + hh}, {X: gx + hw, Y: gy - hy},
+		{X: gx + hw, Y: gy}, {X: gx, Y: gy + hh},
+	}, right)
+	screen.DrawPolygon([]golib.Vector2{
+		{X: gx - hw, Y: gy - hy}, {X: gx, Y: gy - hy + hh},
+		{X: gx, Y: gy + hh}, {X: gx - hw, Y: gy},
+	}, left)
+}
+
+// drawBubbles paints the safe ground: the core's bubble last, so its
+// glow sits over everything, and a dimmer pocket per shadow protector,
+// drawn over the fog it holds back.
+func drawBubbles(s *State, screen *golib.Screen, zoom float32) {
+	for _, id := range sortedBuildingIDs(s) {
+		b := s.Buildings[id]
+		if b.Kind != BuildingProtector {
+			continue
+		}
+		cx, cy := projectTile(float32(b.Col), float32(b.Row))
+		cy += tileH / 2
+		fillEllipse(screen, cx, cy, protectorBubbleTiles, protectorBubbleColor)
+		ellipseOutline(screen, cx, cy, protectorBubbleTiles, 2/zoom, protectorEdgeColor)
+	}
+	cx, cy := projectTile(coreCol, coreRow)
+	cy += tileH / 2
+	// The pad is the core's whole tile; the pole's glow is world-sized,
+	// a point of light until the view closes in. The outlines keep their
+	// thickness on the screen, not in the world: inside the bubble they
+	// would grow into roads.
+	fillEllipse(screen, cx, cy, coreBubbleRadius, bubbleColor)
+	ellipseOutline(screen, cx, cy, coreBubbleRadius, 3/zoom, bubbleEdgeColor)
+	screen.DrawPolygon(scaledDiamond(cx, cy, 1), coreColor)
+	glow := dotRadius(4, zoom, 3.5)
+	screen.DrawCircle(cx, cy, glow, coreGlowColor)
+	screen.DrawCircle(cx, cy, glow*0.5, coreColor)
 }
 
 func drawGround(s *State, screen *golib.Screen, zoom float32) {
@@ -234,23 +461,17 @@ func drawRobots(s *State, screen *golib.Screen, zoom float32) {
 			}
 			screen.DrawCircle(p.X+R*0.84, p.Y+R*0.24, R*0.44, cargo)
 		}
-		screen.DrawCircle(p.X, p.Y-R*0.56, R*0.28, coreGlowColor)
+		// The eye says the model: the core's warm white for its own,
+		// the charger's amber for a built one, blinking while it drinks.
+		eye := coreGlowColor
+		if r.Kind == RobotBuilt {
+			eye = chargerColor
+			if chargeStatus(s, r) == "refueling" && s.Ticks/20%2 == 0 {
+				eye = robotDarkColor
+			}
+		}
+		screen.DrawCircle(p.X, p.Y-R*0.56, R*0.28, eye)
 	}
-}
-
-func drawCoreAndBubble(screen *golib.Screen, zoom float32) {
-	cx, cy := projectTile(coreCol, coreRow)
-	cy += tileH / 2
-	// The pad is the core's whole tile; the pole's glow is world-sized,
-	// a point of light until the view closes in. The outlines keep their
-	// thickness on the screen, not in the world: inside the bubble they
-	// would grow into roads.
-	fillEllipse(screen, cx, cy, coreBubbleRadius, bubbleColor)
-	ellipseOutline(screen, cx, cy, coreBubbleRadius, 3/zoom, bubbleEdgeColor)
-	screen.DrawPolygon(scaledDiamond(cx, cy, 1), coreColor)
-	glow := dotRadius(4, zoom, 3.5)
-	screen.DrawCircle(cx, cy, glow, coreGlowColor)
-	screen.DrawCircle(cx, cy, glow*0.5, coreColor)
 }
 
 func drawFogLine(screen *golib.Screen, zoom float32) {

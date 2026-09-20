@@ -69,3 +69,48 @@ func (a RecallRobot) apply(s *State) {
 		s.Robots[r.ID] = r
 	}
 }
+
+// MarkBuilding marks a cell for a building: the blueprint's cost is paid
+// from the stores at once, and the job joins the queue for the robots to
+// raise. It does nothing on a cell that can't take the kind (see
+// canPlace) or when the stores can't pay.
+type MarkBuilding struct {
+	Kind    BuildingKind
+	Col, Row int // the cell, the tile grid's last subdivision
+}
+
+func (a MarkBuilding) apply(s *State) {
+	if !canPlace(s, a.Kind, a.Col, a.Row) {
+		return
+	}
+	lilac, oil := buildingCost(a.Kind)
+	if s.Stock.Lilac < lilac || s.Stock.Oil < oil {
+		return
+	}
+	s.Stock.Lilac -= lilac
+	s.Stock.Oil -= oil
+	s.Jobs = append(s.Jobs, Job{
+		Kind: a.Kind, Col: a.Col, Row: a.Row, Left: buildingWorkTicks,
+	})
+}
+
+// QueueRobot puts a factory to work on one more robot, paying lilac and
+// oil for it at once. A factory already building, or stores that can't
+// pay, leave it as it is.
+type QueueRobot struct {
+	Building int64 // the factory's entity ID
+}
+
+func (a QueueRobot) apply(s *State) {
+	b, ok := s.Buildings[a.Building]
+	if !ok || b.Kind != BuildingFactory || b.Work > 0 {
+		return
+	}
+	if s.Stock.Lilac < robotCostLilac || s.Stock.Oil < robotCostOil {
+		return
+	}
+	s.Stock.Lilac -= robotCostLilac
+	s.Stock.Oil -= robotCostOil
+	b.Work = factoryRobotTicks
+	s.Buildings[b.ID] = b
+}

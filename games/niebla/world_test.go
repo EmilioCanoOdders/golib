@@ -50,8 +50,8 @@ func TestNewGameStartsTwoIdleRobotsByTheCore(t *testing.T) {
 				id, d, robotParkRadius)
 		}
 	}
-	if s.Stock.Oil != 0 || s.Stock.Lilac != 0 {
-		t.Errorf("the stores start with %v L and %v kg, want both empty",
+	if s.Stock.Oil != startingStockOil || s.Stock.Lilac != startingStockLilac {
+		t.Errorf("the stores start with %v L and %v kg, want the core's gift",
 			s.Stock.Oil, s.Stock.Lilac)
 	}
 }
@@ -67,11 +67,12 @@ func TestSentRobotHaulsOilHome(t *testing.T) {
 		t.Fatal("nobody took the oil post")
 	}
 	// The nearest pool is the safe one inside the bubble: half a minute
-	// out at robotSpeed, a little more back with the load.
-	for i := 0; i < 60*400 && s.Stock.Oil <= 0; i++ {
+	// out at robotSpeed, a little more back with the load. Hauling is
+	// proven by what it adds to the gift the stores start with.
+	for i := 0; i < 60*400 && s.Stock.Oil <= startingStockOil; i++ {
 		Apply(s, Tick{})
 	}
-	if s.Stock.Oil <= 0 {
+	if s.Stock.Oil <= startingStockOil {
 		t.Fatalf("after 400 s of hauling the stores hold %v L of oil", s.Stock.Oil)
 	}
 	patch, _ := depositAt(col, row)
@@ -80,8 +81,8 @@ func TestSentRobotHaulsOilHome(t *testing.T) {
 	if left >= total {
 		t.Errorf("the pool still holds %v L, want it drained by the hauling", left)
 	}
-	if sum := s.Stock.Oil + left; math.Abs(sum-total) > 0.0001 {
-		t.Errorf("the stores hold %v L and the pool %v L, want them to sum to %v",
+	if sum := s.Stock.Oil + left; math.Abs(sum-total-startingStockOil) > 0.0001 {
+		t.Errorf("the stores hold %v L and the pool %v L, want them to sum to the gift plus %v",
 			s.Stock.Oil, left, total)
 	}
 }
@@ -174,7 +175,7 @@ func TestDryDepositReleasesItsRobot(t *testing.T) {
 	full := robotCarryLilac * 5
 	s.Drain[depositKey(patch)] = full
 	Apply(s, SendRobot{Col: col, Row: row})
-	for i := 0; i < 60*400 && s.Stock.Lilac < full; i++ {
+	for i := 0; i < 60*400 && s.Stock.Lilac < startingStockLilac+full; i++ {
 		Apply(s, Tick{})
 	}
 	if _, owned := postOwner(s, col, row); owned {
@@ -183,9 +184,9 @@ func TestDryDepositReleasesItsRobot(t *testing.T) {
 	if left := remainingAt(s, col, row); left > 0 {
 		t.Errorf("the drained vein still holds %v kg", left)
 	}
-	if s.Stock.Lilac != full {
-		t.Errorf("the stores hold %v kg, want the whole vein, %v",
-			s.Stock.Lilac, full)
+	if s.Stock.Lilac != startingStockLilac+full {
+		t.Errorf("the stores hold %v kg, want the gift plus the whole vein, %v",
+			s.Stock.Lilac, startingStockLilac+full)
 	}
 }
 
@@ -198,10 +199,11 @@ func TestBuildJobsComeFirst(t *testing.T) {
 	Apply(s, SendRobot{Col: col, Row: row})
 	owner, _ := postOwner(s, col, row)
 	runTicks(s, 60) // the robot sets out towards its post
-	// A build job springs up on open ground across the way.
-	jobCol, jobRow := coreCol+3, coreRow-3
+	// A build job springs up on open ground across the way, five cells
+	// north-east of the core.
+	jobCol, jobRow := coreCol*5+5, coreRow*5-5
 	s.Jobs = []Job{{Col: jobCol, Row: jobRow, Left: 30}}
-	jobX, jobY := tileCenterUnits(jobCol, jobRow)
+	jobX, jobY := cellCenterUnits(jobCol, jobRow)
 	r := s.Robots[owner.ID]
 	d0 := math.Hypot(r.X-jobX, r.Y-jobY)
 	Apply(s, Tick{})
@@ -219,13 +221,14 @@ func TestBuildJobsComeFirst(t *testing.T) {
 	if len(s.Jobs) != 0 {
 		t.Fatal("the build job never finished")
 	}
-	if s.Stock.Oil > 0 {
-		t.Errorf("the stores hold %v L before the job is done, want none", s.Stock.Oil)
+	if s.Stock.Oil > startingStockOil {
+		t.Errorf("the stores hold %v L before the job is done, want just the gift",
+			s.Stock.Oil)
 	}
-	for i := 0; i < 60*500 && s.Stock.Oil == 0; i++ {
+	for i := 0; i < 60*500 && s.Stock.Oil <= startingStockOil; i++ {
 		Apply(s, Tick{})
 	}
-	if s.Stock.Oil == 0 {
+	if s.Stock.Oil <= startingStockOil {
 		t.Fatal("the robot never went back to its post after the job")
 	}
 }
@@ -237,7 +240,11 @@ func TestTheSimulationReplaysTheSame(t *testing.T) {
 		veinCol, veinRow, _ := nearestTileOf(kindLilac)
 		Apply(s, SendRobot{Col: oilCol, Row: oilRow})
 		Apply(s, SendRobot{Col: veinCol, Row: veinRow})
-		runTicks(s, 3600)
+		s.Stock = Stock{Oil: 400, Lilac: 800}
+		Apply(s, MarkBuilding{Kind: BuildingCharger, Col: 67, Row: 60})
+		runTicks(s, 1800) // the charger rises in the first half
+		Apply(s, QueueRobot{Building: 3})
+		runTicks(s, 1800) // the factory's robot rolls out in the second
 		return s
 	}
 	if !reflect.DeepEqual(play(), play()) {
@@ -249,7 +256,11 @@ func TestTheStateSerializesRound(t *testing.T) {
 	s := newGame()
 	col, row, _ := nearestTileOf(kindOil)
 	Apply(s, SendRobot{Col: col, Row: row})
-	runTicks(s, 600)
+	s.Stock = Stock{Oil: 400, Lilac: 800}
+	Apply(s, MarkBuilding{Kind: BuildingSilo, Col: 67, Row: 60})
+	runTicks(s, 1200) // the silo rises, and joins the oil room
+	Apply(s, QueueRobot{Building: 3})
+	runTicks(s, 1200) // the factory's robot joins the colony
 	data, err := json.Marshal(s)
 	if err != nil {
 		t.Fatalf("the state does not marshal: %v", err)

@@ -10,10 +10,14 @@
 //     serialized.
 //   - state.go holds the simulation's state, the one serializable value
 //     the whole game is, and newGame, which deals the starting region.
-//   - actions.go holds the actions (Tick, SendRobot, RecallRobot) and
-//     Apply, the only door into the state.
+//   - actions.go holds the actions (Tick, SendRobot, RecallRobot,
+//     MarkBuilding, QueueRobot) and Apply, the only door into the state.
 //   - sim_robots.go holds the robots' rules and their tuning: what a
-//     robot does each tick, build jobs first, its post second.
+//     robot does each tick — carry home, mind the tank, finish loading,
+//     build jobs first, its post second.
+//   - sim_buildings.go holds the buildings' rules and their tuning:
+//     blueprints, placement and safe zones, storage caps, refueling,
+//     the factories' robot works.
 //   - region.go holds the hand-made region and the isometric projection,
 //     as plain Go with no drawing, so that region_test.go can test it.
 //   - things.go holds what a tile holds: the things' snapshot out of the
@@ -72,6 +76,23 @@ var (
 	bubbleColor      = golib.Color{R: 168, G: 216, B: 255, A: 46}
 	bubbleEdgeColor  = golib.Color{R: 190, G: 226, B: 255, A: 130}
 	textColor        = golib.Color{R: 40, G: 44, B: 54, A: 255}
+
+	// The buildings. Each kind has a light face for the sun side and a
+	// dark one for the shade, in the colony's cold palette; the
+	// protector keeps the bubble's blue.
+	factoryColor   = golib.Color{R: 92, G: 188, B: 174, A: 255}
+	factoryDark    = golib.Color{R: 52, G: 118, B: 110, A: 255}
+	chargerColor   = golib.Color{R: 240, G: 202, B: 96, A: 255}
+	chargerDark    = golib.Color{R: 150, G: 120, B: 44, A: 255}
+	siloColor      = golib.Color{R: 204, G: 164, B: 100, A: 255}
+	siloDark       = golib.Color{R: 128, G: 100, B: 56, A: 255}
+	warehouseColor = golib.Color{R: 168, G: 156, B: 208, A: 255}
+	warehouseDark  = golib.Color{R: 104, G: 96, B: 140, A: 255}
+
+	protectorColor       = golib.Color{R: 150, G: 202, B: 246, A: 255}
+	protectorDark        = golib.Color{R: 80, G: 120, B: 168, A: 255}
+	protectorBubbleColor = golib.Color{R: 168, G: 216, B: 255, A: 26}
+	protectorEdgeColor   = golib.Color{R: 168, G: 216, B: 255, A: 90}
 
 	// The inspection panel: a dark plate with light text, so the cards'
 	// colors read over any ground. The picked tile keeps the core's warm

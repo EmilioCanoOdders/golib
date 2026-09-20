@@ -50,9 +50,15 @@ type playScene struct {
 	pickedCol    int  // the selected tile
 	pickedRow    int
 	expanded     map[string]bool // which cards stand open, by thing ID
-	hovering     bool            // the pointer is over the region
-	hoverCol     int             // the tile under the pointer
+	radial       bool            // the build menu stands open on a cell
+	radialCol    int             // the cell the menu opened on
+	radialRow    int
+	hovering     bool // the pointer is over the region
+	hoverCol     int  // the tile under the pointer
 	hoverRow     int
+	hoverCellCol int  // the cell under the pointer, the cursor
+	hoverCellRow int  //
+	hoverCell    bool // the pointer is over a cell
 	rightWasDown bool
 	rightFrom    golib.Vector2 // where the right button went down
 }
@@ -207,21 +213,33 @@ func (s *playScene) dragCamera(input *golib.Input) {
 // updateInspection picks the tile under the pointer with the left button,
 // cancels with a right click that never became a drag, expands or folds
 // a card when a click lands on its title, and acts when a click lands on
-// a card's button. The camera has already moved, so the hover follows
-// the view the frame it changes.
+// a card's button. A click on empty ground opens the build menu instead,
+// a radial around the tile; picking one of its options marks that
+// blueprint, and the click that confirms it lands on a cell. While a
+// blueprint is marked, the panel and the menu stand down. The camera has
+// already moved, so the hover follows the view the frame it changes.
 func (s *playScene) updateInspection(input *golib.Input) {
 	mx, my := input.MousePosition()
 	world := s.camera.ToWorld(mx, my)
 	col, row, inside := tileAtWorld(world.X, world.Y)
 	s.hovering = inside
 	s.hoverCol, s.hoverRow = col, row
+	// The cursor is the cell, the grid's last subdivision, whatever the
+	// scene is doing with it.
+	if cc, cr, inCell := cellAtWorld(float64(world.X), float64(world.Y)); inCell {
+		s.hoverCell, s.hoverCellCol, s.hoverCellRow = true, cc, cr
+	} else {
+		s.hoverCell = false
+	}
 
 	if input.MousePressed(golib.MouseLeft) {
+		// The panel, while it stands, wins over whatever sits under it:
+		// its buttons act even where it covers buildable ground.
 		if s.picked {
 			panel := tooltipLayout(s.state, s.camera, s.pickedCol, s.pickedRow, s.expanded)
 			if panel.contains(mx, my) {
-				if _, label, ok := panel.buttonAt(mx, my); ok {
-					s.pressButton(label)
+				if thing, label, ok := panel.buttonAt(mx, my); ok {
+					s.pressButton(thing, label)
 					return
 				}
 				if thing, ok := panel.cardAt(mx, my); ok {
@@ -233,8 +251,25 @@ func (s *playScene) updateInspection(input *golib.Input) {
 				return
 			}
 		}
-		s.picked = inside
-		s.pickedCol, s.pickedRow = col, row
+		if s.radial {
+			// A pick raises the blueprint right on the menu's cell; a
+			// click anywhere else puts the menu away.
+			if item, hit := radialHover(radialLayout(s), mx, my); hit && item.ready {
+				Apply(s.state, MarkBuilding{
+					Kind: item.kind, Col: s.radialCol, Row: s.radialRow,
+				})
+				s.radial = false
+			} else if !hit {
+				s.radial = false
+			}
+		} else if s.buildableCell(s.hoverCellCol, s.hoverCellRow) {
+			s.radial = true
+			s.radialCol, s.radialRow = s.hoverCellCol, s.hoverCellRow
+			s.picked = false
+		} else {
+			s.picked = inside
+			s.pickedCol, s.pickedRow = col, row
+		}
 	}
 
 	// A right click is a press and a release within a few pixels; anything
@@ -246,18 +281,46 @@ func (s *playScene) updateInspection(input *golib.Input) {
 	if s.rightWasDown && !down &&
 		math.Abs(float64(mx-s.rightFrom.X)) < 4 && math.Abs(float64(my-s.rightFrom.Y)) < 4 {
 		s.picked = false
+		s.radial = false
 	}
 	s.rightWasDown = down
 }
 
+// buildableCell reports whether a cell may ask for the build menu:
+// buildable ground, nothing raised or rising there, no robot standing on
+// it.
+func (s *playScene) buildableCell(col, row int) bool {
+	tcol, trow := cellTile(col, row)
+	if tileAt(tcol, trow) != kindGround {
+		return false
+	}
+	if _, occupied := buildingAt(s.state, col, row); occupied {
+		return false
+	}
+	for _, job := range s.state.Jobs {
+		if job.Col == col && job.Row == row {
+			return false
+		}
+	}
+	for _, id := range sortedRobotIDs(s.state) {
+		r := s.state.Robots[id]
+		if int(r.X/buildingCell) == col && int(r.Y/buildingCell) == row {
+			return false
+		}
+	}
+	return true
+}
+
 // pressButton applies the action a card's button asks for on the picked
 // tile.
-func (s *playScene) pressButton(label string) {
+func (s *playScene) pressButton(thing Thing, label string) {
 	switch label {
 	case buttonSend:
 		Apply(s.state, SendRobot{Col: s.pickedCol, Row: s.pickedRow})
 	case buttonRecall:
 		Apply(s.state, RecallRobot{Col: s.pickedCol, Row: s.pickedRow})
+	case buttonBuildRobot:
+		Apply(s.state, QueueRobot{Building: thing.Ref})
 	}
 }
 
@@ -279,8 +342,19 @@ func regionOnScreen() golib.Rectangle {
 func (s *playScene) Draw(screen *golib.Screen) {
 	screen.SetCamera(s.camera)
 	drawRegion(s.state, screen, s.zoom)
-	if s.hovering && (!s.picked || s.hoverCol != s.pickedCol || s.hoverRow != s.pickedRow) {
-		drawTileHighlight(screen, s.hoverCol, s.hoverRow, 1.5/s.zoom, hoveredTileColor)
+	// The cursor is the cell under the pointer, the grid's last
+	// subdivision, about four robots across. Far out it lifts to a
+	// readable size on the screen.
+	if s.hoverCell {
+		x, y := cellCenterUnits(s.hoverCellCol, s.hoverCellRow)
+		gx, gy := project(float32(x), float32(y))
+		scale := float32(buildingCell) / unitsPerTile
+		if min := 12 / s.zoom / tileW; scale < min {
+			scale = min
+		}
+		cursor := scaledDiamond(gx, gy, scale)
+		screen.DrawPolygonOutline(cursor, 2/s.zoom, hoveredTileColor)
+		screen.DrawCircle(gx, gy, 2.5/s.zoom, hoveredTileColor)
 	}
 	if s.picked {
 		drawTileHighlight(screen, s.pickedCol, s.pickedRow, 2/s.zoom, pickedTileColor)
@@ -289,19 +363,23 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	screen.DrawText("niebla", 16, 16, 20, textColor)
 	drawMarkup(screen, s.hudLine(), 16, 44, 12, textColor)
 	screen.DrawText(
-		"wheel zooms, WASD or arrows or right-drag pans, left-click inspects a tile (cards open and act), Esc quits, F11 fullscreen, F2 filter",
+		"click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a tile, Esc quits, F11 fullscreen, F2 filter",
 		16, float32(screen.Height())-30, 10, textColor,
 	)
-	if s.picked {
+	if s.picked && !s.radial {
 		panel := tooltipLayout(s.state, s.camera, s.pickedCol, s.pickedRow, s.expanded)
 		drawTooltip(screen, panel, s.mouse.X, s.mouse.Y)
 	}
+	if s.radial {
+		drawRadial(s, screen, s.mouse.X, s.mouse.Y)
+	}
 }
 
-// hudLine is the strip of stores and hands under the game's name.
+// hudLine is the strip of stores and hands under the game's name, each
+// store against the room the colony has for it.
 func (s *playScene) hudLine() string {
-	return fmt.Sprintf("[oil]%s[/]   [lilac]%s[/]   [dim]%d robots[/]",
-		si(s.state.Stock.Oil, "L"),
-		si(s.state.Stock.Lilac, "kg"),
+	return fmt.Sprintf("[oil]%s / %s[/]   [lilac]%s / %s[/]   [dim]%d robots[/]",
+		si(s.state.Stock.Oil, "L"), si(oilCap(s.state), "L"),
+		si(s.state.Stock.Lilac, "kg"), si(lilacCap(s.state), "kg"),
 		len(s.state.Robots))
 }

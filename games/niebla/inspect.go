@@ -26,11 +26,12 @@ const (
 	tooltipMargin = 8  // kept between the panel and the screen's edges
 )
 
-// The labels a deposit card's button carries. Update reads them to know
-// which action to apply, so treat them as identifiers, not prose.
+// The labels a card's button carries. Update reads them to know which
+// action to apply, so treat them as identifiers, not prose.
 const (
-	buttonSend   = "send robot"
-	buttonRecall = "recall robot"
+	buttonSend      = "send robot"
+	buttonRecall    = "recall robot"
+	buttonBuildRobot = "build robot"
 )
 
 // tooltipRow is one line the panel draws: the header, a card's title, an
@@ -97,6 +98,12 @@ func tooltipLayout(
 		}
 		for _, detail := range info.Details(s, thing) {
 			t.rows = append(t.rows, tooltipRow{thing: thing, detail: detail})
+		}
+		if thing.Type == TypeFactory {
+			if b, ok := s.Buildings[thing.Ref]; ok && b.Work <= 0 {
+				t.rows = append(t.rows, tooltipRow{thing: thing, button: buttonBuildRobot})
+			}
+			continue
 		}
 		if thing.Type != TypeOil && thing.Type != TypeLilac {
 			continue
