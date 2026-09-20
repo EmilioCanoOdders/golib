@@ -376,10 +376,20 @@ func (s *playScene) Draw(screen *golib.Screen) {
 }
 
 // hudLine is the strip of stores and hands under the game's name, each
-// store against the room the colony has for it.
+// store against the room the colony has for it, with the fog's cycle
+// and the swell the forecast names. The words stay in the plain text
+// color: the fog color would drown in the fog the screen is cleared
+// with.
 func (s *playScene) hudLine() string {
-	return fmt.Sprintf("[oil]%s / %s[/]   [lilac]%s / %s[/]   [dim]%d robots[/]",
+	fog := fmt.Sprintf("cycle %d", s.state.Fog.Cycle)
+	switch {
+	case s.state.Fog.SwellLeft > 0:
+		fog += "   swell"
+	case s.state.Fog.NextIn <= 1:
+		fog += "   swell next cycle"
+	}
+	return fmt.Sprintf("[oil]%s / %s[/]   [lilac]%s / %s[/]   [dim]%d robots[/]   %s",
 		si(s.state.Stock.Oil, "L"), si(oilCap(s.state), "L"),
 		si(s.state.Stock.Lilac, "kg"), si(lilacCap(s.state), "kg"),
-		len(s.state.Robots))
+		len(s.state.Robots), fog)
 }

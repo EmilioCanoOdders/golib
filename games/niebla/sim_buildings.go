@@ -189,14 +189,13 @@ func inSafeZone(s *State, x, y float64) bool {
 }
 
 // fogAt returns how much fog sits on a world point, from 0 to 1: none
-// inside a bubble, then the same fade the view paints past the line.
+// inside a bubble, then the same fade the view paints past the line -
+// the line of now, pressed in while a swell is up.
 func fogAt(s *State, x, y float64) float64 {
 	if inSafeZone(s, x, y) {
 		return 0
 	}
-	col := int(math.Floor(x / unitsPerTile))
-	row := int(math.Floor(y / unitsPerTile))
-	return float64(fogCover(tileDistance(col, row)))
+	return float64(fogCover(fogDistanceAt(x, y), fogLineNow(s)))
 }
 
 // oilCap and lilacCap return what the colony's stores hold at most: the

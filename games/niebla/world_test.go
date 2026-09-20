@@ -245,6 +245,7 @@ func TestTheSimulationReplaysTheSame(t *testing.T) {
 		runTicks(s, 1800) // the charger rises in the first half
 		Apply(s, QueueRobot{Building: 3})
 		runTicks(s, 1800) // the factory's robot rolls out in the second
+		runTicks(s, 33000) // the run crosses the first swell, at cycle 18
 		return s
 	}
 	if !reflect.DeepEqual(play(), play()) {

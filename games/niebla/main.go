@@ -18,6 +18,9 @@
 //   - sim_buildings.go holds the buildings' rules and their tuning:
 //     blueprints, placement and safe zones, storage caps, refueling,
 //     the factories' robot works.
+//   - sim_fog.go holds the fog's law: its cycles and swells, how far
+//     the line presses in, and what a swell means for walkers and
+//     tanks.
 //   - region.go holds the hand-made region and the isometric projection,
 //     as plain Go with no drawing, so that region_test.go can test it.
 //   - things.go holds what a tile holds: the things' snapshot out of the

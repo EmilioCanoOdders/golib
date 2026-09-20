@@ -33,6 +33,7 @@ never its corner, whose tile depends on float rounding.
 | `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`) and `Apply`, the only door into the state |
 | `sim_robots.go` | The robots' rules and tuning: what a robot does each tick — carry home, mind the tank, finish loading, oldest build job, own post, idle by the core |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, storage caps, refuel spots, the factories' robot works |
+| `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
 | `region.go` | The hand-made 25x25 layout, the isometric `project`, tile helpers, the deposit patches flooded out of the layout; pure Go, no drawing |
 | `things.go` | What a tile holds: `Thing` snapshots out of layout plus state (a deposit tile shows its whole patch), `tileAtWorld`, the SI quantities; pure Go, no drawing |
 | `catalog.go` | The entity database: per thing type its name, color, unit and card lines, plus the stable-color fallback |
@@ -42,7 +43,8 @@ never its corner, whose tile depends on float rounding.
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `markup_test.go` | Markup parser and tooltip layout/button tests |
 | `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
-| `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos |
+| `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
+| `fog_test.go` | The fog driven directly: cycles, the first swell on schedule, the pressed line, the bubble's margin, the pushed band's drag, the swell's burn, the HUD's forecast |
 
 ## Architecture
 
@@ -102,6 +104,29 @@ The fog's law, in `canPlace` and `inSafeZone`: nothing but a protector
 may be marked outside a bubble, so expansion is protector first, then
 the infrastructure it shelters. The bubbles also cancel the fog's drag,
 which slows every robot to half its pace deep in the mist.
+
+### The fog breathes
+
+The weather is state (`State.Fog` in `state.go`, law and tuning in
+`sim_fog.go`): `Cycle` counts whole cycles of `fogCycleTicks` (30 s);
+`NextIn` counts the cycles of calm left before the next **swell**;
+`SwellLeft` is the ticks the current swell has left; `Swells` remembers
+how many have passed, and every dial grows with that count — each swell
+comes `fogSwellQuickener` times sooner (floor `fogSwellMinPeriod`),
+lasts `fogSwellTicksGrowth` ticks longer (roof `fogSwellTicksMax`) and
+presses `fogSwellGrowth` tiles deeper (`fogSwellReach` the first time),
+but never past `fogSwellMargin` of the bubble: `swellReach` caps it, so
+the core's ground is not negotiable whatever the swell count.
+
+A swell rises whole at a cycle's end — which is what makes the HUD's
+forecast exact: while it says `swell next cycle` (the ghost line stands
+where the fog will press in), the swell rises at that very boundary.
+While it is up, `fogLineNow` returns the pressed line, the view paints
+the band and the line there, and the sim gets meaner in the pushed
+band: `fogDrag` keeps a quarter of the step where the calm fog would
+leave clear ground (`fogSwellSpeedFactor`), and built robots outside a
+bubble burn their tanks 1.5x (`fogSwellBurn`). Nothing else changes:
+placement (`canPlace`) and the bubbles never read the swell.
 
 Two kinds of robot (`RobotKind`): the core's own, free and tankless, and
 the factory's, paid in lilac and oil. A built one burns oil as it walks,
@@ -206,5 +231,9 @@ job pending takes no second job, the factory queues and rolls out tanked
 robots, a built robot refuels before it runs dry, the fog digests a dry
 one outside the bubbles, deep fog halves every walker's pace and a
 protector's pocket cancels it, and full stores hold the cargo until a
-silo opens room. Visual checks are shots with scripted clicks; see the
+silo opens room. `fog_test.go` does the same for the fog slice: the
+cycles tick, the first swell rises on schedule and drains whole, the
+line presses in and never reaches the bubble, the pushed band drags
+more, a swell burns outside but not inside, and the HUD forecasts.
+Visual checks are shots with scripted clicks; see the
 command above.

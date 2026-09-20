@@ -296,3 +296,17 @@ func TestFullStoresHoldTheCargoUntilASiloOpens(t *testing.T) {
 		t.Errorf("the stores hold %v L, want %v", s.Stock.Oil, want)
 	}
 }
+
+// TestAProtectorsBubbleStandsOnItsCell pins the drawn bubble to the cell
+// the protector was raised on. It once drew at the cell's index read as
+// tiles - eight times too far, off the region - so the post rose and no
+// protected radius ever showed around it.
+func TestAProtectorsBubbleStandsOnItsCell(t *testing.T) {
+	b := Building{Kind: BuildingProtector, Col: 147, Row: 100}
+	cx, cy := protectorBubbleCenter(b)
+	gx, gy := projectBuilding(b)
+	if cx != gx || cy != gy {
+		t.Errorf("the protector's bubble centers at %v, %v, want the building's ground %v, %v",
+			cx, cy, gx, gy)
+	}
+}

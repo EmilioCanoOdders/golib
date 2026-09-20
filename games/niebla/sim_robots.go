@@ -23,11 +23,12 @@ const (
 	goldenAngle     = 2.399963229728653 // spreads the parking spots
 )
 
-// stepSim moves the world one tick forward: the factories, then the
-// robots in ID order, so the outcome never depends on map iteration.
-// A built robot empty of oil outside every bubble is digested by the fog
-// and leaves the colony.
+// stepSim moves the world one tick forward: the weather, the
+// factories, then the robots in ID order, so the outcome never depends
+// on map iteration. A built robot empty of oil outside every bubble is
+// digested by the fog and leaves the colony.
 func stepSim(s *State) {
+	stepFog(s)
 	stepFactories(s)
 	for _, id := range sortedRobotIDs(s) {
 		r := s.Robots[id]
@@ -59,7 +60,11 @@ func sortedRobotIDs(s *State) []int64 {
 func stepRobot(s *State, r *Robot) {
 	job, hasJob := oldestJob(s)
 	if r.Kind == RobotBuilt && r.Tank > 0 {
-		r.Tank = math.Max(0, r.Tank-robotBurnPerSecond/60)
+		burn := robotBurnPerSecond / 60
+		if s.Fog.SwellLeft > 0 && !inSafeZone(s, r.X, r.Y) {
+			burn *= fogSwellBurn // the swell's mist is meaner in the open
+		}
+		r.Tank = math.Max(0, r.Tank-burn)
 	}
 	switch {
 	case r.Carry > 0:
@@ -144,10 +149,10 @@ func (s *State) refill(r *Robot) {
 // walkTowards moves the robot one tick's step towards a point and
 // reports whether it arrived. The fog drags at every robot, core or
 // built, slowing it the deeper the tile sits in the mist; inside a
-// bubble the step is whole.
+// bubble the step is whole, and a swell's pushed band is meaner
+// (sim_fog.go).
 func (r *Robot) walkTowards(s *State, x, y float64) bool {
-	step := robotSpeed / 60
-	step *= 1 - (1-fogSpeedFactor)*fogAt(s, r.X, r.Y)
+	step := robotSpeed / 60 * fogDrag(s, r.X, r.Y)
 	dx, dy := x-r.X, y-r.Y
 	d := math.Hypot(dx, dy)
 	if d <= step {

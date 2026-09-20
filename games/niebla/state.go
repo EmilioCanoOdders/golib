@@ -21,6 +21,20 @@ type State struct {
 	Stock     Stock              // what the core's stores hold
 	Drain     map[string]float64 // what remains in each deposit patch, by key
 	Jobs      []Job              // build jobs, oldest first
+	Fog       Fog                // the region's weather: the cycles and the swell
+}
+
+// Fog is the region's weather, where the fog's breath has got to. The
+// swell rises at a cycle's end and drains tick by tick; NextIn counts
+// the cycles of calm left before the next one, and Swells remembers how
+// many have passed, which is how the fog grows harder. SwellLeft > 0
+// means a swell is up (sim_fog.go holds the law).
+type Fog struct {
+	Cycle     int64   // whole cycles since the region began
+	CycleLeft int64   // ticks until the current cycle ends
+	SwellLeft int64   // ticks left of the current swell; 0 is calm
+	NextIn    float64 // cycles of calm left before the next swell
+	Swells    int64   // swells that have passed: the difficulty's memory
 }
 
 // Stock is what the colony has stored at the core.
@@ -113,6 +127,7 @@ func newGame() *State {
 		Buildings: map[int64]Building{},
 		Drain:     map[string]float64{},
 		Stock:     Stock{Oil: startingStockOil, Lilac: startingStockLilac},
+		Fog:       Fog{CycleLeft: fogCycleTicks, NextIn: fogSwellPeriod},
 	}
 	for _, d := range regionDeposits {
 		s.Drain[depositKey(d)] = depositFull(d)

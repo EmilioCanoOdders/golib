@@ -33,8 +33,8 @@ func drawRegion(s *State, screen *golib.Screen, zoom float32) {
 	drawDeposits(s, screen)
 	drawBuildings(s, screen, zoom)
 	drawRobots(s, screen, zoom)
-	drawFogCover(screen)
-	drawFogLine(screen, zoom)
+	drawFogCover(screen, fogLineNow(s))
+	drawFogLine(screen, zoom, s)
 	drawJobs(s, screen, zoom)
 	drawBubbles(s, screen, zoom)
 }
@@ -236,6 +236,14 @@ func isoBox(
 	}, left)
 }
 
+// protectorBubbleCenter returns where a protector's bubble sits on the
+// screen: the ground center of the cell it was raised on - cells, not
+// tiles, the same law the body obeys.
+func protectorBubbleCenter(b Building) (cx, cy float32) {
+	x, y := cellCenterUnits(b.Col, b.Row)
+	return project(float32(x), float32(y))
+}
+
 // drawBubbles paints the safe ground: the core's bubble last, so its
 // glow sits over everything, and a dimmer pocket per shadow protector,
 // drawn over the fog it holds back.
@@ -245,8 +253,7 @@ func drawBubbles(s *State, screen *golib.Screen, zoom float32) {
 		if b.Kind != BuildingProtector {
 			continue
 		}
-		cx, cy := projectTile(float32(b.Col), float32(b.Row))
-		cy += tileH / 2
+		cx, cy := protectorBubbleCenter(b)
 		fillEllipse(screen, cx, cy, protectorBubbleTiles, protectorBubbleColor)
 		ellipseOutline(screen, cx, cy, protectorBubbleTiles, 2/zoom, protectorEdgeColor)
 	}
@@ -292,12 +299,13 @@ func drawGround(s *State, screen *golib.Screen, zoom float32) {
 }
 
 // drawFogCover lays the fog over everything, tile by tile, fading in
-// past the line. It runs after the robots, so whatever walks into the
-// fog is swallowed by it.
-func drawFogCover(screen *golib.Screen) {
+// past the line - the line of now, so a swell's pushed band is mist
+// for as long as it lasts. It runs after the robots, so whatever walks
+// into the fog is swallowed by it.
+func drawFogCover(screen *golib.Screen, line float32) {
 	for row := 0; row < regionRows; row++ {
 		for col := 0; col < regionCols; col++ {
-			cover := fogCover(tileDistance(col, row))
+			cover := fogCover(tileDistance(col, row), line)
 			if cover <= 0 {
 				continue
 			}
@@ -308,12 +316,12 @@ func drawFogCover(screen *golib.Screen) {
 	}
 }
 
-// fogCover returns how much fog sits on a tile, from 0 to 1: none inside the
-// line, then fading in across fogFadeTiles until the tile is fog, one with
+// fogCover returns how much fog sits on a tile, from 0 to 1: none inside
+// the line, then fading in across fogFadeTiles until the tile is fog, one with
 // the fog around the region. Fading per tile keeps the front hugging the
 // tiles, with no gaps between the tiles and a smooth band.
-func fogCover(distance float32) float32 {
-	start := float32(fogLineRadius - 0.7)
+func fogCover(distance, line float32) float32 {
+	start := line - 0.7
 	return golib.Clamp((distance-start)/fogFadeTiles, 0, 1)
 }
 
@@ -474,9 +482,21 @@ func drawRobots(s *State, screen *golib.Screen, zoom float32) {
 	}
 }
 
-func drawFogLine(screen *golib.Screen, zoom float32) {
+// drawFogLine paints the fog's front: pressed in and in a stronger hand
+// while a swell is up, and - when the forecast names it - a ghost of the
+// line standing where the fog will press in.
+func drawFogLine(screen *golib.Screen, zoom float32, s *State) {
 	cx, cy := projectTile(coreCol, coreRow)
 	cy += tileH / 2
+	if s.Fog.SwellLeft > 0 {
+		ellipseOutline(screen, cx, cy, fogLineNow(s), 4/zoom,
+			golib.WithOpacity(fogBandColor, 0.9))
+		return
+	}
+	if s.Fog.NextIn <= 1 {
+		ellipseOutline(screen, cx, cy, fogLineRadius-swellReach(s), 2/zoom,
+			golib.WithOpacity(fogBandColor, 0.22))
+	}
 	ellipseOutline(screen, cx, cy, fogLineRadius, 3/zoom,
 		golib.WithOpacity(fogBandColor, 0.55))
 }
