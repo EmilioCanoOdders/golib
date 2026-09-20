@@ -1,12 +1,36 @@
 package main
 
-import "golib"
+import (
+	"math"
 
-// playScene shows the region. The slice is still: nothing moves yet, so
-// Update only answers the keys that leave, resize or filter the game.
+	"golib"
+)
+
+// Camera tuning. Zoom rests on whole steps so shapes and, later, pixel art
+// stay square, and glides between them; at zoomIn a robot's 1 u fills about
+// 40 screen pixels. Panning keeps its speed on the screen, not in the world,
+// so it glides the same at every zoom.
+const (
+	zoomOut = 1
+	zoomIn  = 4
+
+	panSpeed = 480 // screen pixels per second
+
+	zoomGlide = 0.1 // seconds for the zoom to close most of the way to its next step
+)
+
+// playScene shows the region through a camera. The camera is view, not
+// state: it lives here, outside the simulation, and never gets serialized.
 type playScene struct {
 	glow, crt, soft *golib.Shader
 	filterOn        bool
+	camera          *golib.Camera
+	zoom            float32       // the zoom on screen, gliding toward zoomLevel
+	zoomLevel       float32       // the whole-step zoom the wheel last asked for
+	anchorWorld     golib.Vector2 // while gliding, the point kept under the cursor
+	anchorScreen    golib.Vector2
+	dragging        bool          // the right button is down and moving the view
+	dragFrom        golib.Vector2 // where the cursor stood at the last drag update
 }
 
 // newPlayScene turns the monitor filters on: the glow runs first, so the CRT
@@ -22,6 +46,11 @@ func newPlayScene() *playScene {
 	s.crt.SetUniform("curvature", crtCurvature)
 	s.soft.SetUniform("amount", 0.35)
 	s.setFilters(true)
+	s.camera = golib.NewCamera(screenWidth, screenHeight)
+	s.camera.Bounds = regionOnScreen()
+	s.zoom, s.zoomLevel = zoomOut, zoomOut
+	s.camera.Zoom = s.zoom
+	s.camera.Snap()
 	return s
 }
 
@@ -52,14 +81,121 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 	if input.KeyPressed(golib.KeyF2) {
 		s.setFilters(!s.filterOn)
 	}
+	s.updateCamera(input, dt)
 }
 
-// Draw draws the region. It reads the state and never changes it.
+// updateCamera pans with WASD, the arrows or the left stick, drags with the
+// right button, glides the zoom in whole steps with the wheel, and keeps the
+// view inside the region.
+func (s *playScene) updateCamera(input *golib.Input, dt float32) {
+	s.zoomCamera(input, dt)
+	s.dragCamera(input)
+	s.panCamera(input, dt)
+	s.camera.Update(dt)
+}
+
+func (s *playScene) panCamera(input *golib.Input, dt float32) {
+	dx, dy := float32(0), float32(0)
+	if input.KeyDown(golib.KeyW) || input.KeyDown(golib.KeyUp) {
+		dy--
+	}
+	if input.KeyDown(golib.KeyS) || input.KeyDown(golib.KeyDown) {
+		dy++
+	}
+	if input.KeyDown(golib.KeyA) || input.KeyDown(golib.KeyLeft) {
+		dx--
+	}
+	if input.KeyDown(golib.KeyD) || input.KeyDown(golib.KeyRight) {
+		dx++
+	}
+	if stickX, stickY := input.GamepadLeftStick(0); stickX != 0 || stickY != 0 {
+		dx, dy = stickX, stickY
+	}
+	walked := math.Hypot(float64(dx), float64(dy))
+	if walked == 0 {
+		return
+	}
+	step := panSpeed / s.zoom * dt
+	s.camera.Target.X += dx / float32(walked) * step
+	s.camera.Target.Y += dy / float32(walked) * step
+}
+
+// zoomCamera glides the zoom to the whole step the wheel asks for, keeping
+// the point under the cursor under it while it moves. The in-between zooms
+// only exist while gliding: at rest the zoom is a whole number again.
+func (s *playScene) zoomCamera(input *golib.Input, dt float32) {
+	if notches := input.MouseWheel(); notches != 0 {
+		level := golib.Clamp(s.zoomLevel+float32(int(notches)), zoomOut, zoomIn)
+		if level != s.zoomLevel {
+			s.zoomLevel = level
+			mx, my := input.MousePosition()
+			s.anchorWorld = s.camera.ToWorld(mx, my)
+			s.anchorScreen = golib.Vector2{X: mx, Y: my}
+		}
+	}
+	if s.zoom == s.zoomLevel {
+		return
+	}
+	keep := float32(math.Exp(float64(-dt / zoomGlide)))
+	s.zoom += (s.zoomLevel - s.zoom) * (1 - keep)
+	if math.Abs(float64(s.zoomLevel-s.zoom)) < 0.001 {
+		s.zoom = s.zoomLevel
+	}
+	s.camera.Zoom = s.zoom
+	// Where the center must sit for the anchor to stay under the cursor:
+	// the anchor minus the cursor's offset from the middle.
+	s.camera.Target = golib.Vector2{
+		X: s.anchorWorld.X - (s.anchorScreen.X-screenWidth/2)/s.zoom,
+		Y: s.anchorWorld.Y - (s.anchorScreen.Y-screenHeight/2)/s.zoom,
+	}
+}
+
+// dragCamera moves the view with the right button, the way a hand drags a
+// map: the grab moves the ground with the cursor's opposite.
+func (s *playScene) dragCamera(input *golib.Input) {
+	if !input.MouseDown(golib.MouseRight) {
+		s.dragging = false
+		return
+	}
+	mx, my := input.MousePosition()
+	if !s.dragging {
+		s.dragging = true
+		s.dragFrom = golib.Vector2{X: mx, Y: my}
+		return
+	}
+	// Shifting the anchor with the view keeps the zoom's glide from
+	// fighting the drag when both move at once.
+	dx := (mx - s.dragFrom.X) / s.zoom
+	dy := (my - s.dragFrom.Y) / s.zoom
+	s.camera.Target.X -= dx
+	s.camera.Target.Y -= dy
+	s.anchorWorld.X -= dx
+	s.anchorWorld.Y -= dy
+	s.dragFrom = golib.Vector2{X: mx, Y: my}
+}
+
+// regionOnScreen returns where the region's diamond lands on the screen, the
+// rectangle the camera's view stays inside.
+func regionOnScreen() golib.Rectangle {
+	width := float32(regionCols+regionRows) * tileW / 2
+	height := float32(regionCols+regionRows) * tileH / 2
+	return golib.Rectangle{
+		X:      regionOriginX - width/2,
+		Y:      regionOriginY,
+		Width:  width,
+		Height: height,
+	}
+}
+
+// Draw draws the region through the camera, and the text over it in screen
+// pixels. It reads the state and never changes it.
 func (s *playScene) Draw(screen *golib.Screen) {
-	drawRegion(screen)
+	screen.SetCamera(s.camera)
+	drawRegion(screen, s.zoom)
+	screen.SetCamera(nil)
 	screen.DrawText("niebla", 16, 16, 20, textColor)
 	screen.DrawText(
-		"slice 1: the region. Esc quits, F11 fullscreen, F2 filter",
+		"wheel zooms, WASD or arrows or right-drag pans, Esc quits, F11 fullscreen, F2 filter",
 		16, float32(screen.Height())-30, 10, textColor,
 	)
 }

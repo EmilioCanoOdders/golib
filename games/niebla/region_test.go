@@ -10,6 +10,7 @@ func TestRegionLayoutIsSound(t *testing.T) {
 		t.Fatalf("the layout has %d rows, want %d", len(regionLayout), regionRows)
 	}
 	oils, veins, cores := 0, 0, 0
+	rocks, bushes := 0, 0
 	insideOils, insideVeins := 0, 0
 	for row, line := range regionLayout {
 		if len(line) != regionCols {
@@ -22,6 +23,10 @@ func TestRegionLayoutIsSound(t *testing.T) {
 				oils++
 			case kindLilac:
 				veins++
+			case kindRock:
+				rocks++
+			case kindBush:
+				bushes++
 			case kindCore:
 				cores++
 				if col != coreCol || row != coreRow {
@@ -41,8 +46,11 @@ func TestRegionLayoutIsSound(t *testing.T) {
 			} else if d <= coreBubbleRadius {
 				if kind == kindOil {
 					insideOils++
-				} else {
+				} else if kind == kindLilac {
 					insideVeins++
+				} else {
+					t.Errorf("a %c prop at %d, %d sits inside the bubble, where the ground stays clear",
+						kind, col, row)
 				}
 			}
 		}
@@ -55,6 +63,10 @@ func TestRegionLayoutIsSound(t *testing.T) {
 	}
 	if veins < 4 {
 		t.Errorf("the layout has %d lilac tiles, want 4 or more", veins)
+	}
+	if rocks < 4 || bushes < 4 {
+		t.Errorf("the layout has %d rocks and %d bushes, want 4 or more of each",
+			rocks, bushes)
 	}
 	// The attrition-free zone must let the colony mine one resource of each
 	// type in comfort, from deposits generously long.
@@ -71,7 +83,7 @@ func TestRegionLayoutIsSound(t *testing.T) {
 }
 
 func TestProjectionFitsTheRegionOnScreen(t *testing.T) {
-	if x, _ := project(coreCol, coreRow); x != regionOriginX {
+	if x, _ := projectTile(coreCol, coreRow); x != regionOriginX {
 		t.Errorf("the core projects at x %v, want the middle %v", x, regionOriginX)
 	}
 	corners := [][2]float32{
@@ -81,10 +93,39 @@ func TestProjectionFitsTheRegionOnScreen(t *testing.T) {
 		{0, regionRows - 1},
 	}
 	for _, c := range corners {
-		x, y := project(c[0], c[1])
+		x, y := projectTile(c[0], c[1])
 		if x < 0 || x > screenWidth || y < 0 || y > screenHeight {
 			t.Errorf("corner %v, %v projects at %v, %v, off the screen",
 				c[0], c[1], x, y)
+		}
+	}
+}
+
+// TestUnitsFillATile pins the world's unit: unitsPerTile of them span one
+// tile, so the core's 5 u pole is a tile across and a 10 u building is two.
+func TestUnitsFillATile(t *testing.T) {
+	x0, y0 := project(0, 0)
+	x1, y1 := project(unitsPerTile, 0)
+	if math.Abs(float64(x1-x0-tileW/2)) > 0.01 || math.Abs(float64(y1-y0-tileH/2)) > 0.01 {
+		t.Errorf("%d units span %v by %v pixels, want one tile, %v by %v",
+			unitsPerTile, x1-x0, y1-y0, tileW/2, tileH/2)
+	}
+}
+
+func TestRegionOnScreenCoversTheDiamond(t *testing.T) {
+	bounds := regionOnScreen()
+	corners := [][2]float32{
+		{0, 0},
+		{regionCols - 1, 0},
+		{regionCols - 1, regionRows - 1},
+		{0, regionRows - 1},
+	}
+	for _, c := range corners {
+		x, y := projectTile(c[0], c[1])
+		if x < bounds.X || x > bounds.X+bounds.Width ||
+			y < bounds.Y || y > bounds.Y+bounds.Height {
+			t.Errorf("corner %v, %v projects at %v, %v, outside the camera bounds %v",
+				c[0], c[1], x, y, bounds)
 		}
 	}
 }

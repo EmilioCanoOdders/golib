@@ -4,8 +4,8 @@
 //
 //   - main.go (this file) starts the game: main calls golib.Run with the
 //     first scene. The screen's size and the game's colors are here.
-//   - play.go is the play scene: Update answers the keys, Draw draws the
-//     region.
+//   - play.go is the play scene: Update answers the keys and drives the
+//     camera, Draw draws the region through it.
 //   - region.go holds the hand-made region and the isometric projection, as
 //     plain Go with no drawing, so that region_test.go can test it.
 //   - draw.go paints the region.
@@ -42,6 +42,10 @@ var (
 	lilacColor       = golib.Color{R: 186, G: 148, B: 255, A: 255}
 	lilacDarkColor   = golib.Color{R: 138, G: 102, B: 208, A: 255}
 	lilacLightColor  = golib.Color{R: 214, G: 188, B: 255, A: 255}
+	rockColor        = golib.Color{R: 120, G: 126, B: 138, A: 255}
+	rockLightColor   = golib.Color{R: 144, G: 150, B: 162, A: 255}
+	bushColor        = golib.Color{R: 92, G: 106, B: 92, A: 255}
+	bushLightColor   = golib.Color{R: 114, G: 130, B: 110, A: 255}
 	coreColor        = golib.Color{R: 32, G: 36, B: 46, A: 255}
 	coreGlowColor    = golib.Color{R: 255, G: 244, B: 214, A: 255}
 	bubbleColor      = golib.Color{R: 168, G: 216, B: 255, A: 46}

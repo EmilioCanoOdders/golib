@@ -49,9 +49,10 @@ Consequence for file layout: `state.go` (types), `actions.go` (action types + `A
 | Input | Action |
 | --- | --- |
 | WASD or arrows | Pan the camera |
-| Mouse wheel | Zoom, in whole steps (pixel art stays square) |
+| Mouse wheel | Zoom toward the cursor, gliding between whole steps (pixel art stays square at rest) |
+| Mouse right, held | Drag the view: grab the ground and move it |
 | Mouse left | Select / mark: place blueprint, mark harvest, pick robot |
-| Mouse right | Cancel marking / deselect |
+| Mouse right, clicked | Cancel marking / deselect |
 | Esc | Pause and resume |
 | F11 or Alt+Enter | Fullscreen on and off |
 
@@ -71,9 +72,11 @@ The screen is 2K/2 (1280x720) with `Config.PixelArt`, so a 2K monitor scales it 
 Made in code with `golib.NewSound` (recipes and `SoundSpec`): the fog's low loop outside bubbles, the repulsor hum, robot blips, a digestion crunch, a construction done chime. Fully playable muted.
 
 ## Tuning
-Pinned as code lands, all at the top of the sim files with units in the name: `fogCycleTicks`, `repulsorOilPerCycle`, `robotChargeSeconds`, `robotMoveSpeed` (units/s), `oilPerPoolUnit`, `lilacPerVeinUnit`, blueprint costs. Pinned so far, in `region.go`: `regionCols`/`regionRows` (25x25 tiles), `tileW`/`tileH` (48x24 px at 2K/2), `coreBubbleRadius` 4 tiles, `fogLineRadius` 10.5 tiles, `fogFadeTiles` 2.4 tiles. The fog's shape and speed are the feel of the game; they get their own section when the first region exists.
+Pinned as code lands, all at the top of the sim files with units in the name: `fogCycleTicks`, `repulsorOilPerCycle`, `robotChargeSeconds`, `robotMoveSpeed` (units/s), `oilPerPoolUnit`, `lilacPerVeinUnit`, blueprint costs. Pinned so far, in `region.go`: `regionCols`/`regionRows` (25x25 tiles), `tileW`/`tileH` (48x24 px at 2K/2), `unitsPerTile` 5 (the world's unit: a robot is 1 u, the core's pole 5 u across - one tile, a typical building 10 u - two by two, a vein 30 u - six tiles), `coreBubbleRadius` 4 tiles, `fogLineRadius` 10.5 tiles, `fogFadeTiles` 2.4 tiles. In `play.go`: `zoomOut`/`zoomIn` (whole-step zoom, 1 to 4; at 4 a robot's 1 u is about 40 screen px), `zoomGlide` 0.1 s (the zoom glides from step to step instead of jumping, keeping the point under the cursor under it; only at rest is the zoom a whole number), `panSpeed` 480 screen px/s, constant on the screen at every zoom; the right button drags the view, grab style. The camera is view, not state: it lives in the play scene and never serializes. In `draw.go`: `propZoom` 2, the zoom from which the rocks and bushes are drawn, so zooming in reveals detail. The fog's shape and speed are the feel of the game; they get their own section when the first region exists.
 
-Robots and building, decided for the next slice: the starting robots work for nothing and build the first buildings in comfort; every robot built afterwards consumes oil each cycle, and each building's construction effort grows with its complexity, so growing the colony asks for more units.
+The region layout's placement rules, tested in `region_test.go`: oil, lilac and the core inside the fog line; the two seams crossing under the core generously inside the bubble; rocks and bushes on ground outside the bubble, so the comfort zone stays clear, sitting off their tile's middle by a stable jitter.
+
+Robots and building, decided for the next slice: the starting robots work for nothing and build the first buildings in comfort; every robot built afterwards consumes oil each cycle, and each building's construction effort grows with its complexity, so growing the colony asks for more units. Entities will carry float positions in units; the tile a thing belongs to is computed from them, and the cell index that lookups need is a runtime structure rebuilt on load, never part of the serialized state.
 
 ## Later
 - **The arc (mid-game):** stabilizing the first region summons the ark, the mobile base - the game's own idea, arriving as a reward.
@@ -89,3 +92,5 @@ Robots and building, decided for the next slice: the starting robots work for no
 - 2026-09-20: slice 1 polished after review: screen at 2K/2 (1280x720, `PixelArt`); the white slivers at the fog border gone (the fog fades in per tile now, no band); two generous seams of oil and lilac cross under the core, inside the bubble; robot and building-cost policy written down for the next slice.
 - 2026-09-20: a subtle monitor filter, `shaders/soft.fs`, rounds the pixels' corners (F2 turns it off); flat areas and the ground's checker stay untouched, and no grain is added.
 - 2026-09-20: the filter becomes the asteroids pair, turned down: `glow.fs` with its threshold at 0.8 (the pale fog outshines the oil, so only the core, the bubble's edge and the text glow) at strength 0.9, and `crt.fs` without flicker, scanlines at 0.96, a lighter vignette and curvature 0.08. The soft rounding runs last.
+- 2026-09-20: slice 2, the camera: WASD, arrows or left stick pan, and the wheel zooms in whole steps from 1 to 4, anchored on the cursor, the view bounded to the region. The world took its unit (`unitsPerTile` 5, with the proportions it pins: robot 1 u, pole 5 u, building 10 u, vein 30 u), `project` speaks units, and the core's pole now fills its whole tile. Rocks and bushes dot the ground from zoom 2 on, off their tile's middle by a stable jitter. The cell-and-offset model is decided and written down, waiting for the robots.
+- 2026-09-20: first feel pass: the zoom glides between its whole steps instead of jumping (`zoomGlide`), still anchored on the cursor, and holding the right button drags the view like a grabbed map, both working together.

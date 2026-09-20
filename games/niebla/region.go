@@ -10,12 +10,24 @@ const (
 	tileW = 48 // tile width, in screen pixels
 	tileH = 24 // tile height, in screen pixels
 
+	// The world measures itself in units: a robot is 1 u, the core's pole
+	// is 5 u across, a typical building covers 10 u, and a vein reaches
+	// 30 u. Five units to the tile lands the pole on one tile and a
+	// building on two by two.
+	unitsPerTile = 5
+
 	coreCol = 12 // where the core sits
 	coreRow = 12
 
 	coreBubbleRadius = 4.0 // tiles; nothing is digested inside it
 	fogLineRadius    = 10.5 // tiles; the fog's front stands here, for now
 	fogFadeTiles     = 2.4  // tiles; how far the fog fades in past the line
+)
+
+// The size of one unit on the screen, before the camera zooms.
+const (
+	unitW = float32(tileW) / unitsPerTile
+	unitH = float32(tileH) / unitsPerTile
 )
 
 // Where the region's top corner lands on the screen, so the whole diamond
@@ -31,6 +43,8 @@ const (
 	kindOil    = 'o'
 	kindLilac  = 'L'
 	kindCore   = 'C'
+	kindRock   = 'r' // a decoration, drawn from zoom propZoom on
+	kindBush   = 'b' // a decoration, drawn from zoom propZoom on
 )
 
 // regionLayout is the hand-made region, Tiled-informed, drawn in code for
@@ -41,22 +55,22 @@ var regionLayout = []string{
 	".........................",
 	".........................",
 	".........................",
-	".........................",
-	"................ooo......",
+	".................r.......",
+	"......b.........ooo......",
 	"......L.........ooo......",
-	".......L.................",
-	"........L...L............",
-	"............L............",
-	"............L............",
-	"............L............",
+	".....r.L.........r.......",
+	"....b...L...L............",
+	".......b....L....b.......",
+	"...r........L........r...",
+	".......b....L....b.......",
 	"...LL...ooooCoooo........",
-	"............L............",
-	"............L............",
-	".....ooo....L............",
-	".....ooo....L.....oo.....",
-	"................L.o......",
-	".................L.......",
-	".........................",
+	".......b....L.....b......",
+	"...r........L........r...",
+	".....ooo....L...b........",
+	"....rooo....L.....oob....",
+	".......b........L.ob.....",
+	"........rb.......L.......",
+	"......b.....r.....b......",
 	".........................",
 	".........................",
 	".........................",
@@ -78,11 +92,27 @@ func tileDistance(col, row int) float32 {
 	return float32(math.Hypot(float64(col-coreCol), float64(row-coreRow)))
 }
 
-// project returns where the top corner of a tile's diamond lands on the
-// screen, as DESIGN.md says: screenX = (x-y)*tileW/2, screenY = (x+y)*tileH/2.
-// The coordinates may be fractional, for circles around the core.
-func project(col, row float32) (x, y float32) {
-	return (col-row)*tileW/2 + regionOriginX, (col+row)*tileH/2 + regionOriginY
+// project returns where the world point at x, y units lands on the screen,
+// as DESIGN.md says: screenX = (x-y)*unitW/2, screenY = (x+y)*unitH/2. The
+// coordinates may be fractional, for circles around the core.
+func project(x, y float32) (sx, sy float32) {
+	return (x-y)*unitW/2 + regionOriginX, (x+y)*unitH/2 + regionOriginY
+}
+
+// projectTile returns where a tile's top corner lands on the screen.
+func projectTile(col, row float32) (x, y float32) {
+	return project(col*unitsPerTile, row*unitsPerTile)
+}
+
+// jitter returns a stable number from a tile's place and a salt, from -0.5
+// to 0.5, so props sit off the middle of their tile without anything stored:
+// the same tile always draws the same way.
+func jitter(col, row, salt int) float32 {
+	h := col*374761393 + row*668265263 + salt*1442695041
+	h ^= h >> 13
+	h *= 1274126177
+	h ^= h >> 16
+	return float32(h&0xffff)/float32(0xffff) - 0.5
 }
 
 // ellipseSemiAxes returns the half width and half height on the screen of a

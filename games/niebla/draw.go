@@ -6,24 +6,29 @@ import (
 	"golib"
 )
 
+// propZoom is the zoom from which rocks and bushes are drawn: at whole
+// region view they are a speck of noise, and their appearing as you zoom in
+// is the detail the zoom is for.
+const propZoom = 2
+
 // drawRegion paints the still region: the ground inside the fog line, the
 // core and its bubble, and the fog standing beyond the line. It reads the
 // layout and changes nothing.
-func drawRegion(screen *golib.Screen) {
+func drawRegion(screen *golib.Screen, zoom float32) {
 	screen.Clear(fogColor)
-	drawGround(screen)
+	drawGround(screen, zoom)
 	drawFogLine(screen)
 	drawCoreAndBubble(screen)
 }
 
-func drawGround(screen *golib.Screen) {
+func drawGround(screen *golib.Screen, zoom float32) {
 	for row := 0; row < regionRows; row++ {
 		for col := 0; col < regionCols; col++ {
 			distance := tileDistance(col, row)
 			if distance > fogLineRadius-0.7+fogFadeTiles {
 				continue
 			}
-			x, y := project(float32(col), float32(row))
+			x, y := projectTile(float32(col), float32(row))
 			color := groundColor
 			if (col+row)%2 == 0 {
 				color = groundShadeColor
@@ -34,6 +39,14 @@ func drawGround(screen *golib.Screen) {
 				drawOil(screen, x, y)
 			case kindLilac:
 				drawLilac(screen, x, y)
+			case kindRock:
+				if zoom >= propZoom {
+					drawRock(screen, x, y, col, row)
+				}
+			case kindBush:
+				if zoom >= propZoom {
+					drawBush(screen, x, y, col, row)
+				}
 			}
 			if cover := fogCover(distance); cover > 0 {
 				screen.DrawPolygon(tileDiamond(x, y),
@@ -88,18 +101,48 @@ func drawLilac(screen *golib.Screen, x, y float32) {
 	screen.DrawTriangle(cx+2, cy+3, cx+5, cy-6, cx+8, cy+3, lilacLightColor)
 }
 
+// drawRock draws a rock about one unit across, at the middle of its tile but
+// for the jitter. Two facets, dark against the light.
+func drawRock(screen *golib.Screen, x, y float32, col, row int) {
+	cx := x + jitter(col, row, 1)*3*unitW
+	cy := y + tileH/2 + jitter(col, row, 2)*2*unitH
+	screen.DrawPolygon([]golib.Vector2{
+		{X: cx - 5, Y: cy + 3},
+		{X: cx - 2, Y: cy - 6},
+		{X: cx + 4, Y: cy - 3},
+		{X: cx + 5, Y: cy + 3},
+	}, rockColor)
+	screen.DrawPolygon([]golib.Vector2{
+		{X: cx - 2, Y: cy - 6},
+		{X: cx + 4, Y: cy - 3},
+		{X: cx + 1, Y: cy + 1},
+		{X: cx - 2, Y: cy - 2},
+	}, rockLightColor)
+}
+
+// drawBush draws a bush of three circles about a unit and a half across, at
+// the middle of its tile but for the jitter.
+func drawBush(screen *golib.Screen, x, y float32, col, row int) {
+	cx := x + jitter(col, row, 3)*3*unitW
+	cy := y + tileH/2 + jitter(col, row, 4)*2*unitH
+	screen.DrawCircle(cx-3, cy, 3, bushColor)
+	screen.DrawCircle(cx+3, cy, 3, bushColor)
+	screen.DrawCircle(cx, cy-3, 3, bushLightColor)
+}
+
 func drawCoreAndBubble(screen *golib.Screen) {
-	cx, cy := project(coreCol, coreRow)
+	cx, cy := projectTile(coreCol, coreRow)
 	cy += tileH / 2
+	// The pole is 5 u across: one whole tile.
 	fillEllipse(screen, cx, cy, coreBubbleRadius, bubbleColor)
 	ellipseOutline(screen, cx, cy, coreBubbleRadius, 3, bubbleEdgeColor)
-	screen.DrawPolygon(scaledDiamond(cx, cy, 0.8), coreColor)
-	screen.DrawCircle(cx, cy, 9, coreGlowColor)
-	screen.DrawCircle(cx, cy, 4, coreColor)
+	screen.DrawPolygon(scaledDiamond(cx, cy, 1), coreColor)
+	screen.DrawCircle(cx, cy, unitW, coreGlowColor)
+	screen.DrawCircle(cx, cy, unitW/2, coreColor)
 }
 
 func drawFogLine(screen *golib.Screen) {
-	cx, cy := project(coreCol, coreRow)
+	cx, cy := projectTile(coreCol, coreRow)
 	cy += tileH / 2
 	ellipseOutline(screen, cx, cy, fogLineRadius, 3,
 		golib.WithOpacity(fogBandColor, 0.55))
