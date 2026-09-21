@@ -7,11 +7,35 @@ import (
 	"golib"
 )
 
-// The squads on the screen: the pointer's mode that gives a squad its
-// order, the mark of what each squad is at, and the shots that fly
-// between troopers and rivals. The order itself goes through OrderSquad.
+// The squads on the screen: the number keys and the marks that call a
+// squad, the pointer's mode that gives it its order, the strip that
+// lists the squads by key, the mark of what each squad is at, and the
+// shots that fly between troopers and rivals. The order itself goes
+// through OrderSquad.
 
-const orderPickPx = 16 // screen pixels around a vehicle that still pick it
+const (
+	orderPickPx = 16 // screen pixels around a vehicle that still pick it
+
+	squadKeys      = 9  // the number keys that call a squad: 1 through 9
+	squadPickPx    = 14 // screen pixels around a squad's mark that pick it
+	squadBoxWidth  = 50 // a squad box of the strip, screen pixels
+	squadBoxHeight = 44 //
+	squadBoxGap    = 6  //
+)
+
+// squadSlots lists the war factories whose squads the number keys call,
+// oldest first: 1 calls the first war factory raised, 2 the next, and
+// so on. A factory whose troopers are still on the way holds its slot
+// all the same, so a squad's key never changes under it.
+func squadSlots(s *State) []int64 {
+	var slots []int64
+	for _, id := range sortedBuildingIDs(s) {
+		if s.Buildings[id].Kind == BuildingWarFactory {
+			slots = append(slots, id)
+		}
+	}
+	return slots
+}
 
 // enemyUnder returns the rival vehicle under the pointer, the nearest on
 // the screen within orderPickPx.
@@ -24,6 +48,37 @@ func (s *playScene) enemyUnder(mx, my float32) (Enemy, bool) {
 		at := s.camera.ToScreen(golib.Vector2{X: gx, Y: gy})
 		if gap := math.Hypot(float64(at.X-mx), float64(at.Y-my)); gap <= bestGap {
 			best, found, bestGap = e, true, gap
+		}
+	}
+	return best, found
+}
+
+// squadMarkAt returns the squad whose mark stands under the pointer:
+// the pennant on the spot it guards - its war factory's door, when
+// nobody has ordered it - or the ring around the vehicle it is to
+// shoot first, at the same points the marks are drawn. The nearest
+// within squadPickPx.
+func (s *playScene) squadMarkAt(mx, my float32) (int64, bool) {
+	var best int64
+	found, bestGap := false, float64(squadPickPx)
+	for _, id := range sortedBuildingIDs(s.state) {
+		if s.state.Buildings[id].Kind != BuildingWarFactory {
+			continue
+		}
+		if len(squadMembers(s.state, id)) == 0 {
+			continue
+		}
+		sq := squadOf(s.state, id)
+		pole := dotRadius(14, s.zoom, 10)
+		gx, gy := project(float32(sq.X), float32(sq.Y))
+		py := gy - pole/2
+		if e, stands := s.state.Enemies[sq.Focus]; stands && sq.Order == OrderAttack {
+			gx, gy = project(float32(e.X), float32(e.Y))
+			py = gy - 2*unitH
+		}
+		at := s.camera.ToScreen(golib.Vector2{X: gx, Y: py})
+		if gap := math.Hypot(float64(at.X-mx), float64(at.Y-my)); gap <= bestGap {
+			best, found, bestGap = id, true, gap
 		}
 	}
 	return best, found
@@ -91,6 +146,84 @@ func drawSquadMarks(s *State, screen *golib.Screen, zoom float32) {
 		screen.DrawLine(gx, gy, gx, gy-pole, 1.5/zoom, guardColor)
 		screen.DrawTriangle(gx, gy-pole, gx, gy-pole*0.55,
 			gx+pole*0.6, gy-pole*0.78, guardColor)
+	}
+}
+
+// drawSquadStrip paints the squads' boxes at the top right, one per
+// squad: a little tank icon, how many troopers the squad counts and,
+// below, the key that calls it. The box of the squad being ordered is
+// ringed in the squads' green, and so is the box under the pointer
+// lit.
+func drawSquadStrip(s *playScene, screen *golib.Screen) {
+	for i, home := range squadSlots(s.state) {
+		if i >= squadKeys {
+			break
+		}
+		rect := squadBoxRect(i)
+		armed := s.ordering == home
+		fill := buttonColor
+		if armed || rect.Contains(s.mouse.X, s.mouse.Y) {
+			fill = buttonHoverColor
+		}
+		screen.DrawRectangle(rect, fill)
+		edge := buttonEdgeColor
+		if armed {
+			edge = guardColor
+		}
+		screen.DrawRectangleOutline(rect, 1, edge)
+		count := len(squadMembers(s.state, home))
+		body, dark := guardColor, guardDark
+		ink := panelTextColor
+		if count == 0 && !armed {
+			body, dark, ink = panelDimColor, golib.WithOpacity(panelDimColor, 0.5), panelDimColor
+		}
+		drawTankIcon(screen, rect.X+4, rect.Y+8, body, dark)
+		words := fmt.Sprintf("%d", count)
+		screen.DrawText(words, rect.X+squadBoxWidth-8-screen.TextWidth(words, textSize, uiText),
+			rect.Y+8, textSize, ink, uiText)
+		key := fmt.Sprintf("%d", i+1)
+		keyColor := panelDimColor
+		if armed {
+			keyColor = guardColor
+		}
+		screen.DrawText(key, rect.X+squadBoxWidth/2-screen.TextWidth(key, 11, uiText)/2,
+			rect.Y+28, 11, keyColor, uiText)
+	}
+}
+
+// squadBoxRect is where a squad's box stands, right to left from the
+// screen's top right corner: the squad the 1 calls is the rightmost.
+func squadBoxRect(i int) golib.Rectangle {
+	return golib.Rectangle{
+		X:      screenWidth - 16 - float32(i+1)*squadBoxWidth - float32(i)*squadBoxGap,
+		Y:      44,
+		Width:  squadBoxWidth,
+		Height: squadBoxHeight,
+	}
+}
+
+// squadBoxAt returns the box under a screen point, if any.
+func squadBoxAt(mx, my float32) (int, bool) {
+	for i := 0; i < squadKeys; i++ {
+		if squadBoxRect(i).Contains(mx, my) {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// drawTankIcon paints a little tank, side on, pointing right: barrel,
+// turret, hull and its tracks with their wheels, in the colors it is
+// given.
+func drawTankIcon(screen *golib.Screen, x, y float32, body, dark golib.Color) {
+	screen.DrawRectangle(golib.Rectangle{X: x + 14, Y: y + 1, Width: 8, Height: 2}, body)
+	screen.DrawRectangle(golib.Rectangle{X: x + 8, Y: y, Width: 7, Height: 4}, body)
+	screen.DrawRectangle(golib.Rectangle{X: x + 2, Y: y + 4, Width: 19, Height: 5},
+		mid(body, dark))
+	screen.DrawRectangle(golib.Rectangle{X: x, Y: y + 9, Width: 22, Height: 5}, dark)
+	wheel := mid(dark, golib.Color{R: 12, G: 14, B: 18, A: 255})
+	for i := 0; i < 4; i++ {
+		screen.DrawCircle(x+4+float32(i)*5, y+11.5, 1.6, wheel)
 	}
 }
 

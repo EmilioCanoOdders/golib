@@ -117,7 +117,12 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 		setFilters(!monitor.on)
 	}
 	s.updateCamera(input, dt)
-	s.updateInspection(input, s.dev.update(s, input))
+	taken := s.dev.update(s, input)
+	if !taken {
+		taken = s.updateSquadBoxes(input)
+	}
+	s.updateInspection(input, taken)
+	s.updateSquadKeys(input)
 	// The loop is the clock: one tick of simulation per update, more
 	// while the dev tools fast forward.
 	ticks := s.dev.ticksPerUpdate()
@@ -140,6 +145,58 @@ func (s *playScene) saveNow() {
 		return
 	}
 	s.saveFailed = saveBase(s.state) != nil
+}
+
+// updateSquadKeys calls a squad with the number keys: 1 arms the oldest
+// war factory's squad for an order, 2 the next, and so on, the same way
+// its card's give order does; the same key again puts the order away.
+// Arming takes effect from the next update, so the click of the update
+// that pressed the key never fires an order by itself. The keys stand
+// down while the pointer is laying a pipe, whose clicks they would
+// fight.
+func (s *playScene) updateSquadKeys(input *golib.Input) {
+	if s.laying.on {
+		return
+	}
+	slots := squadSlots(s.state)
+	for i := 0; i < squadKeys && i < len(slots); i++ {
+		if input.KeyPressed(golib.KeyOne + golib.Key(i)) {
+			if s.ordering == slots[i] {
+				s.ordering = 0
+			} else {
+				s.ordering = slots[i]
+				s.radial = false
+			}
+			return
+		}
+	}
+}
+
+// updateSquadBoxes takes a click on one of the squads' boxes the way
+// its key would: the box arms that squad for an order, or takes the
+// order away if it was armed. It reports whether the click belonged to
+// a box, so the region under it never hears of it; a box that no squad
+// holds doesn't exist and passes the click through.
+func (s *playScene) updateSquadBoxes(input *golib.Input) bool {
+	if !input.MousePressed(golib.MouseLeft) || s.laying.on {
+		return false
+	}
+	mx, my := input.MousePosition()
+	i, over := squadBoxAt(mx, my)
+	if !over {
+		return false
+	}
+	slots := squadSlots(s.state)
+	if i < len(slots) {
+		if s.ordering == slots[i] {
+			s.ordering = 0
+		} else {
+			s.ordering = slots[i]
+			s.radial = false
+		}
+		return true
+	}
+	return false
 }
 
 // updateCamera pans with WASD, the arrows or the left stick, drags with the
@@ -298,6 +355,14 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 				}
 				return
 			}
+		}
+		// A squad's mark picks its squad where it stands: the pennant of
+		// a guarding one, the ring around an attack's focus. The click
+		// arms the ordering pointer instead of picking the cell.
+		if home, ok := s.squadMarkAt(mx, my); ok {
+			s.ordering = home
+			s.radial = false
+			return
 		}
 		if s.radial {
 			// A pick raises the blueprint right on the menu's cell; a
@@ -465,10 +530,11 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	screen.DrawText("niebla", 16, 12, 24, textColor, uiText)
 	drawMarkup(screen, s.hudLine(), 16, 44, 15, textColor)
 	drawReport(s.state, screen)
+	drawSquadStrip(s, screen)
 	s.dev.draw(s, screen)
-	help := "click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a cell, Esc saves and returns to the menu, F11 fullscreen, F2 filter"
+	help := "click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a cell, 1-9 call a squad, Esc saves and returns to the menu, F11 fullscreen, F2 filter"
 	if s.ordering != 0 {
-		help = "ordering a squad: click a rival vehicle to attack its party, that vehicle first, or click the ground to post the squad there; right-click puts the order away"
+		help = "ordering a squad: click a rival vehicle to attack its party, that vehicle first, or click the ground to post the squad there; right-click or the squad's number again puts the order away"
 	}
 	if s.laying.on {
 		help = "laying a pipe: click the ground to bend it, click a ringed tank (silo, charger, core) to connect it, click the last node for its menu, right-click takes the last bend back"

@@ -3,6 +3,8 @@ package main
 import (
 	"math"
 	"testing"
+
+	"golib"
 )
 
 // squadOfTroopers raises a war factory by the core and puts n troopers
@@ -175,5 +177,73 @@ func TestAFallenTrooperLeavesItsWreckAndADemolishedWarFactoryItsSquad(t *testing
 	}
 	if _, ordered := s.Squads[home.ID]; ordered {
 		t.Errorf("a demolished war factory's squad keeps its order")
+	}
+}
+
+func TestTheNumberKeysCallTheWarFactoriesOldestFirst(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	if slots := squadSlots(s); len(slots) != 0 {
+		t.Fatalf("%d squads stand before any war factory, want none", len(slots))
+	}
+	col, row := groundNearCore()
+	first := raised(t, s, BuildingWarFactory, col, row)
+	raised(t, s, BuildingSilo, col+1, row)
+	second := raised(t, s, BuildingWarFactory, col+2, row)
+	slots := squadSlots(s)
+	if len(slots) != 2 || slots[0] != first.ID || slots[1] != second.ID {
+		t.Errorf("the keys would call %v, want the two war factories oldest first",
+			slots)
+	}
+}
+
+func TestASquadsMarkPicksItsSquad(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	home := squadOfTroopers(t, s, 2)
+	scene := newPlayScene(s)
+	x, y := cellCenterUnits(home.Col, home.Row)
+	// The pennant of a squad nobody has ordered stands at its door.
+	pole := dotRadius(14, scene.zoom, 10)
+	gx, gy := project(float32(x), float32(y))
+	at := scene.camera.ToScreen(golib.Vector2{X: gx, Y: gy - pole/2})
+	if got, ok := scene.squadMarkAt(at.X, at.Y); !ok || got != home.ID {
+		t.Errorf("the pennant picked squad %d, %v; want %d", got, ok, home.ID)
+	}
+	// The ring of an attack stands on the vehicle it is to shoot first.
+	e := Enemy{ID: 900, Kind: EnemyScout, Party: 901, X: x + 400, Y: y + 200}
+	s.Enemies[e.ID] = e
+	s.Squads[home.ID] = Squad{
+		Home: home.ID, Order: OrderAttack, Party: e.Party, Focus: e.ID,
+	}
+	rx, ry := project(float32(e.X), float32(e.Y))
+	at = scene.camera.ToScreen(golib.Vector2{X: rx, Y: ry - 2*unitH})
+	if got, ok := scene.squadMarkAt(at.X, at.Y); !ok || got != home.ID {
+		t.Errorf("the ring picked squad %d, %v; want %d", got, ok, home.ID)
+	}
+	if _, ok := scene.squadMarkAt(4, 4); ok {
+		t.Errorf("a mark answered at the screen's corner")
+	}
+}
+
+func TestTheSquadsBoxesLieApartAndPickTheirSquad(t *testing.T) {
+	for i := 0; i < 3; i++ {
+		rect := squadBoxRect(i)
+		if rect.X < 0 || rect.Y < 0 ||
+			rect.X+rect.Width > screenWidth || rect.Y+rect.Height > screenHeight {
+			t.Fatalf("box %d leaves the screen: %+v", i, rect)
+		}
+		for j := i + 1; j < 3; j++ {
+			if rect.Overlaps(squadBoxRect(j)) {
+				t.Errorf("boxes %d and %d lie on each other", i, j)
+			}
+		}
+		mx, my := rect.X+rect.Width/2, rect.Y+rect.Height/2
+		if got, ok := squadBoxAt(mx, my); !ok || got != i {
+			t.Errorf("the middle of box %d picked %d, %v", i, got, ok)
+		}
+	}
+	if _, ok := squadBoxAt(4, 4); ok {
+		t.Errorf("a box answered at the screen's corner")
 	}
 }

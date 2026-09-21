@@ -84,7 +84,7 @@ also grows a base its next level at once, and `rivals: a base`, under
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
 | `sim_enemies.go` | The rivals' law and tuning: `Enemy`, `Party`, `Raids`, `Mark` and `Report`; the clock that sends a visit (`stepRaids`, `spawnVisit`), a party's stages (`stepParty`: approach, camp, raid, leave), the siphoning (`raid`), the fog's due on a vehicle with no repulsor over it (`stepExposure`), the wrecks' loot (`killEnemy`), the guard posts (`stepGuards`) and the state's own PRNG (`State.roll`) |
 | `sim_squads.go` | The squads' law and tuning: troopers (`RobotCombat`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), the war factory's room (`squadRoom`), and the rivals shooting back (`stepEnemyGuns`) |
-| `squads.go` | The squads on the screen: the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
+| `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right that list them - a tank icon, the unit count, the key below - and take a click (`drawSquadStrip`, `drawTankIcon`, `squadBoxRect`, `squadBoxAt`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the marks that pick a squad where it stands (`squadMarkAt`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
 | `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), who they hurt, the buildings' health and the robots' mending, what the colony sees (`seen`) and its artillery (`stepArtillery`) |
 | `shots.go` | Shots on the screen and their light, for looks only: bullets as streaks, shells on their arc over a shadow, pools of light added over the ground and what stands on it (`lightPool`), guns' flashes, and bursts of sparks that cool from yellow to red, embers and smoke; the field (`fxField`) learns of fired and landed shots by comparing the state's with the ones it saw last; view, never state |
 | `enemies.go` | The rivals on the screen: the scouts' marks on the ground, the vehicles under their repulsors' pockets over the fog, the guard posts' shots, and the words the player is told (`threatWords` for the HUD, `reportWords` and `drawReport` for the news) |
@@ -412,7 +412,15 @@ that fell earlier in the same tick.
 
 In the play scene `ordering` holds the war factory whose squad the
 pointer is ordering; while it is set, `updateOrdering` owns the clicks,
-like `laying` does for pipes.
+like `laying` does for pipes. The number keys 1-9 reach the same mode
+without the card (`updateSquadKeys`): 1 arms the oldest war factory's
+squad, the same key again takes it back, and the click that pressed the
+key never orders by itself, since arming lands after the update's
+inspection. A squad's box at the top right calls it too, by click
+(`updateSquadBoxes`, taken with the dev tools' click before the region
+sees the pointer). A click on a squad's mark arms it too (`squadMarkAt`
+in `squads.go`), and `drawSquadStrip` paints the squads' boxes at the
+top right.
 
 On the screen (`enemies.go`) the marks lie on the ground under
 everything, and the vehicles are drawn after the fog, so a party reads
@@ -630,6 +638,19 @@ none; a squad sent after a camped crawler brings it down with every
 raider still standing, burns its tanks and gets shot at, and goes back
 to its door when the party is gone; a lone trooper falls and leaves its
 wreck, and a demolished war factory's trooper rests by the core.
+`TestTheNumberKeysCallTheWarFactoriesOldestFirst` pins the keys' order
+(`squadSlots`), `TestASquadsMarkPicksItsSquad` the pennant's and the
+ring's picking (`squadMarkAt`), and `TestTheSquadsBoxesLieApartAndPickTheirSquad`
+the boxes' geometry (`squadBoxRect`, `squadBoxAt`). `shotstate_test.go` holds
+`TestWriteShotSquadState`: with `NIEBLA_SHOT_STATE` naming a file, it
+writes a region with two war factories and their squads in the shape
+`golib shot --save` reads, so shots can start on the squads:
+
+```text
+NIEBLA_SHOT_STATE=../../build/niebla/squads.json ./golib go -C games/niebla test -run TestWriteShotSquadState
+./golib shot niebla 50 --save build/niebla/squads.json --input "Enter@1 One@40 Mouse@45:900,420 MouseLeft@46"
+```
+
 `identity_test.go` pins the identity: stable for a machine, distinct
 between machines, 64 hex characters, and the three parsers of what the
 systems report. `store_test.go` pins the database: an identity (and a
