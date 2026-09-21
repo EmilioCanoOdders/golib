@@ -68,13 +68,12 @@ func knownTag(tag string) bool {
 }
 
 // drawMarkup draws text with parseMarkup's colors, span by span, and
-// returns the x just past it. TextWidth counts one letter gap per
-// character, gaps included after the last, so advancing by it lands the
-// next span where DrawText would have put it.
+// returns the x just past it. TextWidth counts a span's trailing spaces,
+// so advancing by it lands the next span where DrawText would have put it.
 func drawMarkup(screen *golib.Screen, text string, x, y, size float32, base golib.Color) float32 {
 	for _, span := range parseMarkup(text, base) {
-		screen.DrawText(span.text, x, y, size, span.color)
-		x += screen.TextWidth(span.text, size)
+		screen.DrawText(span.text, x, y, size, span.color, uiText)
+		x += screen.TextWidth(span.text, size, uiText)
 	}
 	return x
 }

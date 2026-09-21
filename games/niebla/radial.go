@@ -91,7 +91,7 @@ func drawRadial(s *playScene, screen *golib.Screen, mx, my float32) {
 		if lit {
 			color = panelTextColor
 		}
-		screen.DrawText(string(item.kind), item.x, item.y+radialItemR+5, 10, color,
-			golib.TextOptions{Align: golib.AlignCenter})
+		screen.DrawText(string(item.kind), item.x, item.y+radialItemR+5, 13, color,
+			golib.TextOptions{Font: uiFont, Align: golib.AlignCenter})
 	}
 }

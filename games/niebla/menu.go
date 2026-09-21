@@ -105,13 +105,13 @@ func (s *menuScene) Draw(screen *golib.Screen) {
 		button.draw(screen, i == s.selected)
 	}
 	drawCentered(screen, "Enter or click to play, up, down or the wheel to choose, Esc quits",
-		float32(screenHeight)-28, 10, groundColor)
+		float32(screenHeight)-30, 13, groundColor)
 }
 
 // drawCentered draws text centered on the screen's width.
 func drawCentered(screen *golib.Screen, text string, y, size float32, color golib.Color) {
-	x := (float32(screenWidth) - screen.TextWidth(text, size)) / 2
-	screen.DrawText(text, x, y, size, color)
+	x := (float32(screenWidth) - screen.TextWidth(text, size, uiText)) / 2
+	screen.DrawText(text, x, y, size, color, uiText)
 }
 
 // menuButton is one on-screen button of the menu.
@@ -145,7 +145,7 @@ func (b menuButton) draw(screen *golib.Screen, selected bool) {
 	screen.DrawRectangle(b.bounds, fill)
 	screen.DrawRectangleOutline(b.bounds, 2, buttonEdgeColor)
 	const size = 16
-	x := b.bounds.X + (b.bounds.Width-screen.TextWidth(b.label, size))/2
+	x := b.bounds.X + (b.bounds.Width-screen.TextWidth(b.label, size, uiText))/2
 	y := b.bounds.Y + (b.bounds.Height-size)/2
-	screen.DrawText(b.label, x, y, size, panelTextColor)
+	screen.DrawText(b.label, x, y, size, panelTextColor, uiText)
 }

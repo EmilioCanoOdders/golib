@@ -398,11 +398,11 @@ func (s *playScene) Draw(screen *golib.Screen) {
 		drawTileHighlight(screen, s.pickedCol, s.pickedRow, 2/s.zoom, pickedTileColor)
 	}
 	screen.SetCamera(nil)
-	screen.DrawText("niebla", 16, 16, 20, textColor)
-	drawMarkup(screen, s.hudLine(), 16, 44, 12, textColor)
+	screen.DrawText("niebla", 16, 12, 24, textColor, uiText)
+	drawMarkup(screen, s.hudLine(), 16, 44, 15, textColor)
 	screen.DrawText(
 		"click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a tile, Esc saves and returns to the menu, F11 fullscreen, F2 filter",
-		16, float32(screen.Height())-30, 10, textColor,
+		16, float32(screen.Height())-30, 13, textColor, uiText,
 	)
 	if s.picked && !s.radial {
 		panel := tooltipLayout(s.state, s.camera, s.pickedCol, s.pickedRow, s.expanded)

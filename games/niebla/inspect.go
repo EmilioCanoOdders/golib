@@ -13,16 +13,16 @@ import (
 // building or a site ends its title in a trash can, which demolishes it
 // on the second press.
 const (
-	tooltipWidth  = 260
+	tooltipWidth  = 290
 	tooltipPad    = 12
-	titleSize     = 12
-	textSize      = 10
-	titleRow      = 22 // line height of a card's title
-	textRow       = 14 // line height of the header and of a detail line
+	titleSize     = 15
+	textSize      = 13
+	titleRow      = 24 // line height of a card's title
+	textRow       = 17 // line height of the header and of a detail line
 	buttonRow     = 22 // line height of a button, with air around it
 	buttonWidth   = 96
 	barWidth      = 3  // the color bar on a card's left
-	detailLabelW  = 68 // where a detail's value starts, past its label
+	detailLabelW  = 80 // where a detail's value starts, past its label
 	detailIndent  = 12 // how far details sit inside their card
 	tooltipGap    = 14 // from the tile's corner to the panel
 	tooltipMargin = 8  // kept between the panel and the screen's edges
@@ -288,7 +288,7 @@ func drawTooltip(screen *golib.Screen, t tooltip, mx, my float32) {
 				mark = "- "
 			}
 			tx = drawMarkup(screen, mark, tx, y, titleSize, panelDimColor)
-			screen.DrawText(info.Name, tx, y, titleSize, info.Color)
+			screen.DrawText(info.Name, tx, y, titleSize, info.Color, uiText)
 			summary, summaryColor := r.summary, panelDimColor
 			right := t.x + t.w - tooltipPad
 			if r.trash {
@@ -310,7 +310,7 @@ func drawTooltip(screen *golib.Screen, t tooltip, mx, my float32) {
 				right = r.bx - trashGap
 			}
 			screen.DrawText(summary, right, y, textSize, summaryColor,
-				golib.TextOptions{Align: golib.AlignRight})
+				golib.TextOptions{Font: uiFont, Align: golib.AlignRight})
 		case r.button != "":
 			fill := buttonColor
 			if x, y := r.bx, r.by; mx >= x && mx <= x+r.bw && my >= y && my <= y+r.bh {
@@ -319,9 +319,9 @@ func drawTooltip(screen *golib.Screen, t tooltip, mx, my float32) {
 			rect := golib.Rectangle{X: r.bx, Y: r.by, Width: r.bw, Height: r.bh}
 			screen.DrawRectangle(rect, fill)
 			screen.DrawRectangleOutline(rect, 1, buttonEdgeColor)
-			screen.DrawText(r.button, r.bx+8, r.by+4, textSize, panelTextColor)
+			screen.DrawText(r.button, r.bx+8, r.by+4, textSize, panelTextColor, uiText)
 		default:
-			screen.DrawText(r.detail.Label, x+detailIndent, y, textSize, panelDimColor)
+			screen.DrawText(r.detail.Label, x+detailIndent, y, textSize, panelDimColor, uiText)
 			drawMarkup(screen, r.detail.Value, x+detailIndent+detailLabelW, y,
 				textSize, panelTextColor)
 		}
