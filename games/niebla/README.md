@@ -33,10 +33,13 @@ never its corner, whose tile depends on float rounding.
 ## Dev tools
 
 In the region, hold Control and click the game's name twice: a strip
-opens under the HUD with **hold a swell** (the fog presses in and stays
-until the button lets it go) and **place robots** (every click on the
-region drops a free built robot there; a right click disarms). In a
-scripted shot:
+opens under the HUD, in two rows. The first: **hold a swell** (the fog
+presses in and stays until the button lets it go), **place robots**
+(every click on the region drops a free built robot there; a right click
+disarms), **reset world**, **new world** and **rivals: next visit**. The
+second, each button under the one it goes with: **rivals: a base** under
+reset world, **fast forward x8** under new world and **rivals: stop
+waiting** under next visit. In a scripted shot:
 
 ```text
 ./golib shot niebla 400 --input "Enter@1 Mouse@2:40,24 \
@@ -69,13 +72,13 @@ also grows a base its next level at once, and `rivals: a base`, under
 | `menu.go` | The title screen: the game's name, the player's number, Play and Quit; the `menuButton` hit-testing both scenes' menus use |
 | `identity.go` | Who is playing: the machine's ID (registry value, platform UUID or `/etc/machine-id`), hashed with the game's salt into `player`, the number the menu shows and a later server hands tokens out by |
 | `store.go` | The local database (SQLite): players, saves and the machine table; `saveBase`/`resumeState`, the scenes' door into it; the DB path, `:memory:` under `golib shot` |
-| `play.go` | The play scene: input to actions plus one `Tick` per update; the camera, the selection, the marking blueprint and the open cards live here, never serialized; Esc saves and returns to the menu, autosave every `autosaveTicks` |
+| `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); the camera, the selection, the open cards, the pointer's modes (`laying` a pipe, `ordering` a squad) and the looks-only fields (`mites`, `fx`) live here, never serialized; the HUD's line with the rivals' doings (`threatWords`) and the news plate; a picked guard post's or artillery piece's reach; Esc saves and returns to the menu, autosave every `autosaveTicks` |
 | `radial.go` | The build menu: the radial of blueprints a click on empty ground opens |
-| `state.go` | The simulation's state: robots (core or built), buildings, stock, what remains of each deposit, build jobs; `newGame`, which deals the starting region |
+| `state.go` | The simulation's state: robots (core, built or combat), buildings with their tanks, reloads and damage, stock, what remains of each deposit, build jobs, piles, pipes, the fog, and the war's tables (`Enemies`, `Parties`, `Raids`, `Marks`, `Reports`, `Squads`, `Shots`, the PRNG's `Rolls`); `newGame`, which deals the starting region |
 | `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, and the dev tools' `DevHoldSwell`, `DevSpawnRobot`, `DevResetWorld`, `DevNextVisit` and `DevHurryRivals`; `OrderSquad` for the squads) and `Apply`, the only door into the state |
-| `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, oldest build job, pick up loose items, own post, rest by the core —, the claim on a section of pipe (`stepLayPipe`) and the idle ranks (`parkSlot`, `idleRank`) |
+| `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, oldest build job then the oldest damaged building then a section of pipe, pick up loose items, own post, a trooper's squad, rest by the core —, the claim on a section of pipe (`stepLayPipe`) and the idle ranks (`parkSlot`, `idleRank`) |
 | `sim_piles.go` | Demolition and loose items: `canDemolish`, the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
-| `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, storage caps, refuel spots, the factories' robot works |
+| `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, storage caps, refuel spots, and the two factories' works (`robotWorks`: what each builds, for how much, how long) |
 | `sim_oil.go` | Oil's tanks: the core's, the silos' and the chargers'; `oilTotal`, `oilCap`, `payOil`, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
 | `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus` |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
@@ -90,14 +93,14 @@ also grows a base its next level at once, and `rivals: a base`, under
 | `region.go` | The region's measures, `land` (the generated ground of the seed in hand) and `useRegion`, the isometric `project` that lifts by the relief and its inverse `unproject`, tile helpers, `Deposit` and `depositAt`; pure Go, no drawing |
 | `worldgen.go` | The generator, a pure function of the seed: relief by wave function collapse, ground cover, deposits as fields of richness; its own PRNG and noise; pure Go, no drawing |
 | `ground.go` | The ground's painter: relief as lit slopes, cover colors with a grain, blocks sized to the zoom and culled to the view, rocks, bushes, tufts, and the deposits cell by cell (`oreCut` wears them from the rim in) |
-| `things.go` | What a cell holds, the unit the player picks by: `Thing` snapshots out of layout plus state (a deposit's cell shows its whole patch), `tileAtWorld`, the SI quantities; pure Go, no drawing |
+| `things.go` | What a cell holds, the unit the player picks by: `Thing` snapshots out of layout plus state (a deposit's cell shows its whole patch; rival vehicles and bases standing on the cell have cards too), the robots' captions, troopers' and menders' among them, `tileAtWorld`, the SI quantities; pure Go, no drawing |
 | `catalog.go` | The entity database: per thing type its name, color, unit and card lines, plus the stable-color fallback |
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
-| `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons; the cell's outline (`cellDiamond`) |
+| `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons (a war factory's `build trooper` and `give order` among them) and the integrity line of a damaged building; the cell's outline (`cellDiamond`) |
 | `mites.go` | The fog's wear, for looks only: mites of darkness orbiting whatever stands in the mist, by its volume, trailing walkers and closing in on what stands still; view, never state |
 | `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, the blobs of oil by the state's tick) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
 | `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset world, new world, the rivals' next visit —; view only, acting through the `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
-| `draw.go` | The region painter: the core's monolith, buildings, robots, the bubbles' rings, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
+| `draw.go` | The region painter: the core's monolith, buildings with their damage bars, robots and troopers, the bubbles' rings, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `markup_test.go` | Markup parser and tooltip layout/button tests |
 | `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
@@ -317,10 +320,12 @@ which pile a loading robot stands at, 0 at its post.
 stole, `Fogged`), the visits under way (`State.Parties`: stage, entry,
 camp, `Wait`, `Siphon`), their clock (`State.Raids`: `Visits` and
 `NextAt`), the scouts' marks (`State.Marks`) and the news
-(`State.Reports`, the last `reportsKept`). `stepSim` runs `stepEnemies`
-and `stepGuards` after the pipes and before the robots.
+(`State.Reports`, the last `reportsKept`). `stepSim` runs the war after
+the pipes and before the robots, in this order: `stepSquads`,
+`stepEnemies` (the clock, the parties, the fog's due, the rivals' guns),
+`stepGuards`, `stepArtillery` and `stepShots`.
 
-One party at a time. `stepRaids` sends the next when `Raids.NextAt`
+One party on the move at a time. `stepRaids` sends the next when `Raids.NextAt`
 comes, at a bearing the state rolls (`State.roll`: splitmix64 over the
 seed and `State.Rolls`, the first gameplay randomness, so a save
 reproduces it). Visit 0 is a lone scout, whose party starts at
@@ -347,8 +352,8 @@ cell, which the robots haul home like any other.
 
 A guard post (`BuildingGuard`, in the build menu) reloads in
 `Building.Reload` and shoots the nearest vehicle within
-`guardRangeUnits` (`nearestEnemy`), `guardShotDamage` a shot, paid
-`guardShotOil` out of any tank.
+`guardRangeUnits` (`nearestEnemy`) with a bullet of `guardShotDamage`,
+paid `guardShotOil` out of any tank.
 
 Shots (`sim_shots.go`). No gun hits at once: `State.fire` puts a `Shot`
 in `State.Shots` and `stepShots` flies it - a bullet at `bulletSpeed`
@@ -400,9 +405,10 @@ the nearest, each shot paid from its own tank. Orders are
 `squadOf` gives a squad with no entry the order of guarding its door,
 and `stepSquads` drops an attack whose party is gone and passes a fallen
 focus on to the party's leader. `stepEnemyGuns` is the rivals' side:
-vehicles whose `enemySpec` has a gun fire at the nearest trooper in
-reach, and a fallen trooper leaves a pile. The robots' loop in `stepSim`
-skips a robot that fell earlier in the same tick.
+vehicles whose `enemySpec` has a gun fire a bullet at the nearest
+trooper in reach; `hurtTrooper` (`sim_shots.go`) is where a trooper
+falls and leaves its pile. The robots' loop in `stepSim` skips a robot
+that fell earlier in the same tick.
 
 In the play scene `ordering` holds the war factory whose squad the
 pointer is ordering; while it is set, `updateOrdering` owns the clicks,
