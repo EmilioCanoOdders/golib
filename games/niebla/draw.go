@@ -25,11 +25,12 @@ func dotRadius(units, zoom, minPx float32) float32 {
 }
 
 // drawRegion paints the still region and the robots on it: the ground
-// inside the fog line, the core and its bubble, and the fog standing
-// beyond the line. It reads the state and changes nothing.
+// inside the fog line, the core's monolith and its bubble, and the fog
+// standing beyond the line. It reads the state and changes nothing.
 func drawRegion(s *State, screen *golib.Screen, zoom float32) {
 	screen.Clear(fogColor)
 	drawGround(s, screen, zoom)
+	drawCorePad(screen)
 	drawDeposits(s, screen)
 	drawPiles(s, screen, zoom, true)
 	drawBuildings(s, screen, zoom)
@@ -83,23 +84,31 @@ func mid(a, b golib.Color) golib.Color {
 	}
 }
 
-// drawBuildings paints the colony's structures, back to front, each an
-// isometric body standing on its cell. Like the robots, they never
-// shrink under an icon size on the screen: far out they are little
-// marked blocks, and the view closes in on their true 40 u.
+// drawBuildings paints the colony's structures and the core's monolith
+// among them, back to front, each an isometric body standing on its
+// cell. Like the robots, they never shrink under an icon size on the
+// screen: far out they are little marked blocks, and the view closes in
+// on their true 40 u.
 func drawBuildings(s *State, screen *golib.Screen, zoom float32) {
 	type spot struct {
-		id int64
-		y  float32
+		id   int64
+		y    float32
+		core bool
 	}
-	spots := make([]spot, 0, len(s.Buildings))
+	spots := make([]spot, 0, len(s.Buildings)+1)
 	for _, id := range sortedBuildingIDs(s) {
 		b := s.Buildings[id]
 		_, y := projectBuilding(b)
-		spots = append(spots, spot{id, y})
+		spots = append(spots, spot{id: id, y: y})
 	}
-	sort.Slice(spots, func(i, j int) bool { return spots[i].y < spots[j].y })
+	_, coreY := projectCore()
+	spots = append(spots, spot{y: coreY, core: true})
+	sort.SliceStable(spots, func(i, j int) bool { return spots[i].y < spots[j].y })
 	for _, sp := range spots {
+		if sp.core {
+			drawCore(screen, zoom)
+			continue
+		}
 		b := s.Buildings[sp.id]
 		gx, gy := projectBuilding(b)
 		across, height := buildingSize(b.Kind)
@@ -253,23 +262,62 @@ func isoBox(
 	gx, gy, across, height float32,
 	top, right, left golib.Color,
 ) {
-	hw := across * unitW / 2
-	hh := across * unitH / 2
+	isoSlab(screen, gx, gy, across, across, height, top, right, left)
+}
+
+// isoSlab is isoBox for a footprint that isn't square: alongX units on
+// the world's x axis, which runs down and to the right of the screen, and
+// alongY on its y axis, down and to the left. The right face is alongY
+// wide and the left one alongX.
+func isoSlab(
+	screen *golib.Screen,
+	gx, gy, alongX, alongY, height float32,
+	top, right, left golib.Color,
+) {
+	sum := (alongX + alongY) / 2
+	diff := (alongX - alongY) / 2
 	hy := height * unitH
+	back := golib.Vector2{X: gx - diff*unitW/2, Y: gy - sum*unitH/2}
+	east := golib.Vector2{X: gx + sum*unitW/2, Y: gy + diff*unitH/2}
+	front := golib.Vector2{X: gx + diff*unitW/2, Y: gy + sum*unitH/2}
+	west := golib.Vector2{X: gx - sum*unitW/2, Y: gy - diff*unitH/2}
+	lift := func(p golib.Vector2) golib.Vector2 {
+		return golib.Vector2{X: p.X, Y: p.Y - hy}
+	}
 	screen.DrawPolygon([]golib.Vector2{
-		{X: gx, Y: gy - hy - hh},
-		{X: gx + hw, Y: gy - hy},
-		{X: gx, Y: gy - hy + hh},
-		{X: gx - hw, Y: gy - hy},
+		lift(back), lift(east), lift(front), lift(west),
 	}, top)
 	screen.DrawPolygon([]golib.Vector2{
-		{X: gx, Y: gy - hy + hh}, {X: gx + hw, Y: gy - hy},
-		{X: gx + hw, Y: gy}, {X: gx, Y: gy + hh},
+		lift(front), lift(east), east, front,
 	}, right)
 	screen.DrawPolygon([]golib.Vector2{
-		{X: gx - hw, Y: gy - hy}, {X: gx, Y: gy - hy + hh},
-		{X: gx, Y: gy + hh}, {X: gx - hw, Y: gy},
+		lift(west), lift(front), front, west,
 	}, left)
+}
+
+// projectCore returns where the middle of the core's tile lands on the
+// screen: the monolith's foot, and the center of its bubble.
+func projectCore() (cx, cy float32) {
+	cx, cy = projectTile(coreCol, coreRow)
+	return cx, cy + tileH/2
+}
+
+// drawCore paints the core: a dark monolith on its tile's middle, its
+// broad face to the right, under a top that shines the core's warm white
+// - the one part bright enough for the monitor's glow. It obeys the
+// buildings' icon law, so far out it is a small lit pillar.
+func drawCore(screen *golib.Screen, zoom float32) {
+	cx, cy := projectCore()
+	k := buildingIcon((coreSlabWide+coreSlabDeep)/2, coreHeight, zoom)
+	deep, wide, height := coreSlabDeep*k, coreSlabWide*k, coreHeight*k
+	isoSlab(screen, cx, cy, deep, wide, height,
+		coreGlowColor, coreFaceColor, coreShadeColor)
+	// A seam of light down the broad face, a fifth of the way in.
+	along := wide/2 - wide*0.2
+	sx := cx + (deep/2-along)*unitW/2
+	sy := cy + (deep/2+along)*unitH/2
+	screen.DrawLine(sx, sy-height*0.12*unitH, sx, sy-height*0.88*unitH,
+		dotRadius(0.5, zoom, 1), coreGlowColor)
 }
 
 // protectorBubbleCenter returns where a protector's bubble sits on the
@@ -293,18 +341,18 @@ func drawBubbles(s *State, screen *golib.Screen, zoom float32) {
 		fillEllipse(screen, cx, cy, protectorBubbleTiles, protectorBubbleColor)
 		ellipseOutline(screen, cx, cy, protectorBubbleTiles, 2/zoom, protectorEdgeColor)
 	}
-	cx, cy := projectTile(coreCol, coreRow)
-	cy += tileH / 2
-	// The pad is the core's whole tile; the pole's glow is world-sized,
-	// a point of light until the view closes in. The outlines keep their
-	// thickness on the screen, not in the world: inside the bubble they
-	// would grow into roads.
+	cx, cy := projectCore()
+	// The outlines keep their thickness on the screen, not in the world:
+	// inside the bubble they would grow into roads.
 	fillEllipse(screen, cx, cy, coreBubbleRadius, bubbleColor)
 	ellipseOutline(screen, cx, cy, coreBubbleRadius, 3/zoom, bubbleEdgeColor)
+}
+
+// drawCorePad paints the core's whole tile as its pad, on the ground, so
+// whatever crosses it walks over it.
+func drawCorePad(screen *golib.Screen) {
+	cx, cy := projectCore()
 	screen.DrawPolygon(scaledDiamond(cx, cy, 1), coreColor)
-	glow := dotRadius(4, zoom, 3.5)
-	screen.DrawCircle(cx, cy, glow, coreGlowColor)
-	screen.DrawCircle(cx, cy, glow*0.5, coreColor)
 }
 
 func drawGround(s *State, screen *golib.Screen, zoom float32) {
@@ -522,8 +570,7 @@ func drawRobots(s *State, screen *golib.Screen, zoom float32) {
 // while a swell is up, and - when the forecast names it - a ghost of the
 // line standing where the fog will press in.
 func drawFogLine(screen *golib.Screen, zoom float32, s *State) {
-	cx, cy := projectTile(coreCol, coreRow)
-	cy += tileH / 2
+	cx, cy := projectCore()
 	if s.Fog.SwellLeft > 0 {
 		ellipseOutline(screen, cx, cy, fogLineNow(s), 4/zoom,
 			golib.WithOpacity(fogBandColor, 0.9))

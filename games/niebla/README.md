@@ -51,7 +51,7 @@ never its corner, whose tile depends on float rounding.
 | `catalog.go` | The entity database: per thing type its name, color, unit and card lines, plus the stable-color fallback |
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
 | `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons; tile highlights |
-| `draw.go` | The region painter: ground, buildings, robots, fog, bubbles, build-site wireframes, the marking ghost |
+| `draw.go` | The region painter: ground, the core's monolith, buildings, robots, fog, bubbles, build-site wireframes, the marking ghost |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `markup_test.go` | Markup parser and tooltip layout/button tests |
 | `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
@@ -243,7 +243,7 @@ the last), so spans land where one `DrawText` call would put them.
 
 The world speaks SI: one world unit is one meter (`unitMeters`), so a tile
 is 200 m across (4 ha) and the region 5 km from side to side, the core's
-pole is 10 m across and 14 m tall, and its bubble radius is 800 m. Oil is
+monolith is 16 by 4 m and 36 m tall, and its bubble radius is 800 m. Oil is
 liters, lilac is kilograms (`si` turns 12000 kg into `12.0 t`, so nobody
 ever reads `kkg`). The per-tile amounts (900 L, 3000 kg) are the deposits'
 density; a patch of four tiles holds four of them (a whole vein: 12 t).

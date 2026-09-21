@@ -16,8 +16,10 @@ const (
 	oilPerPoolTile   = 900  // liters of oil in one pool tile
 	lilacPerVeinTile = 3000 // kilograms of lilac in one vein tile
 
-	corePoleAcross = 10 // m across the core's pole
-	coreHeight     = 14 // m of pole above the ground
+	// The core is a monolith in the old proportions, 1 by 4 by 9.
+	coreSlabDeep = 4  // m through the monolith
+	coreSlabWide = 16 // m across its broad face
+	coreHeight   = 36 // m of monolith above the ground
 )
 
 // coreBubbleMeters returns the core's bubble radius in meters.

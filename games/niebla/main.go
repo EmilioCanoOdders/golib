@@ -83,6 +83,8 @@ var (
 	robotDarkColor   = golib.Color{R: 58, G: 66, B: 80, A: 255}
 	robotShadowColor = golib.Color{R: 40, G: 46, B: 58, A: 90}
 	coreColor        = golib.Color{R: 32, G: 36, B: 46, A: 255}
+	coreFaceColor    = golib.Color{R: 60, G: 66, B: 84, A: 255}
+	coreShadeColor   = golib.Color{R: 14, G: 16, B: 22, A: 255}
 	coreGlowColor    = golib.Color{R: 255, G: 244, B: 214, A: 255}
 	bubbleColor      = golib.Color{R: 168, G: 216, B: 255, A: 46}
 	bubbleEdgeColor  = golib.Color{R: 190, G: 226, B: 255, A: 130}

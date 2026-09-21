@@ -77,7 +77,7 @@ var catalog = map[ThingType]ThingInfo{
 		Details: func(s *State, thing Thing) []Detail {
 			return []Detail{
 				{"height", si(coreHeight, "m")},
-				{"pole", si(corePoleAcross, "m") + " across"},
+				{"monolith", fmt.Sprintf("%d by %d m", coreSlabWide, coreSlabDeep)},
 				{"bubble", "r = " + si(coreBubbleMeters(), "m")},
 				{"upkeep", "none"},
 				{"integrity", "[core]indestructible[/]"},
