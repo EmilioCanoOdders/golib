@@ -241,11 +241,23 @@ func (r *Robot) posted(s *State) bool {
 }
 
 func (r *Robot) stepPost(s *State) {
-	cx, cy := tileCenterUnits(r.PostCol, r.PostRow)
+	cx, cy := postSpot(r.PostCol, r.PostRow)
 	if r.walkTowards(s, cx, cy) {
 		r.WorkTicks = robotLoadTicks
 		r.Pile = 0
 	}
+}
+
+// postSpot returns where a robot loads at its post: by the heart of the
+// tile's deposit, where the ore is richest, a cell to the side the pump
+// leaves free. Whatever tile of the deposit the robot was sent to, the
+// deposit is one thing and is worked at one place.
+func postSpot(col, row int) (x, y float64) {
+	d, ok := depositAt(col, row)
+	if !ok {
+		return tileCenterUnits(col, row)
+	}
+	return cellCenterUnits(d.HeartCol+1, d.HeartRow)
 }
 
 func (r *Robot) idling(s *State) bool {

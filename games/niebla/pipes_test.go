@@ -92,7 +92,7 @@ func TestAPumpStandsOnAPoolAndAPoolTakesOne(t *testing.T) {
 	if canPlace(s, BuildingPump, pc+1, pr) {
 		t.Error("a pool with a pump rising took a second one")
 	}
-	for _, far := range regionDeposits {
+	for _, far := range land.deposits {
 		if far.Kind != kindOil || far == d {
 			continue
 		}
@@ -434,8 +434,9 @@ func TestAPoolsCardsCarryThePumpAndItsPipe(t *testing.T) {
 	seedStock(s)
 	pump := pumpOn(t, s, d)
 	// The pool is one thing: every tile of it shows its pump.
-	for row := d.Row; row < d.Row+d.Rows; row++ {
-		for col := d.Col; col < d.Col+d.Cols; col++ {
+	for _, tile := range depositTiles(d) {
+		{
+			col, row := tile[0], tile[1]
 			cc, cr := tileCell(col, row)
 			panel = tooltipLayout(s, camera, cc, cr, map[string]bool{})
 			if panel.findButton(buttonLayPipe) == nil {

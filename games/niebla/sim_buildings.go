@@ -158,7 +158,7 @@ func canPlace(s *State, kind BuildingKind, col, row int) bool {
 	if kind == BuildingPump {
 		ground = kindOil
 	}
-	if tileAt(tcol, trow) != ground {
+	if tileAt(tcol, trow) != ground || !land.flatCell(col, row) {
 		return false
 	}
 	if kind == BuildingPump &&

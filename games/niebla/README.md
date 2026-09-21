@@ -45,6 +45,10 @@ scripted shot:
   Mouse@18:204,77 MouseLeft@19 Mouse@22:250,330 MouseLeft@23"
 ```
 
+`reset world` deals the region again on the seed it has and `new world`
+on another (`DevResetWorld`), saving at once; the seed stands beside
+`dev`. `Mouse@50:460,77 MouseLeft@51` presses `new world` in a shot.
+
 ## Files
 
 | File | Holds |
@@ -64,15 +68,17 @@ scripted shot:
 | `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus` |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
 | `swell.go` | How a pressing swell looks, by its pressure: waves of shade rolling in to the line and one-pixel static over the mist; a pure picture of the state |
-| `region.go` | The hand-made 25x25 layout, the isometric `project`, tile helpers, the deposit patches flooded out of the layout; pure Go, no drawing |
+| `region.go` | The region's measures, `land` (the generated ground of the seed in hand) and `useRegion`, the isometric `project` that lifts by the relief and its inverse `unproject`, tile helpers, `Deposit` and `depositAt`; pure Go, no drawing |
+| `worldgen.go` | The generator, a pure function of the seed: relief by wave function collapse, ground cover, deposits as fields of richness; its own PRNG and noise; pure Go, no drawing |
+| `ground.go` | The ground's painter: relief as lit slopes, cover colors with a grain, blocks sized to the zoom and culled to the view, rocks, bushes, tufts, and the deposits cell by cell (`oreCut` wears them from the rim in) |
 | `things.go` | What a cell holds, the unit the player picks by: `Thing` snapshots out of layout plus state (a deposit's cell shows its whole patch), `tileAtWorld`, the SI quantities; pure Go, no drawing |
 | `catalog.go` | The entity database: per thing type its name, color, unit and card lines, plus the stable-color fallback |
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
 | `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons; the cell's outline (`cellDiamond`) |
 | `mites.go` | The fog's wear, for looks only: mites of darkness orbiting whatever stands in the mist, by its volume, trailing walkers and closing in on what stands still; view, never state |
 | `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, the blobs of oil by the state's tick) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
-| `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots —; view only, acting through the `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
-| `draw.go` | The region painter: ground, the core's monolith, buildings, robots, fog, bubbles, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
+| `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset world, new world —; view only, acting through the `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
+| `draw.go` | The region painter: the core's monolith, buildings, robots, fog, bubbles, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `markup_test.go` | Markup parser and tooltip layout/button tests |
 | `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
@@ -91,9 +97,9 @@ game is a visualization, determinism) hold since slice 4, in a first,
 robot-sized form:
 
 - `State` (`state.go`) is the whole game: robots by ID, the stores, what
-  remains of each deposit patch (one key per patch, flooded once out of
-  the static layout in `region.go` — deposits become entities when
-  buildings need neighbors), and the build jobs, which nothing marks yet
+  remains of each deposit (one key per deposit; the ground itself is
+  generated from `State.Seed` and never enters the state — deposits
+  become entities when buildings need neighbors), and the build jobs, which nothing marks yet
   but every robot obeys. It has no pointers, channels or functions, so
   it serializes as it is.
 - Actions (`actions.go`) are structs (`Tick`, `SendRobot`, `RecallRobot`);
@@ -352,22 +358,41 @@ The world speaks SI: one world unit is one meter (`unitMeters`), so a tile
 is 200 m across (4 ha) and the region 5 km from side to side, the core's
 monolith is 16 by 4 m and 36 m tall, and its bubble radius is 800 m. Oil is
 liters, lilac is kilograms (`si` turns 12000 kg into `12.0 t`, so nobody
-ever reads `kkg`). The per-tile amounts (900 L, 3000 kg) are the deposits'
-density; a patch of four tiles holds four of them (a whole vein: 12 t).
+ever reads `kkg`). A deposit holds its cells' richness times the ore's
+density (`oilPerRichCell` 70 L, `lilacPerRichCell` 240 kg, in
+`worldgen.go`): about 3 kL and 10 t by the core, up to three times that
+far out.
 Robots are fast rovers with small arms (30 m/s, 30 L or 20 kg a trip), so
 a worked deposit shows a constant coming and going. Amounts live at the
 top of `things.go`.
 
 ### Deposit patches
 
-A vein is one thing however many tiles it spans. `findDeposits`
-(`region.go`) floods the layout once, at startup, into `regionDeposits`
-(static data, never state) and `depositAt` maps any tile to its patch.
-`State.Drain` holds one entry per patch, keyed by the patch's top corner
-tile; a robot's post is one tile of the patch, and working it drains the
-whole patch — one robot per patch, one card per patch, one big scar when
-it runs dry. `draw.go` paints each patch as one continuous body that
-shrinks with what remains of it.
+A vein is one thing however many tiles it reaches into. The generator
+(`worldgen.go`) grows each deposit as a field of richness over cells,
+1 at its heart and thinning out to specks at its rim, and keeps the
+tiles that hold enough of it: `land.deposits` and `land.bodies` (static
+data of the seed, never state), and `depositAt` maps any tile to its
+deposit. `State.Drain` holds one entry per deposit, keyed by its heart's
+tile; a robot's post is one tile of the deposit, it loads by the heart
+(`postSpot`), and working it drains the whole deposit — one robot, one
+card, and a scar where the heart was when it runs dry. `ground.go`
+paints each deposit cell by cell, and a worked one wears from the rim
+in.
+
+### The generated region
+
+`State.Seed` names the region and `generateRegion` makes it, the same on
+every machine: relief, cover and deposits. `land` is the region of the
+seed in hand; `newGameOn`, `State.enterRegion` (a save coming in) and
+`Apply` keep it the state's own through `useRegion`. The relief is
+decided by wave function collapse over blocks of four cells and lives
+on the cells' corners, a level (4 m) at a time and never more than a
+level to the cell; `flatCell` is what `canPlace` asks of a cell.
+`project` lifts what stands on the ground by `heightAt`, `projectFlat`
+is for the fog and the bubbles, and `unproject` finds the ground under
+the pointer. DESIGN.md's Tuning has the numbers; `worldgen_test.go`
+checks the laws over 40 seeds.
 
 ### Cell picking
 

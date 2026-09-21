@@ -32,8 +32,10 @@
 //   - sim_fog.go holds the fog's law: its cycles and swells, how far
 //     the line presses in, and what a swell means for walkers and
 //     tanks.
-//   - region.go holds the hand-made region and the isometric projection,
-//     as plain Go with no drawing, so that region_test.go can test it.
+//   - region.go holds the region's measures, the ground of the seed in
+//     hand and the isometric projection, and worldgen.go generates that
+//     ground from a seed - relief by wave function collapse, cover,
+//     deposits -, both as plain Go with no drawing; ground.go paints it.
 //   - things.go holds what a tile holds: the things' snapshot out of the
 //     state and the SI units, as plain Go with no drawing.
 //   - catalog.go is the entity database: per thing type, its name, its

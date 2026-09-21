@@ -7,14 +7,11 @@ import (
 )
 
 // The world speaks SI: one unit of the world is one meter, so a tile is
-// 200 m across, oil is measured in liters and lilac in kilograms. The
-// per-tile amounts are the deposits' density: a patch of four tiles holds
-// four of them (a whole vein, 12 t of lilac).
+// 200 m across, oil is measured in liters and lilac in kilograms. What a
+// deposit holds is its cells' richness times the ore's density
+// (worldgen.go).
 const (
 	unitMeters = 1 // one world unit, in m
-
-	oilPerPoolTile   = 900  // liters of oil in one pool tile
-	lilacPerVeinTile = 3000 // kilograms of lilac in one vein tile
 
 	// The core is a monolith in the old proportions, 1 by 4 by 9.
 	coreSlabDeep = 4  // m through the monolith
@@ -94,8 +91,8 @@ type Thing struct {
 	Ref     int64   // the entity's ID in the state: robots, buildings, piles
 	CellCol int     // sites: the cell the job stands on
 	CellRow int     //
-	Cols    int     // deposits: the patch's extent, in tiles
-	Rows    int     //
+	Full    float64 // deposits: what the body held at first
+	Area    float64 // deposits: the ground its ore covers, in hectares
 }
 
 // thingsAt returns the things standing on a cell, the unit the player
@@ -169,9 +166,9 @@ func robotsOnCell(s *State, col, row int) []Robot {
 	return found
 }
 
-// depositThing is a patch's card: named for its kind, ID'd by its top
-// corner tile, carrying its extent so the card can say how much ground
-// the patch covers.
+// depositThing is a deposit's card: named for its kind, ID'd by its
+// heart's tile, carrying what it held at first and the ground its ore
+// covers.
 func depositThing(d Deposit) Thing {
 	kind := TypeOil
 	if d.Kind == kindLilac {
@@ -179,9 +176,9 @@ func depositThing(d Deposit) Thing {
 	}
 	return Thing{
 		Type: kind,
-		ID:   fmt.Sprintf("%s@%d,%d", kind, d.Col, d.Row),
-		Cols: d.Cols,
-		Rows: d.Rows,
+		ID:   fmt.Sprintf("%s@%s", kind, depositKey(d)),
+		Full: d.Full,
+		Area: float64(d.Cells) * buildingCell * buildingCell / 10000,
 	}
 }
 
@@ -338,11 +335,9 @@ func cargoWord(cargo ThingType) string {
 // whether the point is inside the region. It undoes project: a tile's
 // diamond on the screen is the square [col, col+1) by [row, row+1) in tiles.
 func tileAtWorld(x, y float32) (col, row int, inside bool) {
-	a := (x - regionOriginX) / (unitW / 2)
-	b := (y - regionOriginY) / (unitH / 2)
-	worldX := (a + b) / 2 / unitsPerTile
-	worldY := (b - a) / 2 / unitsPerTile
-	col, row = int(math.Floor(float64(worldX))), int(math.Floor(float64(worldY)))
+	ux, uy := unproject(x, y)
+	col = int(math.Floor(float64(ux / unitsPerTile)))
+	row = int(math.Floor(float64(uy / unitsPerTile)))
 	return col, row, col >= 0 && row >= 0 && col < regionCols && row < regionRows
 }
 

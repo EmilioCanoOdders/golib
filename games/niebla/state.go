@@ -14,6 +14,7 @@ import (
 // State is the whole game as one value. Actions (actions.go) are the
 // only thing that changes it.
 type State struct {
+	Seed      int64              // the region's seed: its relief, cover and deposits (worldgen.go)
 	Ticks     int64              // game ticks, 60 to the second
 	NextID    int64              // the ID the next robot, building, pile or pipe gets
 	Robots    map[int64]Robot    // the colony, by ID
@@ -140,10 +141,18 @@ const (
 	startingStockLilac = 600.0 // kg
 )
 
-// newGame deals the starting region: every deposit patch full, the
-// starting robots idle by the core, and the core's gift in the stores.
+// newGame deals the starting region on the default seed.
 func newGame() *State {
+	return newGameOn(defaultSeed)
+}
+
+// newGameOn deals the starting region a seed generates: every deposit
+// full, the starting robots idle by the core, and the core's gift in the
+// stores.
+func newGameOn(seed int64) *State {
+	useRegion(seed)
 	s := &State{
+		Seed:      seed,
 		NextID:    1,
 		Robots:    map[int64]Robot{},
 		Buildings: map[int64]Building{},
@@ -153,7 +162,7 @@ func newGame() *State {
 		Stock:     Stock{Oil: startingStockOil, Lilac: startingStockLilac},
 		Fog:       Fog{CycleLeft: fogCycleTicks, NextIn: fogSwellPeriod},
 	}
-	for _, d := range regionDeposits {
+	for _, d := range land.deposits {
 		s.Drain[depositKey(d)] = depositFull(d)
 	}
 	for i := 0; i < startingRobots; i++ {
@@ -161,6 +170,21 @@ func newGame() *State {
 		s.spawnRobot(RobotCore, x, y)
 	}
 	return s
+}
+
+// enterRegion makes the ground the state's own, for a state that comes
+// from a save. A save from before the generated regions names deposits
+// that are gone: the ones it doesn't know wake up full.
+func (s *State) enterRegion() {
+	useRegion(s.Seed)
+	if s.Drain == nil {
+		s.Drain = map[string]float64{}
+	}
+	for _, d := range land.deposits {
+		if _, known := s.Drain[depositKey(d)]; !known {
+			s.Drain[depositKey(d)] = depositFull(d)
+		}
+	}
 }
 
 // spawnRobot adds one robot to the colony at a spot, with the tank full

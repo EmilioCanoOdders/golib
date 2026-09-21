@@ -78,6 +78,7 @@ func newPlayScene(state *State) *playScene {
 	if state == nil {
 		state = newGame()
 	}
+	state.enterRegion()
 	s := &playScene{
 		state:    state,
 		mites:    newMiteField(),
@@ -404,7 +405,11 @@ func regionOnScreen() golib.Rectangle {
 // pixels. It reads the state and never changes it.
 func (s *playScene) Draw(screen *golib.Screen) {
 	screen.SetCamera(s.camera)
-	drawRegion(s.state, screen, s.zoom)
+	corner := s.camera.ToWorld(0, 0)
+	drawRegion(s.state, screen, s.zoom, golib.Rectangle{
+		X: corner.X, Y: corner.Y,
+		Width: screenWidth / s.zoom, Height: screenHeight / s.zoom,
+	})
 	s.mites.draw(screen, s.zoom)
 	// The cursor is the cell under the pointer, the grid's last
 	// subdivision, about four robots across. Far out it lifts to a

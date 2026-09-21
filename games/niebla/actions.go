@@ -15,6 +15,7 @@ type Action interface {
 
 // Apply applies an action to the state, in place.
 func Apply(s *State, a Action) {
+	useRegion(s.Seed)
 	a.apply(s)
 }
 
@@ -233,6 +234,16 @@ func (a DevHoldSwell) apply(s *State) {
 	if s.Fog.SwellLeft <= 0 {
 		s.Fog.SwellLeft = swellTicks(s)
 	}
+}
+
+// DevResetWorld deals the region again, from nothing: the same ground for
+// the seed the state already has, new ground for another.
+type DevResetWorld struct {
+	Seed int64
+}
+
+func (a DevResetWorld) apply(s *State) {
+	*s = *newGameOn(a.Seed)
 }
 
 // DevSpawnRobot puts a built robot, its tank full, on a spot of the

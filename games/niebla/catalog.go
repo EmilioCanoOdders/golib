@@ -48,8 +48,8 @@ var catalog = map[ThingType]ThingInfo{
 		Details: func(s *State, thing Thing) []Detail {
 			return []Detail{
 				{"amount", fmt.Sprintf("[oil]%s[/]", si(thing.Amount, "L"))},
-				{"pool", fmt.Sprintf("%d by %d m", thing.Cols*unitsPerTile, thing.Rows*unitsPerTile)},
-				{"state", depositState(thing.Amount, float64(thing.Cols*thing.Rows)*oilPerPoolTile)},
+				{"pool", fmt.Sprintf("%.1f ha", thing.Area)},
+				{"state", depositState(thing.Amount, thing.Full)},
 			}
 		},
 	},
@@ -61,8 +61,8 @@ var catalog = map[ThingType]ThingInfo{
 		Details: func(s *State, thing Thing) []Detail {
 			return []Detail{
 				{"amount", fmt.Sprintf("[lilac]%s[/]", si(thing.Amount, "kg"))},
-				{"vein", fmt.Sprintf("%d by %d m", thing.Cols*unitsPerTile, thing.Rows*unitsPerTile)},
-				{"state", depositState(thing.Amount, float64(thing.Cols*thing.Rows)*lilacPerVeinTile)},
+				{"vein", fmt.Sprintf("%.1f ha", thing.Area)},
+				{"state", depositState(thing.Amount, thing.Full)},
 			}
 		},
 	},

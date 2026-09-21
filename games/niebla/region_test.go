@@ -5,139 +5,6 @@ import (
 	"testing"
 )
 
-func TestRegionLayoutIsSound(t *testing.T) {
-	if len(regionLayout) != regionRows {
-		t.Fatalf("the layout has %d rows, want %d", len(regionLayout), regionRows)
-	}
-	oils, veins, cores := 0, 0, 0
-	rocks, bushes := 0, 0
-	insideOils, insideVeins := 0, 0
-	for row, line := range regionLayout {
-		if len(line) != regionCols {
-			t.Fatalf("row %d is %d tiles wide, want %d", row, len(line), regionCols)
-		}
-		for col := 0; col < regionCols; col++ {
-			var kind byte
-			switch kind = tileAt(col, row); kind {
-			case kindOil:
-				oils++
-			case kindLilac:
-				veins++
-			case kindRock:
-				rocks++
-			case kindBush:
-				bushes++
-			case kindCore:
-				cores++
-				if col != coreCol || row != coreRow {
-					t.Errorf("a core tile at %d, %d, want it at %d, %d",
-						col, row, coreCol, coreRow)
-				}
-				continue
-			case kindGround:
-				continue
-			default:
-				t.Errorf("tile %d, %d has an unknown kind %q", col, row, kind)
-				continue
-			}
-			if d := tileDistance(col, row); d > fogLineRadius {
-				t.Errorf("a feature at %d, %d stands beyond the fog line, %v tiles out",
-					col, row, d)
-			} else if d <= coreBubbleRadius {
-				if kind == kindOil {
-					insideOils++
-				} else if kind == kindLilac {
-					insideVeins++
-				} else {
-					t.Errorf("a %c prop at %d, %d sits inside the bubble, where the ground stays clear",
-						kind, col, row)
-				}
-			}
-		}
-	}
-	if cores != 1 {
-		t.Errorf("the layout has %d core tiles, want exactly 1", cores)
-	}
-	if oils < 6 {
-		t.Errorf("the layout has %d oil tiles, want 6 or more", oils)
-	}
-	if veins < 4 {
-		t.Errorf("the layout has %d lilac tiles, want 4 or more", veins)
-	}
-	if rocks < 4 || bushes < 4 {
-		t.Errorf("the layout has %d rocks and %d bushes, want 4 or more of each",
-			rocks, bushes)
-	}
-	// The attrition-free zone must let the colony mine one resource of
-	// each type in comfort: a patch of each sits inside the bubble.
-	if insideOils < 4 {
-		t.Errorf("only %d oil tiles inside the bubble, want 4 or more", insideOils)
-	}
-	if insideVeins < 4 {
-		t.Errorf("only %d lilac tiles inside the bubble, want 4 or more", insideVeins)
-	}
-	if fogLineRadius <= coreBubbleRadius {
-		t.Errorf("the fog line at %v is not beyond the bubble at %v",
-			fogLineRadius, coreBubbleRadius)
-	}
-}
-
-// TestDepositsComeInFarPatches pins the deposits' shape and spread: a
-// patch is four tiles, and of each kind at least two patches stand far
-// out, past 7 tiles (over a kilometer) from the core, so the zoomed-in
-// region is empty ground and the hauls out there are long.
-func TestDepositsComeInFarPatches(t *testing.T) {
-	for _, c := range []struct {
-		kind byte
-		name string
-	}{
-		{kindOil, "oil"},
-		{kindLilac, "lilac"},
-	} {
-		seen := map[[2]int]bool{}
-		far := 0
-		for row := 0; row < regionRows; row++ {
-			for col := 0; col < regionCols; col++ {
-				if tileAt(col, row) != c.kind || seen[[2]int{col, row}] {
-					continue
-				}
-				size := 0
-				patchFar := false
-				queue := [][2]int{{col, row}}
-				seen[[2]int{col, row}] = true
-				for len(queue) > 0 {
-					tile := queue[0]
-					queue = queue[1:]
-					size++
-					if tileDistance(tile[0], tile[1]) > 7 {
-						patchFar = true
-					}
-					for _, n := range [4][2]int{
-						{tile[0] + 1, tile[1]},
-						{tile[0] - 1, tile[1]},
-						{tile[0], tile[1] + 1},
-						{tile[0], tile[1] - 1},
-					} {
-						if tileAt(n[0], n[1]) == c.kind && !seen[n] {
-							seen[n] = true
-							queue = append(queue, n)
-						}
-					}
-				}
-				if size != 4 {
-					t.Errorf("a %s patch holds %d tiles, want 4", c.name, size)
-				}
-				if patchFar {
-					far++
-				}
-			}
-		}
-		if far < 2 {
-			t.Errorf("only %d far %s patches, want 2 or more past 7 tiles out", far, c.name)
-		}
-	}
-}
-
 func TestProjectionFitsTheRegionOnScreen(t *testing.T) {
 	if x, _ := projectTile(coreCol, coreRow); x != regionOriginX {
 		t.Errorf("the core projects at x %v, want the middle %v", x, regionOriginX)
@@ -284,11 +151,9 @@ func TestThingsAtKnowsTheRegion(t *testing.T) {
 
 // otherPatchTile returns another tile of the given deposit patch.
 func otherPatchTile(d Deposit, not [2]int) ([2]int, bool) {
-	for row := d.Row; row < d.Row+d.Rows; row++ {
-		for col := d.Col; col < d.Col+d.Cols; col++ {
-			if col != not[0] || row != not[1] {
-				return [2]int{col, row}, true
-			}
+	for _, tile := range depositTiles(d) {
+		if tile != not {
+			return tile, true
 		}
 	}
 	return [2]int{}, false
@@ -346,7 +211,7 @@ func TestCatalogColorsAreStable(t *testing.T) {
 	if got := catalogInfo(TypeCore).summarize(Thing{Amount: coreBubbleMeters()}); got != "r = 800 m" {
 		t.Errorf("the core's headline is %q, want \"r = 800 m\"", got)
 	}
-	if got := catalogInfo(TypeOil).summarize(Thing{Amount: oilPerPoolTile}); got != "900 L" {
+	if got := catalogInfo(TypeOil).summarize(Thing{Amount: 900}); got != "900 L" {
 		t.Errorf("the oil headline is %q, want \"900 L\"", got)
 	}
 	if got := catalogInfo(TypeRobot).summarize(Thing{Caption: "oil run"}); got != "oil run" {

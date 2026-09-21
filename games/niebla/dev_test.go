@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"reflect"
 	"testing"
 )
 
@@ -38,6 +39,31 @@ func TestDevSpawnRobotPutsAFreeBuiltRobotOnTheSpot(t *testing.T) {
 	Apply(s, DevSpawnRobot{X: -1, Y: 700})
 	if len(s.Robots) != startingRobots+1 {
 		t.Error("a spot outside the region took a robot")
+	}
+}
+
+func TestDevResetWorldDealsTheRegionAgain(t *testing.T) {
+	s := newGame()
+	Apply(s, DevSpawnRobot{X: 500, Y: 700})
+	runTicks(s, 120)
+	Apply(s, DevResetWorld{Seed: s.Seed})
+	if !reflect.DeepEqual(s, newGame()) {
+		t.Error("a reset world differs from a new game")
+	}
+	Apply(s, DevResetWorld{Seed: 99})
+	if s.Seed != 99 || land.Seed != 99 {
+		t.Fatalf("the state's seed is %d and the ground's %d, want 99", s.Seed, land.Seed)
+	}
+	for _, d := range land.deposits {
+		if s.Drain[depositKey(d)] != d.Full {
+			t.Errorf("deposit %d of the new world holds %v, want %v",
+				d.Index, s.Drain[depositKey(d)], d.Full)
+		}
+	}
+	// Any action on a state brings its own ground back under it.
+	Apply(newGame(), Tick{})
+	if land.Seed != defaultSeed {
+		t.Errorf("a tick on the default region ran on the ground of seed %d", land.Seed)
 	}
 }
 

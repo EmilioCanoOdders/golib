@@ -441,11 +441,10 @@ func patchPumped(s *State, tcol, trow int) bool {
 	return false
 }
 
-// pumpCell returns the cell a pool's pump stands on: the patch's middle.
+// pumpCell returns the cell a pool's pump stands on: its heart, the
+// richest cell, which the generator keeps on flat ground.
 func pumpCell(d Deposit) (col, row int) {
-	const cellsPerTile = unitsPerTile / buildingCell
-	return d.Col*cellsPerTile + d.Cols*cellsPerTile/2,
-		d.Row*cellsPerTile + d.Rows*cellsPerTile/2
+	return d.HeartCol, d.HeartRow
 }
 
 // The words for what a pump is doing.

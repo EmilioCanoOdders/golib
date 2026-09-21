@@ -1,12 +1,17 @@
 package main
 
-import "golib"
+import (
+	"fmt"
+	"math"
+
+	"golib"
+)
 
 // The dev tools: a strip of buttons under the HUD for whoever works on
 // the game. Holding Control and clicking the game's name twice opens and
 // closes it. The strip is view; what its buttons do goes through actions
-// (DevHoldSwell, DevSpawnRobot), like everything else that touches the
-// state.
+// (DevHoldSwell, DevSpawnRobot, DevResetWorld), like everything else that
+// touches the state.
 
 const (
 	devDoubleClickTicks = 24 // updates between the two clicks, at the most
@@ -19,6 +24,8 @@ const (
 
 	devSwellButton = 0
 	devRobotButton = 1
+	devResetButton = 2 // the same region, dealt again
+	devWorldButton = 3 // another region, from a seed of its own
 )
 
 // devOpen outlives the play scene, so a trip to the menu keeps the strip.
@@ -79,6 +86,14 @@ func (d *devTools) update(s *playScene, input *golib.Input) bool {
 		d.placing = !d.placing
 		return true
 	}
+	if devButtonBounds(devResetButton).Contains(mx, my) {
+		d.resetWorld(s, s.state.Seed)
+		return true
+	}
+	if devButtonBounds(devWorldButton).Contains(mx, my) {
+		d.resetWorld(s, int64(golib.RandomInt(1, math.MaxInt32)))
+		return true
+	}
 	if d.placing {
 		world := s.camera.ToWorld(mx, my)
 		x, y := unitsAtWorld(float64(world.X), float64(world.Y))
@@ -88,11 +103,24 @@ func (d *devTools) update(s *playScene, input *golib.Input) bool {
 	return false
 }
 
+// resetWorld deals the region again on a seed and saves it at once, so
+// the base that was is gone from the database too. What the scene held
+// of the old region - the picked cell, an open menu, a pipe in hand, the
+// mites - goes with it.
+func (d *devTools) resetWorld(s *playScene, seed int64) {
+	Apply(s.state, DevResetWorld{Seed: seed})
+	d.placing = false
+	s.picked, s.radial, s.armed = false, false, ""
+	s.laying = pipeLaying{}
+	s.expanded = map[string]bool{}
+	s.mites = newMiteField()
+	s.saveNow()
+}
+
 // unitsAtWorld undoes project: the world units under a projected point.
 func unitsAtWorld(px, py float64) (x, y float64) {
-	a := (px - float64(regionOriginX)) / float64(unitW/2)
-	b := (py - float64(regionOriginY)) / float64(unitH/2)
-	return (a + b) / 2, (b - a) / 2
+	ux, uy := unproject(float32(px), float32(py))
+	return float64(ux), float64(uy)
 }
 
 func (d *devTools) draw(s *playScene, screen *golib.Screen) {
@@ -107,8 +135,18 @@ func (d *devTools) draw(s *playScene, screen *golib.Screen) {
 	if d.placing {
 		robot = "placing: click ground"
 	}
-	labels := []string{devSwellButton: swell, devRobotButton: robot}
-	lit := []bool{devSwellButton: s.state.Fog.Held, devRobotButton: d.placing}
+	labels := []string{
+		devSwellButton: swell,
+		devRobotButton: robot,
+		devResetButton: "reset world",
+		devWorldButton: "new world",
+	}
+	lit := []bool{
+		devSwellButton: s.state.Fog.Held,
+		devRobotButton: d.placing,
+		devResetButton: false,
+		devWorldButton: false,
+	}
 	for i, label := range labels {
 		rect := devButtonBounds(i)
 		fill := buttonColor
@@ -119,6 +157,6 @@ func (d *devTools) draw(s *playScene, screen *golib.Screen) {
 		screen.DrawRectangleOutline(rect, 1, buttonEdgeColor)
 		screen.DrawText(label, rect.X+8, rect.Y+3, 10, panelTextColor, uiText)
 	}
-	screen.DrawText("dev", devTitle.X+devTitle.Width, devTitle.Y+10, 12,
-		panelDimColor, uiText)
+	screen.DrawText(fmt.Sprintf("dev   seed %d", s.state.Seed),
+		devTitle.X+devTitle.Width, devTitle.Y+10, 12, panelDimColor, uiText)
 }
