@@ -36,6 +36,7 @@ type Fog struct {
 	SwellLeft int64   // ticks left of the current swell; 0 is calm
 	NextIn    float64 // cycles of calm left before the next swell
 	Swells    int64   // swells that have passed: the difficulty's memory
+	Held      bool    // the dev tools hold the swell up: it doesn't drain
 }
 
 // Stock is what the colony has stored at the core.

@@ -1,0 +1,143 @@
+package main
+
+import (
+	"math"
+	"testing"
+
+	"golib"
+)
+
+// foggedRobot deals a game whose first robot stands deep in the fog, and
+// returns the robot's ID. The motes only read the state, so the tests
+// move the robot by hand instead of ticking the simulation.
+func foggedRobot(t *testing.T) (*State, int64) {
+	t.Helper()
+	golib.SetRandomSeed(1)
+	s := newGame()
+	id := sortedRobotIDs(s)[0]
+	r := s.Robots[id]
+	r.X, r.Y = 500, 500
+	s.Robots[id] = r
+	if fogAt(s, r.X, r.Y) < 1 {
+		t.Fatalf("the test's robot stands in %v of fog, want 1",
+			fogAt(s, r.X, r.Y))
+	}
+	return s, id
+}
+
+func runMotes(f *moteField, s *State, seconds float32) {
+	for i := 0; i < int(seconds*60); i++ {
+		f.update(s, 1.0/60)
+	}
+}
+
+// swarm returns how far the motes stand from their host on average, and
+// where their middle is, off the host.
+func swarm(h *moteHost) (spread, offX, offY float32) {
+	for _, m := range h.Motes {
+		dx, dy := m.X-h.X, m.Y-h.Y
+		spread += float32(math.Hypot(float64(dx), float64(dy)))
+		offX += dx
+		offY += dy
+	}
+	n := float32(len(h.Motes))
+	return spread / n, offX / n, offY / n
+}
+
+func TestMotesGatherByVolumeAndOnlyInTheFog(t *testing.T) {
+	s, id := foggedRobot(t)
+	col, row := groundInTheFog()
+	s.Jobs = append(s.Jobs, Job{
+		Kind: BuildingProtector, Col: col, Row: row, Left: buildingWorkTicks,
+	})
+	f := newMoteField()
+	runMotes(f, s, 3)
+
+	robot := f.hosts[robotMoteKey(id)]
+	volume := robotBodyAcross * robotBodyAcross * robotBodyHeight
+	want := int(math.Floor(volume * motesPerCubicUnit))
+	if robot == nil || len(robot.Motes) != want {
+		t.Fatalf("the fogged robot has %v motes, want %d", robot, want)
+	}
+	site := f.hosts[siteMoteKey(col, row)]
+	if site == nil || len(site.Motes) <= len(robot.Motes) {
+		t.Fatalf("the site, the bigger body, has no more motes than the robot")
+	}
+	if len(f.hosts) != 2 {
+		t.Errorf("%d hosts, want two: the robot in the bubble has none",
+			len(f.hosts))
+	}
+}
+
+func TestMotesCloseInOnWhatStandsStillAndTrailAWalker(t *testing.T) {
+	s, id := foggedRobot(t)
+	f := newMoteField()
+	runMotes(f, s, 6)
+	h := f.hosts[robotMoteKey(id)]
+	still, _, _ := swarm(h)
+	if still > robotBodyAcross/2*1.2 {
+		t.Fatalf("around a still robot the motes stand %v u out, want them on it",
+			still)
+	}
+
+	// The fogged pace, along x.
+	for i := 0; i < 180; i++ {
+		r := s.Robots[id]
+		r.X += 15.0 / 60
+		s.Robots[id] = r
+		f.update(s, 1.0/60)
+	}
+	walking, offX, _ := swarm(h)
+	if walking < still*2 {
+		t.Errorf("around a walker the motes stand %v u out, %v u when still: "+
+			"want them let go", walking, still)
+	}
+	if offX > -robotBodyAcross/2 {
+		t.Errorf("the swarm's middle is %v u off the walker along its way, "+
+			"want it trailing behind the body", offX)
+	}
+}
+
+func TestMotesFadeOverWhatIsGone(t *testing.T) {
+	s, id := foggedRobot(t)
+	f := newMoteField()
+	runMotes(f, s, 3)
+	delete(s.Robots, id)
+	f.update(s, 1.0/60)
+	if h := f.hosts[robotMoteKey(id)]; h == nil || len(h.Motes) == 0 {
+		t.Fatal("the swarm went with its robot, want it to fade over the spot")
+	}
+	runMotes(f, s, moteFadeSeconds+0.5)
+	if len(f.hosts) != 0 {
+		t.Fatalf("%d hosts left after the fade, want none", len(f.hosts))
+	}
+}
+
+func TestMoteFalloffIsBlackAtTheHeartAndFadesToNothing(t *testing.T) {
+	falloff := moteFalloff()
+	if falloff[0] != 1 || falloff[1] != moteHaloOpacity {
+		t.Fatalf("the falloff starts %v, want 1 then %v", falloff[:2],
+			moteHaloOpacity)
+	}
+	for ring := 1; ring < len(falloff); ring++ {
+		if falloff[ring] >= falloff[ring-1] || falloff[ring] <= 0 {
+			t.Errorf("ring %d darkens by %v after %v, want it ever fainter",
+				ring, falloff[ring], falloff[ring-1])
+		}
+	}
+	if rim := falloff[len(falloff)-1]; rim > 0.02 {
+		t.Errorf("the rim darkens by %v, want it next to nothing", rim)
+	}
+}
+
+func TestMoteLayersStackIntoTheFalloff(t *testing.T) {
+	falloff := moteFalloff()
+	layers := moteLayers(falloff)
+	light := float32(1)
+	for ring := len(layers) - 1; ring >= 0; ring-- {
+		light *= 1 - layers[ring]
+		if got := 1 - light; math.Abs(float64(got-falloff[ring])) > 1e-5 {
+			t.Errorf("ring %d darkens by %v, want %v", ring, got, falloff[ring])
+		}
+	}
+}

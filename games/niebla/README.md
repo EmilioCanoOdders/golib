@@ -30,6 +30,21 @@ and world differ by (0, -12) at rest zoom; click targets in scripted shots
 aim at a tile's center (`projectTile` + half a tile, plus that offset),
 never its corner, whose tile depends on float rounding.
 
+## Dev tools
+
+In the region, hold Control and click the game's name twice: a strip
+opens under the HUD with **hold a swell** (the fog presses in and stays
+until the button lets it go) and **place robots** (every click on the
+region drops a free built robot there; a right click disarms). In a
+scripted shot:
+
+```text
+./golib shot niebla 400 --input "Enter@1 Mouse@2:40,24 \
+  LeftControl@3-12 MouseLeft@4 MouseLeft@8 \
+  Mouse@14:76,77 MouseLeft@15 \
+  Mouse@18:204,77 MouseLeft@19 Mouse@22:250,330 MouseLeft@23"
+```
+
 ## Files
 
 | File | Holds |
@@ -41,7 +56,7 @@ never its corner, whose tile depends on float rounding.
 | `play.go` | The play scene: input to actions plus one `Tick` per update; the camera, the selection, the marking blueprint and the open cards live here, never serialized; Esc saves and returns to the menu, autosave every `autosaveTicks` |
 | `radial.go` | The build menu: the radial of blueprints a click on empty ground opens |
 | `state.go` | The simulation's state: robots (core or built), buildings, stock, what remains of each deposit, build jobs; `newGame`, which deals the starting region |
-| `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`) and `Apply`, the only door into the state |
+| `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, and the dev tools' `DevHoldSwell` and `DevSpawnRobot`) and `Apply`, the only door into the state |
 | `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, oldest build job, pick up loose items, own post, idle by the core |
 | `sim_piles.go` | Demolition and loose items: `canDemolish`, the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, storage caps, refuel spots, the factories' robot works |
@@ -51,11 +66,15 @@ never its corner, whose tile depends on float rounding.
 | `catalog.go` | The entity database: per thing type its name, color, unit and card lines, plus the stable-color fallback |
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
 | `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons; tile highlights |
+| `motes.go` | The fog's wear, for looks only: motes of darkness orbiting whatever stands in the mist, by its volume, trailing walkers and closing in on what stands still; view, never state |
+| `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots —; view only, acting through the `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
 | `draw.go` | The region painter: ground, the core's monolith, buildings, robots, fog, bubbles, build-site wireframes, the marking ghost |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `markup_test.go` | Markup parser and tooltip layout/button tests |
 | `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
+| `motes_test.go` | The motes driven with no window: counted by volume and only in the fog, tight on what stands still and trailing a walker, fading over what is gone, the falloff's layers |
+| `dev_test.go` | The dev actions: a held swell stays up and doesn't count, a placed robot is built, full and free, `unitsAtWorld` undoes `project` |
 | `fog_test.go` | The fog driven directly: cycles, the first swell on schedule, the pressed line, the bubble's margin, the pushed band's drag, the swell's burn, the HUD's forecast |
 | `identity_test.go` | The identity derived from a machine ID: stable, distinct, and the parsers of what `reg query`, `ioreg` and the machine-id files say |
 | `store_test.go` | The database driven directly: an identity kept across runs, the fallback one too, the token column waiting empty, a base saved and loaded back whole, a second save replacing the first, one player's save invisible to another, the DB path's rules |
@@ -325,6 +344,11 @@ cards carry their trash cans. `fog_test.go` does the same for the fog slice: the
 cycles tick, the first swell rises on schedule and drains whole, the
 line presses in and never reaches the bubble, the pushed band drags
 more, a swell burns outside but not inside, and the HUD forecasts.
+`motes_test.go` pins the fog's motes, which are view but need no
+window: their count follows the body's volume and the fog on it, none
+under a bubble; they sit on a robot that stands still and trail one that
+walks; they fade over a host that left the state; and the layers they
+are drawn with stack into `moteFalloff`.
 `identity_test.go` pins the identity: stable for a machine, distinct
 between machines, 64 hex characters, and the three parsers of what the
 systems report. `store_test.go` pins the database: an identity (and a

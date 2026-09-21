@@ -39,6 +39,8 @@ const autosaveTicks = 900
 // Draw renders the state and changes nothing.
 type playScene struct {
 	state *State
+	motes *moteField // the fog's wear on what stands in it; looks only
+	dev   devTools
 
 	camera       *golib.Camera
 	zoom         float32       // the zoom on screen, gliding toward zoomOfStop(zoomStop)
@@ -80,6 +82,7 @@ func newPlayScene(state *State) *playScene {
 	}
 	s := &playScene{
 		state:    state,
+		motes:    newMoteField(),
 		expanded: map[string]bool{},
 	}
 	s.camera = golib.NewCamera(screenWidth, screenHeight)
@@ -112,9 +115,10 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 		setFilters(!monitor.on)
 	}
 	s.updateCamera(input, dt)
-	s.updateInspection(input)
+	s.updateInspection(input, s.dev.update(s, input))
 	// The loop is the clock: one tick of simulation per update.
 	Apply(s.state, Tick{})
+	s.motes.update(s.state, dt)
 	s.savedTicks++
 	if s.savedTicks >= autosaveTicks {
 		s.saveNow()
@@ -227,8 +231,9 @@ func (s *playScene) dragCamera(input *golib.Input) {
 // a radial around the tile; picking one of its options marks that
 // blueprint, and the click that confirms it lands on a cell. While a
 // blueprint is marked, the panel and the menu stand down. The camera has
-// already moved, so the hover follows the view the frame it changes.
-func (s *playScene) updateInspection(input *golib.Input) {
+// already moved, so the hover follows the view the frame it changes. A
+// left click the dev tools took is none of its business.
+func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 	mx, my := input.MousePosition()
 	world := s.camera.ToWorld(mx, my)
 	col, row, inside := tileAtWorld(world.X, world.Y)
@@ -242,7 +247,7 @@ func (s *playScene) updateInspection(input *golib.Input) {
 		s.hoverCell = false
 	}
 
-	if input.MousePressed(golib.MouseLeft) {
+	if input.MousePressed(golib.MouseLeft) && !clickTaken {
 		// A trash can asks twice: any click but the second one on it
 		// disarms it.
 		armed := s.armed
@@ -380,6 +385,7 @@ func regionOnScreen() golib.Rectangle {
 func (s *playScene) Draw(screen *golib.Screen) {
 	screen.SetCamera(s.camera)
 	drawRegion(s.state, screen, s.zoom)
+	s.motes.draw(screen, s.zoom)
 	// The cursor is the cell under the pointer, the grid's last
 	// subdivision, about four robots across. Far out it lifts to a
 	// readable size on the screen.
@@ -400,6 +406,7 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	screen.SetCamera(nil)
 	screen.DrawText("niebla", 16, 12, 24, textColor, uiText)
 	drawMarkup(screen, s.hudLine(), 16, 44, 15, textColor)
+	s.dev.draw(s, screen)
 	screen.DrawText(
 		"click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a tile, Esc saves and returns to the menu, F11 fullscreen, F2 filter",
 		16, float32(screen.Height())-30, 13, textColor, uiText,

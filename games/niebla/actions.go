@@ -159,3 +159,39 @@ func (a CancelJob) apply(s *State) {
 		return
 	}
 }
+
+// The developer's actions, sent by the dev tools (dev.go) and by nobody
+// else. They are actions like any other, so a log with them in it still
+// replays.
+
+// DevHoldSwell raises a swell and holds it up, or lets go of the held one
+// and ends it. A held swell is no swell of the fog's own: it doesn't
+// count, so the next ones come no sooner, longer or deeper for it.
+type DevHoldSwell struct {
+	On bool
+}
+
+func (a DevHoldSwell) apply(s *State) {
+	s.Fog.Held = a.On
+	if !a.On {
+		s.Fog.SwellLeft = 0
+		return
+	}
+	if s.Fog.SwellLeft <= 0 {
+		s.Fog.SwellLeft = swellTicks(s)
+	}
+}
+
+// DevSpawnRobot puts a built robot, its tank full, on a spot of the
+// region, free of charge. It does nothing for a spot outside the region.
+type DevSpawnRobot struct {
+	X, Y float64 // units
+}
+
+func (a DevSpawnRobot) apply(s *State) {
+	if a.X < 0 || a.Y < 0 ||
+		a.X >= regionCols*unitsPerTile || a.Y >= regionRows*unitsPerTile {
+		return
+	}
+	s.spawnRobot(RobotBuilt, a.X, a.Y)
+}

@@ -41,7 +41,7 @@ const (
 // tick, the cycle's clock runs always, and the swell that is due rises
 // at the boundary, whole.
 func stepFog(s *State) {
-	if s.Fog.SwellLeft > 0 {
+	if s.Fog.SwellLeft > 0 && !s.Fog.Held {
 		s.Fog.SwellLeft--
 	}
 	s.Fog.CycleLeft--

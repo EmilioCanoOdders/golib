@@ -79,10 +79,7 @@ func cellTile(col, row int) (tcol, trow int) {
 // whether it is inside the region. It undoes project and floors onto the
 // cell grid, the way tileAtWorld does onto tiles.
 func cellAtWorld(x, y float64) (col, row int, inside bool) {
-	a := (x - float64(regionOriginX)) / float64(unitW/2)
-	b := (y - float64(regionOriginY)) / float64(unitH/2)
-	worldX := (a + b) / 2
-	worldY := (b - a) / 2
+	worldX, worldY := unitsAtWorld(x, y)
 	col, row = int(math.Floor(worldX/buildingCell)), int(math.Floor(worldY/buildingCell))
 	return col, row, col >= 0 && row >= 0 && col < regionCellCols && row < regionCellRows
 }
