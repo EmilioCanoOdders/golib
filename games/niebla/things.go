@@ -50,6 +50,7 @@ const (
 	TypeSilo      ThingType = "silo"
 	TypeWarehouse ThingType = "warehouse"
 	TypeProtector ThingType = "protector"
+	TypePump      ThingType = "pump"
 
 	TypeSite ThingType = "site" // a building still being raised
 	TypePile ThingType = "pile" // loose items on the ground
@@ -68,6 +69,8 @@ func buildingType(kind BuildingKind) ThingType {
 		return TypeWarehouse
 	case BuildingProtector:
 		return TypeProtector
+	case BuildingPump:
+		return TypePump
 	}
 	return TypeRobot
 }
@@ -110,11 +113,24 @@ func thingsAt(s *State, col, row int) []Thing {
 	case kindCore:
 		things = append(things, coreAt(col, row))
 	}
-	for _, b := range buildingsOnTile(s, col, row) {
-		things = append(things, buildingThing(b))
+	for _, id := range sortedBuildingIDs(s) {
+		b := s.Buildings[id]
+		if !sameGround(b.Col, b.Row, col, row) {
+			continue
+		}
+		thing := buildingThing(b)
+		switch b.Kind {
+		case BuildingPump:
+			thing.Caption = pumpStatus(s, b)
+		case BuildingSilo:
+			thing.Amount = math.Round(b.Oil)
+		case BuildingCharger:
+			thing.Caption = si(math.Round(b.Oil), "L")
+		}
+		things = append(things, thing)
 	}
 	for _, job := range s.Jobs {
-		if tcol, trow := cellTile(job.Col, job.Row); tcol == col && trow == row {
+		if sameGround(job.Col, job.Row, col, row) {
 			things = append(things, siteThing(job))
 		}
 	}
@@ -125,6 +141,19 @@ func thingsAt(s *State, col, row int) []Thing {
 		things = append(things, robotThing(s, r))
 	}
 	return things
+}
+
+// sameGround reports whether a cell belongs to a tile's card: it stands
+// on that tile, or on another tile of the same deposit patch - a pool is
+// one thing, so its pump shows on every tile of it.
+func sameGround(cellCol, cellRow, col, row int) bool {
+	tcol, trow := cellTile(cellCol, cellRow)
+	if tcol == col && trow == row {
+		return true
+	}
+	here, ok := depositAt(col, row)
+	there, okThere := depositAt(tcol, trow)
+	return ok && okThere && here == there
 }
 
 // robotsOnTile returns the robots standing on a tile, in ID order.
@@ -256,6 +285,9 @@ func robotCaption(s *State, r Robot) string {
 		}
 		return "loading " + postWord(r)
 	case taskBuild:
+		if _, hasJob := oldestJob(s); !hasJob {
+			return "laying pipe"
+		}
 		return "building"
 	case taskCollect:
 		return "fetching loose items"
@@ -276,7 +308,7 @@ func storageWord(s *State, r Robot) string {
 	if math.Hypot(r.X-x, r.Y-y) >= 0.5 {
 		return ""
 	}
-	full := oilCap(s) - s.Stock.Oil
+	full := tankRoom(s, haulTank(s, r))
 	if r.Cargo == TypeLilac {
 		full = lilacCap(s) - s.Stock.Lilac
 	}

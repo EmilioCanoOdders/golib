@@ -282,18 +282,17 @@ func TestFullStoresHoldTheCargoUntilASiloOpens(t *testing.T) {
 	if s.Stock.Oil != coreOilCap {
 		t.Errorf("the full store took %v L more", s.Stock.Oil-coreOilCap)
 	}
-	// A silo opens room, and the waiting load lands in it.
-	sid := s.NextID
-	s.NextID++
-	s.Buildings[sid] = Building{
-		ID: sid, Kind: BuildingSilo, Col: coreCol + 2, Row: coreRow + 2,
+	// A silo opens room, and the waiting load walks over and lands in
+	// its tank: oil has a place.
+	col, row := groundNearCore()
+	s.raise(BuildingSilo, col, row)
+	silo, _ := buildingAt(s, col, row)
+	if !tickUntil(s, 60*60, func() bool { return s.Robots[id].Carry == 0 }) {
+		t.Errorf("the robot still holds %v L with room in the silo", s.Robots[id].Carry)
 	}
-	Apply(s, Tick{})
-	if r := s.Robots[id]; r.Carry != 0 {
-		t.Errorf("the robot still holds %v L with room in the silo", r.Carry)
-	}
-	if want := coreOilCap + 30; s.Stock.Oil != want {
-		t.Errorf("the stores hold %v L, want %v", s.Stock.Oil, want)
+	if got := s.Buildings[silo.ID].Oil; got != 30 || s.Stock.Oil != coreOilCap {
+		t.Errorf("the silo holds %v L and the core %v, want the load in the silo",
+			got, s.Stock.Oil)
 	}
 }
 

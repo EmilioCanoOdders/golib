@@ -56,10 +56,12 @@ scripted shot:
 | `play.go` | The play scene: input to actions plus one `Tick` per update; the camera, the selection, the marking blueprint and the open cards live here, never serialized; Esc saves and returns to the menu, autosave every `autosaveTicks` |
 | `radial.go` | The build menu: the radial of blueprints a click on empty ground opens |
 | `state.go` | The simulation's state: robots (core or built), buildings, stock, what remains of each deposit, build jobs; `newGame`, which deals the starting region |
-| `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, and the dev tools' `DevHoldSwell` and `DevSpawnRobot`) and `Apply`, the only door into the state |
+| `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, and the dev tools' `DevHoldSwell` and `DevSpawnRobot`) and `Apply`, the only door into the state |
 | `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, oldest build job, pick up loose items, own post, idle by the core |
 | `sim_piles.go` | Demolition and loose items: `canDemolish`, the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, storage caps, refuel spots, the factories' robot works |
+| `sim_oil.go` | Oil's tanks: the core's, the silos' and the chargers'; `oilTotal`, `oilCap`, `payOil`, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
+| `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus` |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
 | `swell.go` | How a pressing swell looks, by its pressure: waves of shade rolling in to the line and one-pixel static over the mist; a pure picture of the state |
 | `region.go` | The hand-made 25x25 layout, the isometric `project`, tile helpers, the deposit patches flooded out of the layout; pure Go, no drawing |
@@ -68,12 +70,14 @@ scripted shot:
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
 | `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons; tile highlights |
 | `mites.go` | The fog's wear, for looks only: mites of darkness orbiting whatever stands in the mist, by its volume, trailing walkers and closing in on what stands still; view, never state |
+| `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, the blobs of oil by the state's tick) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
 | `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots —; view only, acting through the `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
 | `draw.go` | The region painter: ground, the core's monolith, buildings, robots, fog, bubbles, build-site wireframes, the marking ghost |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `markup_test.go` | Markup parser and tooltip layout/button tests |
 | `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
+| `pipes_test.go` | Pumps and pipes driven directly: a pump stands on a pool and a pool takes one, a pipe is paid by the section and laid by the robots, a laid pipe carries the pool into its tank and stops at a full one or a dry pool, oil has a place and pipes move it between tanks (shares, ports, payments, a demolished tank's oil), robots carry oil to a tank with room and refill where there is oil, what `LayPipe` refuses, a pipe leaves with its ends and its cost falls as a pile, the curve passes through its bends, pipes survive a save, the pool's cards carry the pump and its pipe |
 | `mites_test.go` | The mites driven with no window: counted by volume and only in the fog, tight on what stands still and trailing a walker, fading over what is gone, the falloff's layers |
 | `dev_test.go` | The dev actions: a held swell stays up and doesn't count, a placed robot is built, full and free, `unitsAtWorld` undoes `project` |
 | `fog_test.go` | The fog driven directly: cycles, the first swell on schedule, the pressed line, the bubble's margin, the pushed band's drag, the swell's burn, the HUD's forecast |
@@ -120,7 +124,8 @@ building's `Col, Row` in the state are cell coordinates; `cellAtWorld`
 undoes the projection onto the cell grid the way `tileAtWorld` does onto
 tiles.
 
-Five blueprints (`BuildingKind` in `state.go`, rules and tuning in
+Five blueprints in the radial menu, and the pump off it (see [Pumps and
+pipes](#pumps-and-pipes)) (`BuildingKind` in `state.go`, rules and tuning in
 `sim_buildings.go`): the **robot factory** builds robots from lilac and
 oil, the **charger** refills a built robot's tank from the stores, the
 **silo** and the **warehouse** add oil and lilac storage room, and the
@@ -142,6 +147,60 @@ The fog's law, in `canPlace` and `inSafeZone`: nothing but a protector
 may be marked outside a bubble, so expansion is protector first, then
 the infrastructure it shelters. The bubbles also cancel the fog's drag,
 which slows every robot to half its pace deep in the mist.
+
+### Oil's tanks
+
+`sim_oil.go`: oil has a place. `State.Stock.Oil` is the core's own tank
+and `Building.Oil` a silo's or a charger's (`tankCapOf`); a tank is named
+by its building's ID, the core's by `coreTank`, 0. `oilTotal` and
+`oilCap` sum them for the HUD and for `canAfford`, and `payOil` takes
+what the colony spends out of any tank, the core's first. Robots choose
+with `nearestTank`: `haulTank` is the nearest tank with room (where
+`storeSpot` walks an oil load and `deposit` pours it), `refuelTank` the
+nearest charger or core with oil (where `refuelSpot` walks and `refill`
+draws). `Demolish` drops a tank's oil in its pile. Lilac is still one
+stock under `lilacCap`. A save from before the tanks loads with all its
+oil in the core, over its cap if need be: it takes no more until it is
+used or piped away.
+
+### Pumps and pipes
+
+The **pump** (`BuildingPump`) is the one kind `canPlace` takes on oil
+instead of ground: on a pool with oil left and no pump yet
+(`patchPumped`), inside a bubble. It isn't in the radial menu - a click on
+a pool inspects it - so the pool's card carries `build pump`, which marks
+it on `pumpCell`, the patch's middle; `sameGround` makes `thingsAt` show
+a pool's pump and site on every tile of the pool.
+
+A **pipe** (`State.Pipes`, by ID) carries oil one way, `From` a pump or
+a tank `To` a tank, through the player's `Bends`, in units. `canJoin` is
+the network's law: two different ends, a port free on each
+(`freePorts`: `pipePorts` 3, `corePipePorts` 6), no pipe between them
+already. The curve is never stored: `pipeSpine` rebuilds it from the
+ends and the bends with `pipePath` - a centripetal Catmull-Rom spline
+cut into `pipeSpanSamples` pieces a span, with a `sagPoint` when there
+are no bends - so the sim (length, sections, where the robots stand) and
+the view (the drawing, the blobs) read the same line. `Sections` is what
+was paid and `Left` the robot work owed: `building` claims a robot for
+the oldest unlaid pipe once no site is left, and `stepLayPipe` stands it
+at the pipe's head (`pipeLaidPart` along the curve), working a tick per
+arrival. `stepPipes` runs after the factories: every `pipeFlowing` pipe
+(laid, `pipeSupply` in its source, `tankRoom` at its end) moves up to
+`pipeLitersPerSecond`, the pipes of one source sharing what it gives -
+for a pump, the `pumpLitersPerSecond` it draws from `State.Drain`.
+`Demolish` calls `takePipesOf`, so a pipe never outlives an end.
+
+The laying mode is view (`pipeLaying` in the scene): it collects bends
+and sends one `LayPipe` (`sendPipe`) on the click that lands on a tank
+the pipe may end at (`layTargets`) - `layTarget` tests the pointer
+against the tank's body on the screen, foot to top, a building winning
+over the core - or on `connect` in the last node's menu
+(`layMenuLayout`, `pickLayMenu`), which ends it at `nearestTarget`. The
+panel lists an end's pipes as button rows (`pipeEndOf`, `pipeNote`; the
+row's `ref` is the pipe `RemovePipe` takes). `drawPipes` runs twice,
+like the piles: clear stretches under the buildings and robots with
+their shadow, fogged ones and the unlaid ghost over the fog; the pipe is
+drawn `lift` above its ground line, on posts.
 
 ### The fog breathes
 

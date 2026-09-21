@@ -26,6 +26,9 @@
 //   - sim_buildings.go holds the buildings' rules and their tuning:
 //     blueprints, placement and safe zones, storage caps, refueling,
 //     the factories' robot works.
+//   - sim_pipes.go holds the pumps and the pipes: the curve through the
+//     player's clicks, its price by the section, the robots laying it
+//     and the oil it carries; pipes.go draws them and lays them.
 //   - sim_fog.go holds the fog's law: its cycles and swells, how far
 //     the line presses in, and what a swell means for walkers and
 //     tanks.
@@ -106,6 +109,15 @@ var (
 	protectorDark        = golib.Color{R: 80, G: 120, B: 168, A: 255}
 	protectorBubbleColor = golib.Color{R: 168, G: 216, B: 255, A: 26}
 	protectorEdgeColor   = golib.Color{R: 168, G: 216, B: 255, A: 90}
+
+	// The pump wears the oil's trade in a darker rust, and its pipes a
+	// cold steel inside a dark casing, so they read over the dark ground
+	// and over the pale fog alike, and the oil reads inside them.
+	pumpColor       = golib.Color{R: 214, G: 122, B: 72, A: 255}
+	pumpDark        = golib.Color{R: 132, G: 70, B: 40, A: 255}
+	pipeColor       = golib.Color{R: 124, G: 134, B: 152, A: 255}
+	pipeDarkColor   = golib.Color{R: 36, G: 40, B: 52, A: 255}
+	pipeShadowColor = golib.Color{R: 18, G: 22, B: 32, A: 110}
 
 	// The inspection panel: a dark plate with light text, so the cards'
 	// colors read over any ground. The picked tile keeps the core's warm

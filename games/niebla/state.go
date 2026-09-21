@@ -15,13 +15,14 @@ import (
 // only thing that changes it.
 type State struct {
 	Ticks     int64              // game ticks, 60 to the second
-	NextID    int64              // the ID the next robot, building or pile gets
+	NextID    int64              // the ID the next robot, building, pile or pipe gets
 	Robots    map[int64]Robot    // the colony, by ID
 	Buildings map[int64]Building // the colony's structures, by ID
 	Stock     Stock              // what the core's stores hold
 	Drain     map[string]float64 // what remains in each deposit patch, by key
 	Jobs      []Job              // build jobs, oldest first
 	Piles     map[int64]Pile     // loose items on the ground, by ID
+	Pipes     map[int64]Pipe     // oil pipes, laid or being laid, by ID
 	Fog       Fog                // the region's weather: the cycles and the swell
 }
 
@@ -40,9 +41,10 @@ type Fog struct {
 	Pressure  float64 // 0 calm to 1 pressed in whole: how far the swell has come
 }
 
-// Stock is what the colony has stored at the core.
+// Stock is what the colony has stored. Lilac is one stock under every
+// roof; oil has a place, and this is the core's own tank (sim_oil.go).
 type Stock struct {
-	Oil   float64 // liters
+	Oil   float64 // liters, in the core's tank
 	Lilac float64 // kilograms
 }
 
@@ -85,6 +87,7 @@ const (
 	BuildingSilo      BuildingKind = "silo"      // stores more oil
 	BuildingWarehouse BuildingKind = "warehouse" // stores more lilac
 	BuildingProtector BuildingKind = "protector" // a small bubble of safe ground
+	BuildingPump      BuildingKind = "pump"      // draws a pool's oil into a pipe
 )
 
 // Building is one raised structure. Its Col, Row are cell coordinates
@@ -96,6 +99,7 @@ type Building struct {
 	Kind     BuildingKind
 	Col, Row int // the cell it stands on
 	Work     int64
+	Oil      float64 // liters in its tank: silos and chargers (sim_oil.go)
 }
 
 // Job is one build job: what to raise, on which cell, and the ticks of
@@ -141,6 +145,7 @@ func newGame() *State {
 		Robots:    map[int64]Robot{},
 		Buildings: map[int64]Building{},
 		Piles:     map[int64]Pile{},
+		Pipes:     map[int64]Pipe{},
 		Drain:     map[string]float64{},
 		Stock:     Stock{Oil: startingStockOil, Lilac: startingStockLilac},
 		Fog:       Fog{CycleLeft: fogCycleTicks, NextIn: fogSwellPeriod},

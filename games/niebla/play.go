@@ -62,11 +62,12 @@ type playScene struct {
 	radial       bool            // the build menu stands open on a cell
 	radialCol    int             // the cell the menu opened on
 	radialRow    int
-	hovering     bool // the pointer is over the region
-	hoverCol     int  // the tile under the pointer
+	laying       pipeLaying // the pipe the pointer is drawing, if any
+	hovering     bool       // the pointer is over the region
+	hoverCol     int        // the tile under the pointer
 	hoverRow     int
-	hoverCellCol int // the cell under the pointer, the cursor
-	hoverCellRow int //
+	hoverCellCol int  // the cell under the pointer, the cursor
+	hoverCellRow int  //
 	hoverCell    bool // the pointer is over a cell
 	rightWasDown bool
 	rightFrom    golib.Vector2 // where the right button went down
@@ -247,6 +248,17 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 		s.hoverCell = false
 	}
 
+	rightClick := s.rightClicked(input)
+	if s.laying.on {
+		s.updateLaying(input, clickTaken, rightClick)
+		return
+	}
+	if rightClick {
+		s.picked = false
+		s.radial = false
+		s.armed = ""
+	}
+
 	if input.MousePressed(golib.MouseLeft) && !clickTaken {
 		// A trash can asks twice: any click but the second one on it
 		// disarms it.
@@ -267,8 +279,8 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 					}
 					return
 				}
-				if thing, label, ok := panel.buttonAt(mx, my); ok {
-					s.pressButton(thing, label)
+				if row := panel.buttonRowAt(mx, my); row != nil {
+					s.pressButton(*row)
 					return
 				}
 				if thing, ok := panel.cardAt(mx, my); ok {
@@ -300,20 +312,21 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 			s.pickedCol, s.pickedRow = col, row
 		}
 	}
+}
 
-	// A right click is a press and a release within a few pixels; anything
-	// more was a drag, and drags don't deselect.
+// rightClicked reports a right click: a press and a release within a few
+// pixels. Anything more was a drag, and drags cancel nothing.
+func (s *playScene) rightClicked(input *golib.Input) bool {
+	mx, my := input.MousePosition()
 	down := input.MouseDown(golib.MouseRight)
 	if down && !s.rightWasDown {
 		s.rightFrom = golib.Vector2{X: mx, Y: my}
 	}
-	if s.rightWasDown && !down &&
-		math.Abs(float64(mx-s.rightFrom.X)) < 4 && math.Abs(float64(my-s.rightFrom.Y)) < 4 {
-		s.picked = false
-		s.radial = false
-		s.armed = ""
-	}
+	clicked := s.rightWasDown && !down &&
+		math.Abs(float64(mx-s.rightFrom.X)) < 4 &&
+		math.Abs(float64(my-s.rightFrom.Y)) < 4
 	s.rightWasDown = down
+	return clicked
 }
 
 // buildableCell reports whether a cell may ask for the build menu:
@@ -346,14 +359,26 @@ func (s *playScene) buildableCell(col, row int) bool {
 
 // pressButton applies the action a card's button asks for on the picked
 // tile.
-func (s *playScene) pressButton(thing Thing, label string) {
-	switch label {
+func (s *playScene) pressButton(row tooltipRow) {
+	thing := row.thing
+	switch row.button {
 	case buttonSend:
 		Apply(s.state, SendRobot{Col: s.pickedCol, Row: s.pickedRow})
 	case buttonRecall:
 		Apply(s.state, RecallRobot{Col: s.pickedCol, Row: s.pickedRow})
 	case buttonBuildRobot:
 		Apply(s.state, QueueRobot{Building: thing.Ref})
+	case buttonBuildPump:
+		if d, ok := depositAt(s.pickedCol, s.pickedRow); ok {
+			col, row := pumpCell(d)
+			Apply(s.state, MarkBuilding{Kind: BuildingPump, Col: col, Row: row})
+		}
+	case buttonLayPipe:
+		if end, ok := pipeEndOf(s.state, thing); ok {
+			s.startLaying(end)
+		}
+	case buttonRemovePipe:
+		Apply(s.state, RemovePipe{Pipe: row.ref})
 	}
 }
 
@@ -403,15 +428,25 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	if s.picked {
 		drawTileHighlight(screen, s.pickedCol, s.pickedRow, 2/s.zoom, pickedTileColor)
 	}
+	if s.laying.on {
+		s.drawLaying(screen)
+	}
 	screen.SetCamera(nil)
 	drawSwellStatic(s.state, screen, s.camera)
 	screen.DrawText("niebla", 16, 12, 24, textColor, uiText)
 	drawMarkup(screen, s.hudLine(), 16, 44, 15, textColor)
 	s.dev.draw(s, screen)
-	screen.DrawText(
-		"click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a tile, Esc saves and returns to the menu, F11 fullscreen, F2 filter",
-		16, float32(screen.Height())-30, 13, textColor, uiText,
-	)
+	help := "click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a tile, Esc saves and returns to the menu, F11 fullscreen, F2 filter"
+	if s.laying.on {
+		help = "laying a pipe: click the ground to bend it, click a ringed tank (silo, charger, core) to connect it, click the last node for its menu, right-click takes the last bend back"
+	}
+	screen.DrawText(help, 16, float32(screen.Height())-30, 13, textColor, uiText)
+	if s.laying.on {
+		s.drawLayingLabel(screen)
+		if s.laying.menu {
+			s.drawLayMenu(screen)
+		}
+	}
 	if s.picked && !s.radial {
 		panel := tooltipLayout(s.state, s.camera, s.pickedCol, s.pickedRow, s.expanded)
 		panel.arm(s.armed)
@@ -441,7 +476,7 @@ func (s *playScene) hudLine() string {
 		fog += "   save failed"
 	}
 	return fmt.Sprintf("[oil]%s / %s[/]   [lilac]%s / %s[/]   [dim]%d robots[/]   %s",
-		si(s.state.Stock.Oil, "L"), si(oilCap(s.state), "L"),
+		si(oilTotal(s.state), "L"), si(oilCap(s.state), "L"),
 		si(s.state.Stock.Lilac, "kg"), si(lilacCap(s.state), "kg"),
 		len(s.state.Robots), fog)
 }

@@ -32,12 +32,14 @@ func drawRegion(s *State, screen *golib.Screen, zoom float32) {
 	drawGround(s, screen, zoom)
 	drawCorePad(screen)
 	drawDeposits(s, screen)
+	drawPipes(s, screen, zoom, true)
 	drawPiles(s, screen, zoom, true)
 	drawBuildings(s, screen, zoom)
 	drawRobots(s, screen, zoom)
 	drawFogCover(screen, fogLineNow(s))
 	drawSwellWaves(s, screen)
 	drawFogLine(screen, zoom, s)
+	drawPipes(s, screen, zoom, false)
 	drawPiles(s, screen, zoom, false)
 	drawJobs(s, screen, zoom)
 	drawBubbles(s, screen, zoom)
@@ -210,6 +212,8 @@ func buildingSize(kind BuildingKind) (across, height float32) {
 		return 25, 13
 	case BuildingProtector:
 		return 8, 24
+	case BuildingPump:
+		return 18, 20
 	}
 	return 20, 10
 }
@@ -252,6 +256,13 @@ func drawBuilding(
 		glow := across * unitW * 0.7 // world-sized, like the core's
 		screen.DrawCircle(gx, gy-(height+2)*unitH, glow, protectorColor)
 		screen.DrawCircle(gx, gy-(height+2)*unitH, glow*0.5, bubbleEdgeColor)
+	case BuildingPump:
+		// A squat wellhead, a riser out of its middle and a cap of oil.
+		isoBox(screen, gx, gy, across, height*0.4,
+			pumpColor, mid(pumpColor, pumpDark), pumpDark)
+		isoBox(screen, gx, gy-height*0.4*unitH, across*0.4, height*0.6,
+			pumpColor, mid(pumpColor, pumpDark), pumpDark)
+		screen.DrawCircle(gx, gy-(height+1)*unitH, across*unitW*0.22, oilColor)
 	}
 }
 

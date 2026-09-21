@@ -97,18 +97,20 @@ func TestDemolishingAFactoryCancelsItsRobot(t *testing.T) {
 	}
 }
 
-func TestDemolishingASiloSpillsWhatLosesItsRoof(t *testing.T) {
+func TestDemolishingASiloSpillsWhatItsTankHeld(t *testing.T) {
 	s := newGame()
 	col, row := groundNearCore()
 	b := raised(t, s, BuildingSilo, col, row)
-	s.Stock.Oil = coreOilCap + 400
+	s.Stock.Oil = coreOilCap
+	b.Oil = 400
+	s.Buildings[b.ID] = b
 	Apply(s, Demolish{Building: b.ID})
 	if s.Stock.Oil != coreOilCap {
-		t.Errorf("the stores hold %v L under a roof of %v", s.Stock.Oil, float64(coreOilCap))
+		t.Errorf("the core holds %v L in a tank of %v", s.Stock.Oil, float64(coreOilCap))
 	}
 	p, _ := pileAt(s, col, row)
 	if p.Oil != 400 || p.Lilac != siloCostLilac {
-		t.Errorf("the pile holds %v L and %v kg, want the overflow and the silo's cost",
+		t.Errorf("the pile holds %v L and %v kg, want the silo's oil and its cost",
 			p.Oil, p.Lilac)
 	}
 	// The lilac goes home; the oil has no room and waits on the ground,

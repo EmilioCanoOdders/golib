@@ -81,7 +81,9 @@ var catalog = map[ThingType]ThingInfo{
 				{"bubble", "r = " + si(coreBubbleMeters(), "m")},
 				{"upkeep", "none"},
 				{"integrity", "[core]indestructible[/]"},
-				{"oil store", fmt.Sprintf("[oil]%s[/]", si(s.Stock.Oil, "L"))},
+				{"oil tank", tankWords(s, coreTank)},
+				{"colony oil", fmt.Sprintf("[oil]%s[/] / %s",
+					si(math.Round(oilTotal(s)), "L"), si(oilCap(s), "L"))},
 				{"lilac store", fmt.Sprintf("[lilac]%s[/]", si(s.Stock.Lilac, "kg"))},
 				{"robots", fmt.Sprintf("%d", len(s.Robots))},
 			}
@@ -153,7 +155,8 @@ var catalog = map[ThingType]ThingInfo{
 		Details: func(s *State, thing Thing) []Detail {
 			return []Detail{
 				{"pace", si(chargerRefillPerSec, "L") + "/s"},
-				{"serves", "the colony's stores"},
+				{"tank", tankWords(s, thing.Ref)},
+				{"serves", "from its own tank"},
 				{"low tank", fmt.Sprintf("at %s", si(robotTankLiters*robotLowTankAt, "L"))},
 			}
 		},
@@ -165,9 +168,9 @@ var catalog = map[ThingType]ThingInfo{
 		Primary: true,
 		Details: func(s *State, thing Thing) []Detail {
 			return []Detail{
-				{"adds", fmt.Sprintf("[oil]%s[/]", si(siloOilCap, "L"))},
+				{"tank", tankWords(s, thing.Ref)},
 				{"colony oil", fmt.Sprintf("[oil]%s[/] / %s",
-					si(s.Stock.Oil, "L"), si(oilCap(s), "L"))},
+					si(math.Round(oilTotal(s)), "L"), si(oilCap(s), "L"))},
 			}
 		},
 	},
@@ -197,6 +200,18 @@ var catalog = map[ThingType]ThingInfo{
 				{"bubble", "r = " + si(protectorBubbleMeters(), "m")},
 				{"shelters", "buildings and robots"},
 				{"upkeep", "none"},
+			}
+		},
+	},
+	TypePump: {
+		Name:    "Oil pump",
+		Color:   pumpColor,
+		Primary: true,
+		Details: func(s *State, thing Thing) []Detail {
+			return []Detail{
+				{"pace", si(pumpLitersPerSecond, "L") + "/s"},
+				{"pipe cost", fmt.Sprintf("[lilac]%s[/] per %s",
+					si(pipeSectionLilac, "kg"), si(pipeSectionMeters, "m"))},
 			}
 		},
 	},
@@ -244,6 +259,38 @@ func siteDetails(s *State, thing Thing) []Detail {
 		{"work left", si(float64((job.Left+59)/60), "s")},
 		{"paid", costWords(lilac, oil)},
 	}
+}
+
+// pipeEndName names what a pipe starts or ends at.
+func pipeEndName(s *State, end int64) string {
+	if end == coreTank {
+		return "the core"
+	}
+	return string(s.Buildings[end].Kind)
+}
+
+// pipeNote says a pipe in a few words, seen from one of its ends: where
+// it goes or comes from, how long it is, and what it is doing.
+func pipeNote(s *State, p Pipe, seenFrom int64) string {
+	way, other := "to", p.To
+	if p.To == seenFrom {
+		way, other = "from", p.From
+	}
+	doing := "idle"
+	switch {
+	case p.Left > 0:
+		doing = fmt.Sprintf("laid %.0f%%", pipeLaidPart(p)*100)
+	case pipeFlowing(s, p):
+		doing = "[oil]flowing[/]"
+	}
+	return fmt.Sprintf("%s %s, %s, %s", way, pipeEndName(s, other),
+		si(float64(p.Sections)*pipeSectionMeters, "m"), doing)
+}
+
+// tankWords writes what a tank holds against what it holds at most.
+func tankWords(s *State, tank int64) string {
+	return fmt.Sprintf("[oil]%s[/] / %s",
+		si(math.Round(tankOil(s, tank)*10)/10, "L"), si(tankCap(s, tank), "L"))
 }
 
 // costWords writes a cost in the resources' colors, the kinds it asks
@@ -344,4 +391,5 @@ func init() {
 	markupPalette["dim"] = panelDimColor
 	markupPalette["light"] = panelTextColor
 	markupPalette["fog"] = fogColor
+	markupPalette["danger"] = dangerColor
 }

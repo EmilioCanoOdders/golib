@@ -98,21 +98,20 @@ func canDemolish(s *State, b Building) bool {
 	return true
 }
 
-// spillOverflow moves what the stores no longer have a roof for onto a
-// cell: the stores are one stock under many roofs, so what a silo or a
-// warehouse held is the part that stops fitting when its roof goes.
+// spillOverflow moves the lilac the stores no longer have a roof for
+// onto a cell: lilac is one stock under many roofs, so what a warehouse
+// held is the part that stops fitting when its roof goes. Oil has a
+// place, and a demolished tank drops its own (Demolish).
 func (s *State) spillOverflow(col, row int) {
-	oil := math.Max(0, s.Stock.Oil-oilCap(s))
 	lilac := math.Max(0, s.Stock.Lilac-lilacCap(s))
-	s.Stock.Oil -= oil
 	s.Stock.Lilac -= lilac
-	s.dropPile(col, row, oil, lilac)
+	s.dropPile(col, row, 0, lilac)
 }
 
 // freeRoom returns the room the stores have left for a cargo, counting
 // what the robots already carry home, so nobody loads what won't fit.
 func freeRoom(s *State, cargo ThingType) float64 {
-	room := oilCap(s) - s.Stock.Oil
+	room := oilCap(s) - oilTotal(s)
 	if cargo == TypeLilac {
 		room = lilacCap(s) - s.Stock.Lilac
 	}
@@ -183,21 +182,26 @@ func (s *State) takeFromPile(r *Robot) {
 	s.Piles[p.ID] = p
 }
 
-// storeSpot returns where a robot unloads: the nearest store of its
-// cargo's kind — a warehouse or the core for lilac, a silo or the core
-// for oil. The stores stay one stock; the nearest one is only where the
-// walking ends. Robots spread around a store by ID, as builders do.
+// storeSpot returns where a robot unloads. Lilac is one stock, so the
+// nearest warehouse or the core is only where the walking ends; oil goes
+// into the tank it is carried to, the nearest with room for it
+// (haulTank). Robots spread around a store by ID, as builders do.
 func storeSpot(s *State, r Robot) (x, y float64) {
 	x, y = parkSpot(r.ID)
-	best := math.Hypot(r.X-x, r.Y-y)
-	kind := BuildingSilo
-	if r.Cargo == TypeLilac {
-		kind = BuildingWarehouse
-	}
 	angle := float64(r.ID) * goldenAngle
+	if r.Cargo == TypeOil {
+		tank := haulTank(s, r)
+		if tank == coreTank {
+			return x, y
+		}
+		spot, _ := tankSpot(s, tank)
+		return spot.X + math.Cos(angle)*storeStandoff,
+			spot.Y + math.Sin(angle)*storeStandoff
+	}
+	best := math.Hypot(r.X-x, r.Y-y)
 	for _, id := range sortedBuildingIDs(s) {
 		b := s.Buildings[id]
-		if b.Kind != kind {
+		if b.Kind != BuildingWarehouse {
 			continue
 		}
 		cx, cy := cellCenterUnits(b.Col, b.Row)

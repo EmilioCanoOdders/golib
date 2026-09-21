@@ -75,7 +75,7 @@ func (a RecallRobot) apply(s *State) {
 // raise. It does nothing on a cell that can't take the kind (see
 // canPlace) or when the stores can't pay.
 type MarkBuilding struct {
-	Kind    BuildingKind
+	Kind     BuildingKind
 	Col, Row int // the cell, the tile grid's last subdivision
 }
 
@@ -84,11 +84,11 @@ func (a MarkBuilding) apply(s *State) {
 		return
 	}
 	lilac, oil := buildingCost(a.Kind)
-	if s.Stock.Lilac < lilac || s.Stock.Oil < oil {
+	if !canAfford(s, a.Kind) {
 		return
 	}
 	s.Stock.Lilac -= lilac
-	s.Stock.Oil -= oil
+	s.payOil(oil)
 	s.Jobs = append(s.Jobs, Job{
 		Kind: a.Kind, Col: a.Col, Row: a.Row, Left: buildingWorkTicks,
 	})
@@ -106,18 +106,19 @@ func (a QueueRobot) apply(s *State) {
 	if !ok || b.Kind != BuildingFactory || b.Work > 0 {
 		return
 	}
-	if s.Stock.Lilac < robotCostLilac || s.Stock.Oil < robotCostOil {
+	if s.Stock.Lilac < robotCostLilac || oilTotal(s) < robotCostOil {
 		return
 	}
 	s.Stock.Lilac -= robotCostLilac
-	s.Stock.Oil -= robotCostOil
+	s.payOil(robotCostOil)
 	b.Work = factoryRobotTicks
 	s.Buildings[b.ID] = b
 }
 
 // Demolish takes a building down at once: its tasks die with it, and its
-// cost, the cost of a robot its factory was building and what the stores
-// lose the roof for fall on its cell as one pile. It does nothing for a
+// cost, the cost of a robot its factory was building, the pipes that
+// started or ended at it and what the stores lose the roof for fall on
+// its cell as one pile. It does nothing for a
 // building that isn't there, or for a protector that alone shelters
 // another building (see canDemolish).
 type Demolish struct {
@@ -137,7 +138,8 @@ func (a Demolish) apply(s *State) {
 		lilac += robotCostLilac
 		oil += robotCostOil
 	}
-	s.dropPile(b.Col, b.Row, oil, lilac)
+	lilac += s.takePipesOf(b.ID) * demolishRefund
+	s.dropPile(b.Col, b.Row, oil+b.Oil, lilac)
 	s.spillOverflow(b.Col, b.Row)
 }
 
@@ -158,6 +160,57 @@ func (a CancelJob) apply(s *State) {
 		s.dropPile(job.Col, job.Row, oil*demolishRefund, lilac*demolishRefund)
 		return
 	}
+}
+
+// LayPipe marks a pipe from a pump or a tank to a tank, through the
+// bends the player clicked: its sections are paid in lilac at once, and
+// the robots lay it from its source out. It does nothing when the ends
+// can't take a pipe (see canLayPipe) or when the stores can't pay.
+type LayPipe struct {
+	From  int64       // the pump's or the tank's entity ID; 0 is the core
+	To    int64       // the tank's entity ID; 0 is the core
+	Bends []PipePoint // the clicks between the ends, in units
+}
+
+func (a LayPipe) apply(s *State) {
+	sections, ok := canLayPipe(s, a.From, a.To, a.Bends)
+	if !ok || s.Stock.Lilac < pipeCost(sections) {
+		return
+	}
+	s.Stock.Lilac -= pipeCost(sections)
+	// A save from before the pipes loads with no table for them.
+	if s.Pipes == nil {
+		s.Pipes = map[int64]Pipe{}
+	}
+	id := s.NextID
+	s.NextID++
+	s.Pipes[id] = Pipe{
+		ID: id, From: a.From, To: a.To,
+		Bends:    append([]PipePoint(nil), a.Bends...),
+		Sections: sections,
+		Left:     sections * pipeSectionWorkTicks,
+	}
+}
+
+// RemovePipe takes a pipe up at once, laid or not: what it was made of
+// falls as a pile by the building it started at, or by the one it ended
+// at when it started at the core. It does nothing for a pipe that isn't
+// there.
+type RemovePipe struct {
+	Pipe int64 // the pipe's entity ID
+}
+
+func (a RemovePipe) apply(s *State) {
+	p, ok := s.Pipes[a.Pipe]
+	if !ok {
+		return
+	}
+	delete(s.Pipes, p.ID)
+	at, ok := s.Buildings[p.From]
+	if !ok {
+		at = s.Buildings[p.To]
+	}
+	s.dropPile(at.Col, at.Row, 0, pipeCost(p.Sections)*demolishRefund)
 }
 
 // The developer's actions, sent by the dev tools (dev.go) and by nobody

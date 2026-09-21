@@ -19,6 +19,7 @@ const (
 	warehouseCostLilac = 100.0 // kg
 	protectorCostLilac = 180.0 // kg
 	protectorCostOil   = 40.0  // L
+	pumpCostLilac      = 150.0 // kg
 
 	buildingWorkTicks = 600 // ticks of robot work to raise any building: 10 s
 
@@ -42,8 +43,8 @@ const (
 	robotLowTankAt      = 0.25  // tank fraction that sends it to refuel
 	chargerRefillPerSec = 20.0  // L/s drawn from the stores
 
-// The shadow protector's bubble: a small disc of safe ground, like
-// the core's but without the pole's upkeep.
+	// The shadow protector's bubble: a small disc of safe ground, like
+	// the core's but without the pole's upkeep.
 	protectorBubbleTiles = 2.0 // tiles
 )
 
@@ -97,6 +98,8 @@ func buildingCost(kind BuildingKind) (lilac, oil float64) {
 		return warehouseCostLilac, 0
 	case BuildingProtector:
 		return protectorCostLilac, protectorCostOil
+	case BuildingPump:
+		return pumpCostLilac, 0
 	}
 	return 0, 0
 }
@@ -104,7 +107,7 @@ func buildingCost(kind BuildingKind) (lilac, oil float64) {
 // canAfford reports whether the stores can pay a blueprint's cost.
 func canAfford(s *State, kind BuildingKind) bool {
 	lilac, oil := buildingCost(kind)
-	return s.Stock.Lilac >= lilac && s.Stock.Oil >= oil
+	return s.Stock.Lilac >= lilac && oilTotal(s) >= oil
 }
 
 // sortedBuildingIDs lists the buildings' IDs in order, so nothing ever
@@ -143,13 +146,23 @@ func buildingsOnTile(s *State, tcol, trow int) []Building {
 
 // canPlace reports whether a kind may be marked on a cell: buildable
 // ground, no building there yet, and — the fog's law — inside a safe
-// bubble, which the protector alone is built to stand outside of.
+// bubble, which the protector alone is built to stand outside of. A pump
+// is the one kind that stands on oil instead: on a pool with oil left in
+// it and no pump yet.
 func canPlace(s *State, kind BuildingKind, col, row int) bool {
 	if col < 0 || row < 0 || col >= regionCellCols || row >= regionCellRows {
 		return false
 	}
 	tcol, trow := cellTile(col, row)
-	if tileAt(tcol, trow) != kindGround {
+	ground := byte(kindGround)
+	if kind == BuildingPump {
+		ground = kindOil
+	}
+	if tileAt(tcol, trow) != ground {
+		return false
+	}
+	if kind == BuildingPump &&
+		(patchPumped(s, tcol, trow) || remainingAt(s, tcol, trow) <= 0) {
 		return false
 	}
 	if _, occupied := buildingAt(s, col, row); occupied {
@@ -204,18 +217,8 @@ func fogAt(s *State, x, y float64) float64 {
 	return float64(fogCover(fogDistanceAt(x, y), fogLineNow(s)))
 }
 
-// oilCap and lilacCap return what the colony's stores hold at most: the
-// core's own room, plus every silo and warehouse.
-func oilCap(s *State) float64 {
-	cap := coreOilCap
-	for _, id := range sortedBuildingIDs(s) {
-		if s.Buildings[id].Kind == BuildingSilo {
-			cap += siloOilCap
-		}
-	}
-	return cap
-}
-
+// lilacCap returns what the colony's stores hold at most in lilac: the
+// core's own room, plus every warehouse. Oil's tanks are in sim_oil.go.
 func lilacCap(s *State) float64 {
 	cap := coreLilacCap
 	for _, id := range sortedBuildingIDs(s) {
@@ -226,23 +229,11 @@ func lilacCap(s *State) float64 {
 	return cap
 }
 
-// refuelSpot returns where a robot goes to refill its tank: the nearest
-// charger, or the core when there is none or when it is closer. Both
-// serve from the colony's stores.
+// refuelSpot returns where a robot goes to refill its tank: the middle
+// of its refuelTank.
 func refuelSpot(s *State, r Robot) (x, y float64) {
-	x, y = tileCenterUnits(coreCol, coreRow)
-	best := math.Hypot(r.X-x, r.Y-y)
-	for _, id := range sortedBuildingIDs(s) {
-		b := s.Buildings[id]
-		if b.Kind != BuildingCharger {
-			continue
-		}
-		cx, cy := cellCenterUnits(b.Col, b.Row)
-		if d := math.Hypot(r.X-cx, r.Y-cy); d < best {
-			best, x, y = d, cx, cy
-		}
-	}
-	return x, y
+	spot, _ := tankSpot(s, refuelTank(s, r))
+	return spot.X, spot.Y
 }
 
 // stepFactories moves every factory's robot build one tick forward; done,

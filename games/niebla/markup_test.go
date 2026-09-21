@@ -99,8 +99,8 @@ func TestTooltipLayoutRowsAndCards(t *testing.T) {
 			details++
 		}
 	}
-	if details != 8 {
-		t.Errorf("the expanded core card shows %d details, want 8", details)
+	if details != 9 {
+		t.Errorf("the expanded core card shows %d details, want 9", details)
 	}
 	if !panel.contains(panel.x+1, panel.y+1) || panel.contains(panel.x-1, panel.y) {
 		t.Errorf("contains answers wrongly around the panel's edges")
@@ -125,8 +125,8 @@ func TestPrimaryCardsStartOpen(t *testing.T) {
 			details++
 		}
 	}
-	if details != 8 {
-		t.Errorf("the core's card starts with %d details shown, want 8", details)
+	if details != 9 {
+		t.Errorf("the core's card starts with %d details shown, want 9", details)
 	}
 
 	// A deposit's card starts open, button included, with no clicks.

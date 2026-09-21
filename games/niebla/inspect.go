@@ -41,10 +41,15 @@ const (
 // The labels a card's button carries. Update reads them to know which
 // action to apply, so treat them as identifiers, not prose.
 const (
-	buttonSend      = "send robot"
-	buttonRecall    = "recall robot"
+	buttonSend       = "send robot"
+	buttonRecall     = "recall robot"
 	buttonBuildRobot = "build robot"
+	buttonBuildPump  = "build pump"
+	buttonLayPipe    = "lay pipe"
+	buttonRemovePipe = "remove"
 )
+
+const pipeButtonWidth = 58 // a pipe row's remove button: its note needs the room
 
 // tooltipRow is one line the panel draws: the header, a card's title, an
 // expanded card's detail, or a button.
@@ -56,6 +61,9 @@ type tooltipRow struct {
 	open    bool    // the card is expanded
 	summary string  // the title's headline, right-aligned
 	button  string  // the label on a button row, "" otherwise
+	dim     bool    // the button can't be pressed now: the stores can't pay
+	note    string  // markup written beside the button
+	ref     int64   // what the button acts on, when it isn't the card's thing: a pipe
 	bx, by  float32 // the button's rectangle on the screen
 	bw, bh  float32 //
 	trash   bool    // a title row that ends in a trash can, at bx, by
@@ -123,6 +131,21 @@ func tooltipLayout(
 			}
 			continue
 		}
+		if end, ok := pipeEndOf(s, thing); ok {
+			for _, p := range pipesOf(s, end) {
+				t.rows = append(t.rows, tooltipRow{
+					thing: thing, button: buttonRemovePipe,
+					note: pipeNote(s, p, end), ref: p.ID,
+				})
+			}
+			if freePorts(s, end) > 0 {
+				t.rows = append(t.rows, tooltipRow{
+					thing: thing, button: buttonLayPipe,
+					note: fmt.Sprintf("[dim]%d of %d ports free[/]",
+						freePorts(s, end), freePorts(s, end)+len(pipesOf(s, end))),
+				})
+			}
+		}
 		if thing.Type != TypeOil && thing.Type != TypeLilac {
 			continue
 		}
@@ -134,6 +157,17 @@ func tooltipLayout(
 			label = buttonRecall
 		}
 		t.rows = append(t.rows, tooltipRow{thing: thing, button: label})
+		if d, ok := depositAt(col, row); ok && thing.Type == TypeOil {
+			if pc, pr := pumpCell(d); canPlace(s, BuildingPump, pc, pr) {
+				lilac, oil := buildingCost(BuildingPump)
+				t.rows = append(t.rows, tooltipRow{
+					thing:  thing,
+					button: buttonBuildPump,
+					dim:    !canAfford(s, BuildingPump),
+					note:   "[dim]" + costWords(lilac, oil) + "[/]",
+				})
+			}
+		}
 	}
 	// Lay the rows out inside the plate: heights first, then the buttons'
 	// rectangles relative to it, then everything at its final place.
@@ -143,6 +177,9 @@ func tooltipLayout(
 		if r.button != "" {
 			r.bx, r.by = tooltipPad+detailIndent, y+2
 			r.bw, r.bh = buttonWidth, buttonRow-4
+			if r.button == buttonRemovePipe {
+				r.bw = pipeButtonWidth
+			}
 		}
 		if r.trash {
 			r.bx, r.by = t.w-tooltipPad-trashWidth, y-1
@@ -247,19 +284,42 @@ func (t tooltip) cardAt(x, y float32) (Thing, bool) {
 // buttonAt returns the thing whose button holds the screen point, with
 // the button's label.
 func (t tooltip) buttonAt(x, y float32) (Thing, string, bool) {
+	if r := t.buttonRowAt(x, y); r != nil {
+		return r.thing, r.button, true
+	}
+	return Thing{}, "", false
+}
+
+// buttonRowAt returns the row of the button that holds the screen point,
+// or nil: a dimmed button holds nothing.
+func (t tooltip) buttonRowAt(x, y float32) *tooltipRow {
 	if x < t.x || x > t.x+t.w {
-		return Thing{}, "", false
+		return nil
 	}
 	for i := range t.rows {
 		r := &t.rows[i]
-		if r.button == "" {
+		if r.button == "" || r.dim {
 			continue
 		}
 		if x >= r.bx && x <= r.bx+r.bw && y >= r.by && y <= r.by+r.bh {
-			return r.thing, r.button, true
+			return r
 		}
 	}
-	return Thing{}, "", false
+	return nil
+}
+
+// pipeEndOf returns the pipe end a card stands for: the core's tank, a
+// silo's, a charger's, or a pump.
+func pipeEndOf(s *State, thing Thing) (end int64, ok bool) {
+	if thing.Type == TypeCore {
+		return coreTank, true
+	}
+	b, found := s.Buildings[thing.Ref]
+	if !found || buildingType(b.Kind) != thing.Type {
+		return 0, false
+	}
+	_, ok = pipeEndSpot(s, b.ID)
+	return b.ID, ok
 }
 
 // drawTooltip paints the panel: a dark plate, the tile's header, and one
@@ -312,14 +372,21 @@ func drawTooltip(screen *golib.Screen, t tooltip, mx, my float32) {
 			screen.DrawText(summary, right, y, textSize, summaryColor,
 				golib.TextOptions{Font: uiFont, Align: golib.AlignRight})
 		case r.button != "":
-			fill := buttonColor
-			if x, y := r.bx, r.by; mx >= x && mx <= x+r.bw && my >= y && my <= y+r.bh {
+			fill, ink := buttonColor, panelTextColor
+			rect := golib.Rectangle{X: r.bx, Y: r.by, Width: r.bw, Height: r.bh}
+			switch {
+			case r.dim:
+				ink = panelDimColor
+			case rect.Contains(mx, my):
 				fill = buttonHoverColor
 			}
-			rect := golib.Rectangle{X: r.bx, Y: r.by, Width: r.bw, Height: r.bh}
 			screen.DrawRectangle(rect, fill)
 			screen.DrawRectangleOutline(rect, 1, buttonEdgeColor)
-			screen.DrawText(r.button, r.bx+8, r.by+4, textSize, panelTextColor, uiText)
+			screen.DrawText(r.button, r.bx+8, r.by+4, textSize, ink, uiText)
+			if r.note != "" {
+				drawMarkup(screen, r.note, r.bx+r.bw+10, r.by+4,
+					textSize, panelTextColor)
+			}
 		default:
 			screen.DrawText(r.detail.Label, x+detailIndent, y, textSize, panelDimColor, uiText)
 			drawMarkup(screen, r.detail.Value, x+detailIndent+detailLabelW, y,

@@ -24,12 +24,13 @@ const (
 )
 
 // stepSim moves the world one tick forward: the weather, the
-// factories, then the robots in ID order, so the outcome never depends
+// factories, the pipes, then the robots in ID order, so the outcome never depends
 // on map iteration. A built robot empty of oil outside every bubble is
 // digested by the fog and leaves the colony.
 func stepSim(s *State) {
 	stepFog(s)
 	stepFactories(s)
+	stepPipes(s)
 	for _, id := range sortedRobotIDs(s) {
 		r := s.Robots[id]
 		stepRobot(s, &r)
@@ -63,7 +64,7 @@ const (
 	taskHaul    = "haul"    // bring home what it carries
 	taskRefuel  = "refuel"  // mind its tank
 	taskLoad    = "load"    // finish loading, at its post or at a pile
-	taskBuild   = "build"   // raise the oldest build job
+	taskBuild   = "build"   // raise the oldest build job, then lay pipe
 	taskCollect = "collect" // pick up loose items
 	taskPost    = "post"    // work its own post
 	taskIdle    = "idle"    // stand by the core
@@ -146,18 +147,42 @@ func (r *Robot) stepLoad(s *State) {
 }
 
 func (r *Robot) building(s *State) bool {
-	_, hasJob := oldestJob(s)
-	return hasJob
+	if _, hasJob := oldestJob(s); hasJob {
+		return true
+	}
+	_, laying := unlaidPipe(s)
+	return laying
 }
 
 // Builders stand on their cell's edge, spread by ID, so the rising body
-// doesn't swallow them.
+// doesn't swallow them. With no site left to raise, they lay pipe.
 func (r *Robot) stepBuild(s *State) {
-	job, _ := oldestJob(s)
+	job, hasJob := oldestJob(s)
+	if !hasJob {
+		r.stepLayPipe(s)
+		return
+	}
 	cx, cy := cellCenterUnits(job.Col, job.Row)
 	angle := float64(r.ID) * goldenAngle
 	if r.walkTowards(s, cx+math.Cos(angle)*11, cy+math.Sin(angle)*11) {
 		s.workJob()
+	}
+}
+
+// stepLayPipe works on the oldest unlaid pipe, at its head: the pipe
+// grows from its pump out, and whoever lays it walks along with it.
+func (r *Robot) stepLayPipe(s *State) {
+	p, _ := unlaidPipe(s)
+	path, ok := pipeSpine(s, p)
+	if !ok {
+		return
+	}
+	head := pathPointAt(path, pathLength(path)*pipeLaidPart(p))
+	angle := float64(r.ID) * goldenAngle
+	x := head.X + math.Cos(angle)*pipeLayStandoff
+	y := head.Y + math.Sin(angle)*pipeLayStandoff
+	if r.walkTowards(s, x, y) {
+		s.workPipe(p.ID)
 	}
 }
 
@@ -222,7 +247,7 @@ func chargeStatus(s *State, r Robot) string {
 	at := math.Hypot(r.X-x, r.Y-y) < 0.5
 	switch {
 	case at && r.Tank < robotTankLiters:
-		if s.Stock.Oil <= 0 {
+		if tankOil(s, refuelTank(s, r)) <= 0 {
 			return "out of oil"
 		}
 		return "refueling"
@@ -232,12 +257,13 @@ func chargeStatus(s *State, r Robot) string {
 	return ""
 }
 
-// refill pours oil from the colony's stores into the tank, at the
-// charger's pace; dry stores leave the robot standing there.
+// refill pours oil from the post's tank into the robot's, at the
+// charger's pace; a dry post leaves the robot standing there.
 func (s *State) refill(r *Robot) {
+	post := refuelTank(s, *r)
 	fill := math.Min(chargerRefillPerSec/60, robotTankLiters-r.Tank)
-	fill = math.Min(fill, s.Stock.Oil)
-	s.Stock.Oil -= fill
+	fill = math.Min(fill, tankOil(s, post))
+	s.addOil(post, -fill)
 	r.Tank += fill
 }
 
@@ -297,7 +323,7 @@ func (s *State) deposit(r *Robot) {
 	var room float64
 	switch r.Cargo {
 	case TypeOil:
-		room = oilCap(s) - s.Stock.Oil
+		room = tankRoom(s, haulTank(s, *r))
 	case TypeLilac:
 		room = lilacCap(s) - s.Stock.Lilac
 	default:
@@ -307,7 +333,7 @@ func (s *State) deposit(r *Robot) {
 	put := math.Min(r.Carry, math.Max(0, room))
 	switch r.Cargo {
 	case TypeOil:
-		s.Stock.Oil += put
+		s.addOil(haulTank(s, *r), put)
 	case TypeLilac:
 		s.Stock.Lilac += put
 	}

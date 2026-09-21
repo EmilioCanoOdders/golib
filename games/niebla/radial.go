@@ -30,9 +30,9 @@ const (
 
 // radialItem is one option of the open menu, laid out on the screen.
 type radialItem struct {
-	kind        BuildingKind
-	x, y        float32 // the circle's center
-	ready       bool    // the colony may raise this kind on this cell
+	kind  BuildingKind
+	x, y  float32 // the circle's center
+	ready bool    // the colony may raise this kind on this cell
 }
 
 // radialLayout lays the open menu's options out around its cell's
@@ -79,7 +79,7 @@ func drawRadial(s *playScene, screen *golib.Screen, mx, my float32) {
 		lit := item.ready && item.kind == hovered.kind
 		edge := info.Color
 		if !item.ready {
-			edge = golib.WithOpacity(info.Color, 80)
+			edge = golib.WithOpacity(info.Color, 0.3)
 		}
 		fill := panelColor
 		if lit {
