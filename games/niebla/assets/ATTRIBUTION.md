@@ -5,7 +5,7 @@ Files in this folder that were not made for GoLib. Keep this file with them: a
 
 ## Fonts
 
-**`fonts/FiraSans-Regular.ttf`**: Fira Sans Regular, the font of every text in the game.
+**`fonts/FiraSans-Regular.ttf`** and **`fonts/FiraSans-Medium.ttf`**: Fira Sans Regular, the font of every text in the game, and Fira Sans Medium, for emphasis.
 
 | Field | Value |
 | --- | --- |
