@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"strings"
 )
 
 // The world speaks SI: one unit of the world is one meter, so a tile is
@@ -47,6 +48,9 @@ const (
 	TypeSilo      ThingType = "silo"
 	TypeWarehouse ThingType = "warehouse"
 	TypeProtector ThingType = "protector"
+
+	TypeSite ThingType = "site" // a building still being raised
+	TypePile ThingType = "pile" // loose items on the ground
 )
 
 // buildingType maps a building kind to the thing type its cards read.
@@ -82,13 +86,15 @@ type Thing struct {
 	ID      string  // stable in the region, so views can remember it
 	Amount  float64 // the type's headline quantity, in its SI unit
 	Caption string  // a headline that replaces the summary, a robot's task
-	Ref     int64   // the entity's ID in the state, for robots
+	Ref     int64   // the entity's ID in the state: robots, buildings, piles
+	CellCol int     // sites: the cell the job stands on
+	CellRow int     //
 	Cols    int     // deposits: the patch's extent, in tiles
 	Rows    int     //
 }
 
 // thingsAt returns the things standing on a tile: its building or deposit
-// first, then the robots on it by ID. A deposit tile shows its whole
+// first, then its sites and piles, then the robots on it by ID. A deposit tile shows its whole
 // patch's card: the vein is one thing, however many tiles it spans.
 // Rocks and bushes are decoration, so they have no card yet.
 func thingsAt(s *State, col, row int) []Thing {
@@ -104,6 +110,14 @@ func thingsAt(s *State, col, row int) []Thing {
 	}
 	for _, b := range buildingsOnTile(s, col, row) {
 		things = append(things, buildingThing(b))
+	}
+	for _, job := range s.Jobs {
+		if tcol, trow := cellTile(job.Col, job.Row); tcol == col && trow == row {
+			things = append(things, siteThing(job))
+		}
+	}
+	for _, p := range pilesOnTile(s, col, row) {
+		things = append(things, pileThing(p))
 	}
 	for _, r := range robotsOnTile(s, col, row) {
 		things = append(things, robotThing(s, r))
@@ -162,6 +176,51 @@ func buildingThing(b Building) Thing {
 	return thing
 }
 
+// siteThing is the card of a building still being raised, ID'd by its
+// cell: a job has no entity ID, and a cell holds one site at most.
+func siteThing(job Job) Thing {
+	done := 100 - job.Left*100/buildingWorkTicks
+	return Thing{
+		Type:    TypeSite,
+		ID:      fmt.Sprintf("site@%d,%d", job.Col, job.Row),
+		Caption: fmt.Sprintf("%s, %d%%", job.Kind, done),
+		CellCol: job.Col,
+		CellRow: job.Row,
+	}
+}
+
+// siteJob returns the job a site's card stands for.
+func siteJob(s *State, thing Thing) (Job, bool) {
+	for _, job := range s.Jobs {
+		if job.Col == thing.CellCol && job.Row == thing.CellRow {
+			return job, true
+		}
+	}
+	return Job{}, false
+}
+
+// pileThing is a pile's card, headlined by what lies there.
+func pileThing(p Pile) Thing {
+	return Thing{
+		Type:    TypePile,
+		ID:      fmt.Sprintf("pile-%d", p.ID),
+		Ref:     p.ID,
+		Caption: pileWords(p, " + "),
+	}
+}
+
+// pileWords writes a pile's contents, the kinds it holds only.
+func pileWords(p Pile, joint string) string {
+	var words []string
+	if p.Lilac >= pileDust {
+		words = append(words, si(math.Round(p.Lilac*10)/10, "kg"))
+	}
+	if p.Oil >= pileDust {
+		words = append(words, si(math.Round(p.Oil*10)/10, "L"))
+	}
+	return strings.Join(words, joint)
+}
+
 // standsOn reports whether the robot's position falls on this tile.
 func (r Robot) standsOn(col, row int) bool {
 	c, rw := robotTile(r)
@@ -181,33 +240,37 @@ func robotThing(s *State, r Robot) Thing {
 // the state in the same priority order the rules do (sim_robots.go), so
 // the words always say what the robot is doing.
 func robotCaption(s *State, r Robot) string {
-	_, hasJob := oldestJob(s)
-	switch {
-	case r.Carry > 0:
+	switch r.taskNow(s).name {
+	case taskHaul:
 		if word := storageWord(s, r); word != "" {
 			return word
 		}
 		return "hauling " + cargoWord(r.Cargo)
-	case chargeStatus(s, r) != "":
+	case taskRefuel:
 		return chargeStatus(s, r)
-	case r.WorkTicks > 0:
+	case taskLoad:
+		if r.Pile != 0 {
+			return "loading loose items"
+		}
 		return "loading " + postWord(r)
-	case hasJob:
+	case taskBuild:
 		return "building"
-	case r.hasPost():
+	case taskCollect:
+		return "fetching loose items"
+	case taskPost:
 		return postWord(r) + " run"
 	default:
 		return "idle"
 	}
 }
 
-// storageWord names a robot standing at the core with a full store and
+// storageWord names a robot standing at a store that is full, with
 // cargo in its arms.
 func storageWord(s *State, r Robot) string {
 	if r.Carry <= 0 {
 		return ""
 	}
-	x, y := parkSpot(r.ID)
+	x, y := storeSpot(s, r)
 	if math.Hypot(r.X-x, r.Y-y) >= 0.5 {
 		return ""
 	}

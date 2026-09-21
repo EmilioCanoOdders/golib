@@ -163,6 +163,9 @@ func canPlace(s *State, kind BuildingKind, col, row int) bool {
 			return false // a job already raises something here
 		}
 	}
+	if _, littered := pileAt(s, col, row); littered {
+		return false // loose items hold the cell until they are hauled off
+	}
 	x, y := cellCenterUnits(col, row)
 	return kind == BuildingProtector || inSafeZone(s, x, y)
 }
@@ -171,13 +174,19 @@ func canPlace(s *State, kind BuildingKind, col, row int) bool {
 // core's, or a shadow protector's. Nothing is digested inside one, and
 // the fog does not slow whoever walks there.
 func inSafeZone(s *State, x, y float64) bool {
+	return shelteredWithout(s, x, y, 0)
+}
+
+// shelteredWithout reports whether a world point would stand inside a
+// bubble if one building were gone: what demolishing a protector asks.
+func shelteredWithout(s *State, x, y float64, gone int64) bool {
 	cx, cy := tileCenterUnits(coreCol, coreRow)
 	if math.Hypot(x-cx, y-cy) <= coreBubbleRadius*unitsPerTile {
 		return true
 	}
 	for _, id := range sortedBuildingIDs(s) {
 		b := s.Buildings[id]
-		if b.Kind != BuildingProtector {
+		if b.Kind != BuildingProtector || b.ID == gone {
 			continue
 		}
 		bx, by := cellCenterUnits(b.Col, b.Row)

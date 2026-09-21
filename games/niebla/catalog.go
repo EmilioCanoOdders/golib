@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"golib"
@@ -199,6 +200,68 @@ var catalog = map[ThingType]ThingInfo{
 			}
 		},
 	},
+	TypeSite: {
+		Name:    "Building site",
+		Color:   siteColor,
+		Primary: true, // its Details are set in init: they read the catalog
+	},
+	TypePile: {
+		Name:    "Loose items",
+		Color:   pileColor,
+		Primary: true,
+		Details: func(s *State, thing Thing) []Detail {
+			p, ok := s.Piles[thing.Ref]
+			if !ok {
+				return nil
+			}
+			var details []Detail
+			if p.Lilac >= pileDust {
+				details = append(details, Detail{
+					"lilac", fmt.Sprintf("[lilac]%s[/]", si(math.Round(p.Lilac*10)/10, "kg")),
+				})
+			}
+			if p.Oil >= pileDust {
+				details = append(details, Detail{
+					"oil", fmt.Sprintf("[oil]%s[/]", si(math.Round(p.Oil*10)/10, "L")),
+				})
+			}
+			return append(details, Detail{"state", pileState(s, p)})
+		},
+	},
+}
+
+// siteDetails are a site's card lines. They name the building from the
+// catalog itself, so init hangs them on the entry: inside the catalog's
+// own value they would be an initialization cycle.
+func siteDetails(s *State, thing Thing) []Detail {
+	job, ok := siteJob(s, thing)
+	if !ok {
+		return nil
+	}
+	lilac, oil := buildingCost(job.Kind)
+	return []Detail{
+		{"raising", catalogInfo(buildingType(job.Kind)).Name},
+		{"work left", si(float64((job.Left+59)/60), "s")},
+		{"paid", costWords(lilac, oil)},
+	}
+}
+
+// costWords writes a cost in the resources' colors, the kinds it asks
+// only.
+func costWords(lilac, oil float64) string {
+	words := fmt.Sprintf("[lilac]%s[/]", si(lilac, "kg"))
+	if oil > 0 {
+		words += fmt.Sprintf(" + [oil]%s[/]", si(oil, "L"))
+	}
+	return words
+}
+
+// pileState says whether the robots can take a pile home.
+func pileState(s *State, p Pile) string {
+	if _, amount := pileOffer(s, p); amount <= 0 {
+		return "waiting for storage"
+	}
+	return "to be hauled"
 }
 
 // depositState says how a deposit tile reads after the robots worked it.
@@ -272,6 +335,9 @@ func hsv(h, s, v float32) golib.Color {
 var markupPalette = map[string]golib.Color{}
 
 func init() {
+	site := catalog[TypeSite]
+	site.Details = siteDetails
+	catalog[TypeSite] = site
 	for kind, info := range catalog {
 		markupPalette[string(kind)] = info.Color
 	}

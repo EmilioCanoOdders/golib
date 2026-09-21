@@ -9,7 +9,9 @@ import (
 // Tooltip tuning, in screen pixels. The panel is one dark plate with a row
 // per line: the tile's header, one card title per thing with its headline
 // at the right, the expanded cards' details and, for deposits, a button
-// that sends the card's robot to it, or recalls it.
+// that sends the card's robot to it, or recalls it. The card of a
+// building or a site ends its title in a trash can, which demolishes it
+// on the second press.
 const (
 	tooltipWidth  = 260
 	tooltipPad    = 12
@@ -24,6 +26,16 @@ const (
 	detailIndent  = 12 // how far details sit inside their card
 	tooltipGap    = 14 // from the tile's corner to the panel
 	tooltipMargin = 8  // kept between the panel and the screen's edges
+	trashWidth    = 11 // the trash can at the end of a card's title
+	trashHeight   = 13
+	trashGap      = 8 // between the trash can and the title's headline
+)
+
+// What a card's headline reads while its trash can is armed, and while
+// the pointer is over one that can't go.
+const (
+	armedSummary   = "demolish?"
+	blockedSummary = "its bubble shelters others"
 )
 
 // The labels a card's button carries. Update reads them to know which
@@ -46,6 +58,9 @@ type tooltipRow struct {
 	button  string  // the label on a button row, "" otherwise
 	bx, by  float32 // the button's rectangle on the screen
 	bw, bh  float32 //
+	trash   bool    // a title row that ends in a trash can, at bx, by
+	blocked bool    // the trash can is dimmed: this one can't go
+	armed   bool    // the trash can was pressed once and asks again
 }
 
 // tooltip is the picked tile's panel, laid out: where it stands on the
@@ -87,11 +102,14 @@ func tooltipLayout(
 	for _, thing := range things {
 		info := catalogInfo(thing.Type)
 		open := cardOpen(info, t.lone, expanded, thing.ID)
+		trash, blocked := trashFor(s, thing)
 		t.rows = append(t.rows, tooltipRow{
 			thing:   thing,
 			title:   true,
 			open:    open,
 			summary: info.summarize(thing),
+			trash:   trash,
+			blocked: blocked,
 		})
 		if !open {
 			continue
@@ -126,6 +144,10 @@ func tooltipLayout(
 			r.bx, r.by = tooltipPad+detailIndent, y+2
 			r.bw, r.bh = buttonWidth, buttonRow-4
 		}
+		if r.trash {
+			r.bx, r.by = t.w-tooltipPad-trashWidth, y-1
+			r.bw, r.bh = trashWidth, trashHeight
+		}
 		y += rowHeight(r)
 	}
 	t.h = y + tooltipPad
@@ -142,6 +164,50 @@ func tooltipLayout(
 		t.rows[i].by += t.y
 	}
 	return t
+}
+
+// trashFor reports whether a thing's card carries a trash can, and
+// whether it is dimmed: every building and site can go but the core,
+// which has none, and a protector that alone shelters another building.
+func trashFor(s *State, thing Thing) (trash, blocked bool) {
+	if thing.Type == TypeSite {
+		return true, false
+	}
+	b, ok := s.Buildings[thing.Ref]
+	if !ok || buildingType(b.Kind) != thing.Type {
+		return false, false
+	}
+	return true, !canDemolish(s, b)
+}
+
+// arm marks the card whose trash can was pressed once, so it draws red
+// and asks again. Arming is view, not state.
+func (t *tooltip) arm(id string) {
+	for i := range t.rows {
+		r := &t.rows[i]
+		r.armed = r.trash && !r.blocked && id != "" && r.thing.ID == id
+	}
+}
+
+// trashAt returns the thing whose trash can holds the screen point, and
+// whether that one is dimmed.
+func (t tooltip) trashAt(x, y float32) (thing Thing, blocked, ok bool) {
+	for i := range t.rows {
+		r := &t.rows[i]
+		if r.trashHolds(x, y) {
+			return r.thing, r.blocked, true
+		}
+	}
+	return Thing{}, false, false
+}
+
+// trashHolds reports whether the screen point is on the row's trash
+// can, with some slack around so small a target.
+func (r *tooltipRow) trashHolds(x, y float32) bool {
+	const slack = 3
+	return r.trash &&
+		x >= r.bx-slack && x <= r.bx+r.bw+slack &&
+		y >= r.by-slack && y <= r.by+r.bh+slack
 }
 
 // rowHeight returns the line height of a panel row.
@@ -223,7 +289,27 @@ func drawTooltip(screen *golib.Screen, t tooltip, mx, my float32) {
 			}
 			tx = drawMarkup(screen, mark, tx, y, titleSize, panelDimColor)
 			screen.DrawText(info.Name, tx, y, titleSize, info.Color)
-			screen.DrawText(r.summary, t.x+t.w-tooltipPad, y, textSize, panelDimColor,
+			summary, summaryColor := r.summary, panelDimColor
+			right := t.x + t.w - tooltipPad
+			if r.trash {
+				over := r.trashHolds(mx, my)
+				color := panelDimColor
+				switch {
+				case r.blocked:
+					color = blockedColor
+					if over {
+						summary = blockedSummary
+					}
+				case r.armed:
+					color = dangerColor
+					summary, summaryColor = armedSummary, dangerColor
+				case over:
+					color = panelTextColor
+				}
+				drawTrashCan(screen, r.bx, r.by, color)
+				right = r.bx - trashGap
+			}
+			screen.DrawText(summary, right, y, textSize, summaryColor,
 				golib.TextOptions{Align: golib.AlignRight})
 		case r.button != "":
 			fill := buttonColor
@@ -241,6 +327,22 @@ func drawTooltip(screen *golib.Screen, t tooltip, mx, my float32) {
 		}
 		y += rowHeight(r)
 	}
+}
+
+// drawTrashCan paints a trash can, trashWidth by trashHeight pixels
+// from its top left corner: a handle, a lid and a ribbed body.
+func drawTrashCan(screen *golib.Screen, x, y float32, color golib.Color) {
+	rect := func(rx, ry, w, h float32) {
+		screen.DrawRectangle(
+			golib.Rectangle{X: x + rx, Y: y + ry, Width: w, Height: h}, color)
+	}
+	rect(4, 0, 3, 1)  // the handle
+	rect(0, 2, 11, 2) // the lid
+	rect(1, 5, 1, 8)  // the body's sides and bottom
+	rect(9, 5, 1, 8)
+	rect(1, 12, 9, 1)
+	rect(4, 6, 1, 5) // the ribs
+	rect(6, 6, 1, 5)
 }
 
 // findButton returns the row of the first button labeled so, or nil.

@@ -56,6 +56,7 @@ type playScene struct {
 	pickedCol    int  // the selected tile
 	pickedRow    int
 	expanded     map[string]bool // which cards stand open, by thing ID
+	armed        string          // the card whose trash can was pressed once, by thing ID
 	radial       bool            // the build menu stands open on a cell
 	radialCol    int             // the cell the menu opened on
 	radialRow    int
@@ -242,11 +243,25 @@ func (s *playScene) updateInspection(input *golib.Input) {
 	}
 
 	if input.MousePressed(golib.MouseLeft) {
+		// A trash can asks twice: any click but the second one on it
+		// disarms it.
+		armed := s.armed
+		s.armed = ""
 		// The panel, while it stands, wins over whatever sits under it:
 		// its buttons act even where it covers buildable ground.
 		if s.picked {
 			panel := tooltipLayout(s.state, s.camera, s.pickedCol, s.pickedRow, s.expanded)
 			if panel.contains(mx, my) {
+				if thing, blocked, ok := panel.trashAt(mx, my); ok {
+					switch {
+					case blocked:
+					case armed == thing.ID:
+						s.demolish(thing)
+					default:
+						s.armed = thing.ID
+					}
+					return
+				}
 				if thing, label, ok := panel.buttonAt(mx, my); ok {
 					s.pressButton(thing, label)
 					return
@@ -291,13 +306,14 @@ func (s *playScene) updateInspection(input *golib.Input) {
 		math.Abs(float64(mx-s.rightFrom.X)) < 4 && math.Abs(float64(my-s.rightFrom.Y)) < 4 {
 		s.picked = false
 		s.radial = false
+		s.armed = ""
 	}
 	s.rightWasDown = down
 }
 
 // buildableCell reports whether a cell may ask for the build menu:
-// buildable ground, nothing raised or rising there, no robot standing on
-// it.
+// buildable ground, nothing raised, rising or lying there, no robot
+// standing on it.
 func (s *playScene) buildableCell(col, row int) bool {
 	tcol, trow := cellTile(col, row)
 	if tileAt(tcol, trow) != kindGround {
@@ -310,6 +326,9 @@ func (s *playScene) buildableCell(col, row int) bool {
 		if job.Col == col && job.Row == row {
 			return false
 		}
+	}
+	if _, littered := pileAt(s.state, col, row); littered {
+		return false
 	}
 	for _, id := range sortedRobotIDs(s.state) {
 		r := s.state.Robots[id]
@@ -331,6 +350,16 @@ func (s *playScene) pressButton(thing Thing, label string) {
 	case buttonBuildRobot:
 		Apply(s.state, QueueRobot{Building: thing.Ref})
 	}
+}
+
+// demolish applies what a card's armed trash can asks for: a site
+// leaves the queue, a building comes down.
+func (s *playScene) demolish(thing Thing) {
+	if thing.Type == TypeSite {
+		Apply(s.state, CancelJob{Col: thing.CellCol, Row: thing.CellRow})
+		return
+	}
+	Apply(s.state, Demolish{Building: thing.Ref})
 }
 
 // regionOnScreen returns where the region's diamond lands on the screen, the
@@ -377,6 +406,7 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	)
 	if s.picked && !s.radial {
 		panel := tooltipLayout(s.state, s.camera, s.pickedCol, s.pickedRow, s.expanded)
+		panel.arm(s.armed)
 		drawTooltip(screen, panel, s.mouse.X, s.mouse.Y)
 	}
 	if s.radial {

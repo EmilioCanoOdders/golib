@@ -1,0 +1,264 @@
+package main
+
+import (
+	"encoding/json"
+	"math"
+	"testing"
+
+	"golib"
+)
+
+// raised puts a finished building on a cell, skipping the robots' work,
+// and returns it.
+func raised(t *testing.T, s *State, kind BuildingKind, col, row int) Building {
+	t.Helper()
+	s.raise(kind, col, row)
+	b, ok := buildingAt(s, col, row)
+	if !ok {
+		t.Fatalf("no %s stands on cell %d, %d", kind, col, row)
+	}
+	return b
+}
+
+// tickUntil runs the simulation until done says so, or the ticks run out.
+func tickUntil(s *State, ticks int, done func() bool) bool {
+	for i := 0; i < ticks; i++ {
+		if done() {
+			return true
+		}
+		Apply(s, Tick{})
+	}
+	return done()
+}
+
+func TestDemolishingLeavesTheCostAsAPileAndTheRobotsHaulItHome(t *testing.T) {
+	s := newGame()
+	col, row := groundNearCore()
+	b := raised(t, s, BuildingCharger, col, row)
+	before := s.Stock
+	Apply(s, Demolish{Building: b.ID})
+	if _, stands := buildingAt(s, col, row); stands {
+		t.Fatal("the charger still stands after its demolition")
+	}
+	if s.Stock != before {
+		t.Errorf("the stores went from %v to %v: a refund is a haul, never a transfer",
+			before, s.Stock)
+	}
+	p, ok := pileAt(s, col, row)
+	if !ok {
+		t.Fatal("the demolition left no pile on its cell")
+	}
+	if p.Lilac != chargerCostLilac || p.Oil != chargerCostOil {
+		t.Errorf("the pile holds %v kg and %v L, want the charger's whole cost",
+			p.Lilac, p.Oil)
+	}
+	if canPlace(s, BuildingSilo, col, row) {
+		t.Error("a cell with a pile on it took a marking")
+	}
+	if !tickUntil(s, 60*600, func() bool { return len(s.Piles) == 0 }) {
+		t.Fatalf("the robots never cleared the pile: %v", s.Piles)
+	}
+	tickUntil(s, 60*60, func() bool {
+		for _, r := range s.Robots {
+			if r.Carry > 0 {
+				return false
+			}
+		}
+		return true
+	})
+	if got := s.Stock.Lilac - before.Lilac; math.Abs(got-chargerCostLilac) > 0.001 {
+		t.Errorf("the stores gained %v kg of lilac, want %v", got, chargerCostLilac)
+	}
+	if got := s.Stock.Oil - before.Oil; math.Abs(got-chargerCostOil) > 0.001 {
+		t.Errorf("the stores gained %v L of oil, want %v", got, chargerCostOil)
+	}
+	if !canPlace(s, BuildingSilo, col, row) {
+		t.Error("the cleared cell still refuses a marking")
+	}
+}
+
+func TestDemolishingAFactoryCancelsItsRobot(t *testing.T) {
+	s := newGame()
+	col, row := groundNearCore()
+	b := raised(t, s, BuildingFactory, col, row)
+	Apply(s, QueueRobot{Building: b.ID})
+	robots := len(s.Robots)
+	Apply(s, Demolish{Building: b.ID})
+	p, _ := pileAt(s, col, row)
+	if p.Lilac != factoryCostLilac+robotCostLilac || p.Oil != robotCostOil {
+		t.Errorf("the pile holds %v kg and %v L, want the factory's and its robot's cost",
+			p.Lilac, p.Oil)
+	}
+	for i := 0; i < factoryRobotTicks+60; i++ {
+		Apply(s, Tick{})
+	}
+	if len(s.Robots) != robots {
+		t.Errorf("%d robots, want %d: the cancelled robot rolled out", len(s.Robots), robots)
+	}
+}
+
+func TestDemolishingASiloSpillsWhatLosesItsRoof(t *testing.T) {
+	s := newGame()
+	col, row := groundNearCore()
+	b := raised(t, s, BuildingSilo, col, row)
+	s.Stock.Oil = coreOilCap + 400
+	Apply(s, Demolish{Building: b.ID})
+	if s.Stock.Oil != coreOilCap {
+		t.Errorf("the stores hold %v L under a roof of %v", s.Stock.Oil, float64(coreOilCap))
+	}
+	p, _ := pileAt(s, col, row)
+	if p.Oil != 400 || p.Lilac != siloCostLilac {
+		t.Errorf("the pile holds %v L and %v kg, want the overflow and the silo's cost",
+			p.Oil, p.Lilac)
+	}
+	// The lilac goes home; the oil has no room and waits on the ground,
+	// with nobody standing around with it in their arms.
+	tickUntil(s, 60*600, func() bool {
+		p, _ := pileAt(s, col, row)
+		return p.Lilac == 0
+	})
+	for i := 0; i < 60*60; i++ {
+		Apply(s, Tick{})
+	}
+	if p, _ := pileAt(s, col, row); p.Oil != 400 {
+		t.Errorf("the pile holds %v L, want the 400 L the stores can't take", p.Oil)
+	}
+	for _, r := range s.Robots {
+		if r.Cargo == TypeOil {
+			t.Errorf("robot %d loaded oil the stores have no room for", r.ID)
+		}
+	}
+	// Room made, the oil comes home too.
+	s.Stock.Oil = 0
+	if !tickUntil(s, 60*1200, func() bool { return len(s.Piles) == 0 }) {
+		t.Errorf("the waiting oil never came home: %v", s.Piles)
+	}
+}
+
+func TestCancellingASiteDropsItsCost(t *testing.T) {
+	s := newGame()
+	seedStock(s)
+	col, row := groundNearCore()
+	Apply(s, MarkBuilding{Kind: BuildingProtector, Col: col, Row: row})
+	Apply(s, CancelJob{Col: col, Row: row})
+	if len(s.Jobs) != 0 {
+		t.Fatalf("%d jobs survive the cancelling", len(s.Jobs))
+	}
+	p, ok := pileAt(s, col, row)
+	if !ok || p.Lilac != protectorCostLilac || p.Oil != protectorCostOil {
+		t.Errorf("the cancelled site left %v, want the protector's cost", p)
+	}
+	Apply(s, CancelJob{Col: col + 1, Row: row})
+	if len(s.Piles) != 1 {
+		t.Errorf("cancelling a cell with no site changed the piles: %v", s.Piles)
+	}
+}
+
+func TestAProtectorStaysWhileItAloneSheltersABuilding(t *testing.T) {
+	s := newGame()
+	col, row := groundInTheFog()
+	protector := raised(t, s, BuildingProtector, col, row)
+	charger := raised(t, s, BuildingCharger, col+2, row)
+	Apply(s, Demolish{Building: protector.ID})
+	if _, stands := s.Buildings[protector.ID]; !stands {
+		t.Fatal("the protector went while it alone sheltered a charger")
+	}
+	Apply(s, Demolish{Building: charger.ID})
+	Apply(s, Demolish{Building: protector.ID})
+	if len(s.Buildings) != 0 {
+		t.Errorf("%d buildings stand, want the outpost gone, protector last",
+			len(s.Buildings))
+	}
+	// A second protector over the same charger frees the first.
+	s = newGame()
+	first := raised(t, s, BuildingProtector, col, row)
+	raised(t, s, BuildingProtector, col+4, row)
+	raised(t, s, BuildingCharger, col+2, row)
+	Apply(s, Demolish{Building: first.ID})
+	if _, stands := s.Buildings[first.ID]; stands {
+		t.Error("a protector stayed though another bubble shelters the charger")
+	}
+}
+
+func TestALoadGoesToTheNearestStoreOfItsKind(t *testing.T) {
+	s := newGame()
+	// A warehouse and a pile side by side, far from the core's pole.
+	col, row := 104+20, 96
+	raised(t, s, BuildingWarehouse, col, row)
+	s.dropPile(col+2, row, 0, 20)
+	var r Robot
+	for _, id := range sortedRobotIDs(s) {
+		r = s.Robots[id]
+		break
+	}
+	r.Carry, r.Cargo = 20, TypeLilac
+	r.X, r.Y = cellCenterUnits(col+2, row)
+	wx, wy := cellCenterUnits(col, row)
+	x, y := storeSpot(s, r)
+	if d := math.Hypot(x-wx, y-wy); d > storeStandoff+0.001 {
+		t.Errorf("lilac next to a warehouse unloads %v u from it, want at its side", d)
+	}
+	r.Cargo = TypeOil
+	px, py := parkSpot(r.ID)
+	if x, y := storeSpot(s, r); x != px || y != py {
+		t.Errorf("oil with no silo unloads at %v, %v, want the core's %v, %v", x, y, px, py)
+	}
+}
+
+func TestPilesSurviveASaveAndOldSavesTakeThem(t *testing.T) {
+	s := newGame()
+	col, row := groundNearCore()
+	s.dropPile(col, row, 40, 120)
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back State
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatal(err)
+	}
+	if p, ok := pileAt(&back, col, row); !ok || p.Oil != 40 || p.Lilac != 120 {
+		t.Errorf("the pile came back as %v", p)
+	}
+	old := newGame()
+	old.Piles = nil // a save from before the piles
+	old.dropPile(col, row, 0, 10)
+	if _, ok := pileAt(old, col, row); !ok {
+		t.Error("a state with no pile table couldn't take a pile")
+	}
+}
+
+func TestCardsCarryTheirTrashCan(t *testing.T) {
+	s := newGame()
+	seedStock(s)
+	camera := golib.NewCamera(screenWidth, screenHeight)
+	col, row := groundNearCore()
+	b := raised(t, s, BuildingSilo, col, row)
+	Apply(s, MarkBuilding{Kind: BuildingCharger, Col: col + 1, Row: row})
+	tcol, trow := cellTile(col, row)
+	panel := tooltipLayout(s, camera, tcol, trow, map[string]bool{})
+	trash := map[ThingType]*tooltipRow{}
+	for i := range panel.rows {
+		if r := &panel.rows[i]; r.trash {
+			trash[r.thing.Type] = r
+		}
+	}
+	if trash[TypeSilo] == nil || trash[TypeSite] == nil {
+		t.Fatalf("the silo's and the site's cards want a trash can each, got %v", trash)
+	}
+	can := trash[TypeSilo]
+	thing, blocked, ok := panel.trashAt(can.bx+can.bw/2, can.by+can.bh/2)
+	if !ok || blocked || thing.Ref != b.ID {
+		t.Errorf("the silo's trash can answered %v, %v, %v", thing, blocked, ok)
+	}
+	panel.arm(thing.ID)
+	if !can.armed || trash[TypeSite].armed {
+		t.Error("arming the silo's card should arm it alone")
+	}
+	core := tooltipLayout(s, camera, coreCol, coreRow, map[string]bool{})
+	for _, r := range core.rows {
+		if r.trash {
+			t.Error("the core's card carries a trash can: it is indestructible both ways")
+		}
+	}
+}

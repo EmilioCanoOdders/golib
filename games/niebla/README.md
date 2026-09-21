@@ -41,8 +41,9 @@ never its corner, whose tile depends on float rounding.
 | `play.go` | The play scene: input to actions plus one `Tick` per update; the camera, the selection, the marking blueprint and the open cards live here, never serialized; Esc saves and returns to the menu, autosave every `autosaveTicks` |
 | `radial.go` | The build menu: the radial of blueprints a click on empty ground opens |
 | `state.go` | The simulation's state: robots (core or built), buildings, stock, what remains of each deposit, build jobs; `newGame`, which deals the starting region |
-| `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`) and `Apply`, the only door into the state |
-| `sim_robots.go` | The robots' rules and tuning: what a robot does each tick — carry home, mind the tank, finish loading, oldest build job, own post, idle by the core |
+| `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`) and `Apply`, the only door into the state |
+| `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, oldest build job, pick up loose items, own post, idle by the core |
+| `sim_piles.go` | Demolition and loose items: `canDemolish`, the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, storage caps, refuel spots, the factories' robot works |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
 | `region.go` | The hand-made 25x25 layout, the isometric `project`, tile helpers, the deposit patches flooded out of the layout; pure Go, no drawing |
@@ -75,8 +76,12 @@ robot-sized form:
   `Apply` mutates the state it is given — one owner, no copies — and is
   total and deterministic, so a seed plus an action log replays a game.
 - The robots carry no plan: `stepRobot` (`sim_robots.go`) derives each
-  tick what one does, in priority order (carry home, mind the tank,
-  finish loading, oldest build job, own post, idle by the core).
+  tick what one does from `robotDay`, a list of tasks in priority order
+  (carry home, mind the tank, finish loading, oldest build job, pick up
+  loose items, own post, idle by the core): the first task that claims
+  the robot owns its tick, and the robot's caption reads the same list
+  (`Robot.taskNow`). A per-robot task list, when it comes, is a filter
+  over it.
   Anything that iterates entities iterates them in sorted ID order.
 - The play scene sends input actions and one `Tick` per update; `Draw`
   only reads. View state — camera, picked tile, marked blueprint, open
@@ -152,8 +157,24 @@ of `sim_buildings.go`.
 
 The stores have a roof: `oilCap`/`lilacCap` is the core's own room plus
 every silo and warehouse. A robot hauling into a full store stands at
-the core trying again each tick (its card says waiting for storage), and
-deposits what fits when a silo opens room.
+the store trying again each tick (its card says waiting for storage), and
+deposits what fits when a silo opens room. The stores are one stock, but
+a load's walk ends at the nearest store of its kind (`storeSpot`): a
+warehouse or the core for lilac, a silo or the core for oil.
+
+Demolition (`sim_piles.go`): `Demolish` takes a building out of the
+state at once and `CancelJob` a site out of the queue. What it was made
+of falls on its cell as one `Pile` (`State.Piles`, by ID): the
+blueprint's cost times `demolishRefund`, the cost of the robot a factory
+was building, and what the stores lose the roof for (`spillOverflow`).
+A pile holds its cell against `canPlace` until its last item leaves,
+which deletes it. A protector can't go while it alone shelters another
+building or a site (`canDemolish`, on `shelteredWithout`). Robots pick
+piles up after build jobs and before their posts: the nearest pile that
+holds something the stores have free room for (`freeRoom` counts what
+is already on its way home, so nobody loads what won't fit), one kind
+per trip, lilac first, loading for `robotLoadTicks`; `Robot.Pile` says
+which pile a loading robot stands at, 0 at its post.
 
 ### The lifecycle, identity and the local database
 
@@ -253,7 +274,13 @@ would leave the screen.
 ### Inspection panel
 
 One geometry, two users: `tooltipLayout` builds the row list, and `Update`
-hit-tests it (`contains`, `cardAt`, `buttonAt`) while `Draw` paints it.
+hit-tests it (`contains`, `trashAt`, `cardAt`, `buttonAt`) while `Draw`
+paints it. A building's or a site's title row ends in a trash can
+(`trashFor`; none on the core, dimmed on a protector that can't go): the
+first press arms it — the scene's `armed` holds the card's ID and
+`tooltip.arm` paints it red under `demolish?` —, the second applies
+`Demolish` or `CancelJob`, and any other click disarms. A site and a
+pile have cards of their own (`siteThing`, `pileThing`).
 Cards start open on their own: a tile's primary thing (deposits, the
 core, buildings — `Primary` in the catalog) and, on a tile with a single
 thing, that thing. A click on a title folds or opens from where the card
@@ -288,7 +315,13 @@ job pending takes no second job, the factory queues and rolls out tanked
 robots, a built robot refuels before it runs dry, the fog digests a dry
 one outside the bubbles, deep fog halves every walker's pace and a
 protector's pocket cancels it, and full stores hold the cargo until a
-silo opens room. `fog_test.go` does the same for the fog slice: the
+silo opens room. `piles_test.go` pins the demolition: the cost falls as
+a pile and comes home whole, a factory's robot is cancelled and refunded,
+a silo spills what loses its roof and the oil waits for room with nobody
+holding it, a cancelled site drops its cost, a protector stays while it
+alone shelters a building, a load goes to the nearest store of its kind,
+piles survive a save (and a save from before them takes one), and the
+cards carry their trash cans. `fog_test.go` does the same for the fog slice: the
 cycles tick, the first swell rises on schedule and drains whole, the
 line presses in and never reaches the bubble, the pushed band drags
 more, a swell burns outside but not inside, and the HUD forecasts.

@@ -117,6 +117,14 @@ var (
 	buttonColor      = golib.Color{R: 34, G: 39, B: 50, A: 255}
 	buttonEdgeColor  = golib.Color{R: 190, G: 226, B: 255, A: 120}
 	buttonHoverColor = golib.Color{R: 52, G: 60, B: 76, A: 255}
+	dangerColor      = golib.Color{R: 238, G: 96, B: 84, A: 255}
+	blockedColor     = golib.Color{R: 78, G: 84, B: 98, A: 255}
+
+	// A site reads in the scaffold's pale steel, and loose items in the
+	// crates' worn wood.
+	siteColor     = golib.Color{R: 176, G: 190, B: 208, A: 255}
+	pileColor     = golib.Color{R: 196, G: 170, B: 128, A: 255}
+	pileDarkColor = golib.Color{R: 124, G: 104, B: 74, A: 255}
 )
 
 // The monitor filters, run over the whole picture after every Draw, in this

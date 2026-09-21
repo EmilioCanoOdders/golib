@@ -114,3 +114,48 @@ func (a QueueRobot) apply(s *State) {
 	b.Work = factoryRobotTicks
 	s.Buildings[b.ID] = b
 }
+
+// Demolish takes a building down at once: its tasks die with it, and its
+// cost, the cost of a robot its factory was building and what the stores
+// lose the roof for fall on its cell as one pile. It does nothing for a
+// building that isn't there, or for a protector that alone shelters
+// another building (see canDemolish).
+type Demolish struct {
+	Building int64 // the building's entity ID
+}
+
+func (a Demolish) apply(s *State) {
+	b, ok := s.Buildings[a.Building]
+	if !ok || !canDemolish(s, b) {
+		return
+	}
+	delete(s.Buildings, b.ID)
+	lilac, oil := buildingCost(b.Kind)
+	lilac *= demolishRefund
+	oil *= demolishRefund
+	if b.Kind == BuildingFactory && b.Work > 0 {
+		lilac += robotCostLilac
+		oil += robotCostOil
+	}
+	s.dropPile(b.Col, b.Row, oil, lilac)
+	s.spillOverflow(b.Col, b.Row)
+}
+
+// CancelJob takes a site out of the queue: the work put into it is gone
+// and its cost falls on its cell as a pile. It does nothing on a cell
+// with no site.
+type CancelJob struct {
+	Col, Row int // the site's cell
+}
+
+func (a CancelJob) apply(s *State) {
+	for i, job := range s.Jobs {
+		if job.Col != a.Col || job.Row != a.Row {
+			continue
+		}
+		s.Jobs = append(s.Jobs[:i:i], s.Jobs[i+1:]...)
+		lilac, oil := buildingCost(job.Kind)
+		s.dropPile(job.Col, job.Row, oil*demolishRefund, lilac*demolishRefund)
+		return
+	}
+}

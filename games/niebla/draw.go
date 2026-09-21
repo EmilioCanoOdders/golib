@@ -31,12 +31,48 @@ func drawRegion(s *State, screen *golib.Screen, zoom float32) {
 	screen.Clear(fogColor)
 	drawGround(s, screen, zoom)
 	drawDeposits(s, screen)
+	drawPiles(s, screen, zoom, true)
 	drawBuildings(s, screen, zoom)
 	drawRobots(s, screen, zoom)
 	drawFogCover(screen, fogLineNow(s))
 	drawFogLine(screen, zoom, s)
+	drawPiles(s, screen, zoom, false)
 	drawJobs(s, screen, zoom)
 	drawBubbles(s, screen, zoom)
+}
+
+// drawPiles paints the loose items, each pile a small heap on its
+// cell's middle: crates for the lilac, a drum for the oil, whatever the
+// amounts. The sheltered ones go under the buildings and the robots,
+// which walk through them; the ones left in the mist are drawn over the
+// fog, like the sites, so the colony never loses sight of its things.
+func drawPiles(s *State, screen *golib.Screen, zoom float32, sheltered bool) {
+	const (
+		heapAcross = 14.0 // u, the whole heap
+		heapHeight = 6.0
+	)
+	for _, id := range sortedPileIDs(s) {
+		p := s.Piles[id]
+		x, y := cellCenterUnits(p.Col, p.Row)
+		if inSafeZone(s, x, y) != sheltered {
+			continue
+		}
+		gx, gy := project(float32(x), float32(y))
+		k := buildingIcon(heapAcross, heapHeight, zoom)
+		crate, drum := 6*k, 4.5*k
+		if p.Lilac >= pileDust {
+			isoBox(screen, gx-crate*unitW*0.45, gy, crate, 5*k,
+				pileColor, mid(pileColor, pileDarkColor), pileDarkColor)
+			isoBox(screen, gx+crate*unitW*0.1, gy+crate*unitH*0.55, crate, 4*k,
+				pileColor, mid(pileColor, pileDarkColor), pileDarkColor)
+			isoBox(screen, gx-crate*unitW*0.45, gy-5*k*unitH, crate*0.5, 1.5*k,
+				lilacLightColor, lilacColor, lilacDarkColor)
+		}
+		if p.Oil >= pileDust {
+			isoBox(screen, gx+drum*unitW*0.75, gy-drum*unitH*0.3, drum, 6*k,
+				oilColor, mid(oilColor, oilDarkColor), oilDarkColor)
+		}
+	}
 }
 
 // mid blends two colors halfway, for a box face between light and shade.

@@ -50,15 +50,56 @@ func sortedRobotIDs(s *State) []int64 {
 	return ids
 }
 
-// stepRobot derives what the robot does this tick, in priority order:
-// first it brings home what it carries, then it minds its tank — a built
-// robot low on oil walks to the nearest charger or the core —, then it
-// finishes loading at its post, then it raises the oldest build job, then
-// it works its own post, and with nothing of all that it idles by the
-// core. A robot arriving home therefore builds first and returns to its
-// own task after, exactly as the design asks.
+// robotTask is one line of a robot's day: its name, whether it claims
+// the robot this tick, and the tick of it.
+type robotTask struct {
+	name   string
+	claims func(r *Robot, s *State) bool
+	step   func(r *Robot, s *State)
+}
+
+// The lines of a robot's day, by name.
+const (
+	taskHaul    = "haul"    // bring home what it carries
+	taskRefuel  = "refuel"  // mind its tank
+	taskLoad    = "load"    // finish loading, at its post or at a pile
+	taskBuild   = "build"   // raise the oldest build job
+	taskCollect = "collect" // pick up loose items
+	taskPost    = "post"    // work its own post
+	taskIdle    = "idle"    // stand by the core
+)
+
+// robotDay is the robot's day, in priority order: the first line that
+// claims the robot owns its tick. It brings home what it carries, minds
+// its tank — a built robot low on oil walks to the nearest charger or
+// the core —, finishes loading, raises the oldest build job, picks up
+// what lies on the ground before digging more, works its own post, and
+// with nothing of all that idles by the core. A robot arriving home
+// therefore builds first and returns to its own task after, exactly as
+// the design asks.
+var robotDay = []robotTask{
+	{taskHaul, (*Robot).hauling, (*Robot).stepHaul},
+	{taskRefuel, (*Robot).refueling, (*Robot).stepRefuel},
+	{taskLoad, (*Robot).loading, (*Robot).stepLoad},
+	{taskBuild, (*Robot).building, (*Robot).stepBuild},
+	{taskCollect, (*Robot).collecting, (*Robot).stepCollect},
+	{taskPost, (*Robot).posted, (*Robot).stepPost},
+	{taskIdle, (*Robot).idling, (*Robot).stepIdle},
+}
+
+// taskNow returns the line of the day that owns the robot this tick.
+func (r *Robot) taskNow(s *State) robotTask {
+	for _, task := range robotDay {
+		if task.claims(r, s) {
+			return task
+		}
+	}
+	return robotDay[len(robotDay)-1]
+}
+
+// stepRobot burns the tank and gives the tick to the robot's task. The
+// robot carries no plan: the task is derived from the state every tick.
 func stepRobot(s *State, r *Robot) {
-	job, hasJob := oldestJob(s)
 	if r.Kind == RobotBuilt && r.Tank > 0 {
 		burn := robotBurnPerSecond / 60
 		if s.Fog.SwellLeft > 0 && !inSafeZone(s, r.X, r.Y) {
@@ -66,39 +107,92 @@ func stepRobot(s *State, r *Robot) {
 		}
 		r.Tank = math.Max(0, r.Tank-burn)
 	}
-	switch {
-	case r.Carry > 0:
-		hx, hy := parkSpot(r.ID)
-		if r.walkTowards(s, hx, hy) {
-			s.deposit(r)
-		}
-	case r.refueling(s):
-		x, y := refuelSpot(s, *r)
-		if r.walkTowards(s, x, y) {
-			s.refill(r)
-		}
-	case r.WorkTicks > 0:
-		r.WorkTicks--
-		if r.WorkTicks == 0 {
-			s.takeLoad(r)
-		}
-	case hasJob:
-		// Builders stand on their cell's edge, spread by ID, so the
-		// rising body doesn't swallow them.
-		cx, cy := cellCenterUnits(job.Col, job.Row)
-		angle := float64(r.ID) * goldenAngle
-		if r.walkTowards(s, cx+math.Cos(angle)*11, cy+math.Sin(angle)*11) {
-			s.workJob()
-		}
-	case r.hasPost() && remainingAt(s, r.PostCol, r.PostRow) > 0:
-		cx, cy := tileCenterUnits(r.PostCol, r.PostRow)
-		if r.walkTowards(s, cx, cy) {
-			r.WorkTicks = robotLoadTicks
-		}
-	default:
-		px, py := parkSpot(r.ID)
-		r.walkTowards(s, px, py)
+	r.taskNow(s).step(r, s)
+}
+
+func (r *Robot) hauling(s *State) bool {
+	return r.Carry > 0
+}
+
+func (r *Robot) stepHaul(s *State) {
+	x, y := storeSpot(s, *r)
+	if r.walkTowards(s, x, y) {
+		s.deposit(r)
 	}
+}
+
+func (r *Robot) stepRefuel(s *State) {
+	x, y := refuelSpot(s, *r)
+	if r.walkTowards(s, x, y) {
+		s.refill(r)
+	}
+}
+
+func (r *Robot) loading(s *State) bool {
+	return r.WorkTicks > 0
+}
+
+func (r *Robot) stepLoad(s *State) {
+	r.WorkTicks--
+	if r.WorkTicks > 0 {
+		return
+	}
+	if r.Pile != 0 {
+		s.takeFromPile(r)
+		return
+	}
+	s.takeLoad(r)
+}
+
+func (r *Robot) building(s *State) bool {
+	_, hasJob := oldestJob(s)
+	return hasJob
+}
+
+// Builders stand on their cell's edge, spread by ID, so the rising body
+// doesn't swallow them.
+func (r *Robot) stepBuild(s *State) {
+	job, _ := oldestJob(s)
+	cx, cy := cellCenterUnits(job.Col, job.Row)
+	angle := float64(r.ID) * goldenAngle
+	if r.walkTowards(s, cx+math.Cos(angle)*11, cy+math.Sin(angle)*11) {
+		s.workJob()
+	}
+}
+
+func (r *Robot) collecting(s *State) bool {
+	_, found := nearestPile(s, *r)
+	return found
+}
+
+func (r *Robot) stepCollect(s *State) {
+	p, _ := nearestPile(s, *r)
+	x, y := cellCenterUnits(p.Col, p.Row)
+	if r.walkTowards(s, x, y) {
+		r.WorkTicks = robotLoadTicks
+		r.Pile = p.ID
+	}
+}
+
+func (r *Robot) posted(s *State) bool {
+	return r.hasPost() && remainingAt(s, r.PostCol, r.PostRow) > 0
+}
+
+func (r *Robot) stepPost(s *State) {
+	cx, cy := tileCenterUnits(r.PostCol, r.PostRow)
+	if r.walkTowards(s, cx, cy) {
+		r.WorkTicks = robotLoadTicks
+		r.Pile = 0
+	}
+}
+
+func (r *Robot) idling(s *State) bool {
+	return true
+}
+
+func (r *Robot) stepIdle(s *State) {
+	px, py := parkSpot(r.ID)
+	r.walkTowards(s, px, py)
 }
 
 // refueling reports whether the tank owns the robot's day: low, it
@@ -197,7 +291,7 @@ func (s *State) takeLoad(r *Robot) {
 
 // deposit empties the robot's arms into the colony's stores, as much of
 // the load as their room takes; a store already full leaves the rest in
-// its arms, and the robot stands at the core trying again every tick.
+// its arms, and the robot stands at the store trying again every tick.
 func (s *State) deposit(r *Robot) {
 	var room float64
 	switch r.Cargo {

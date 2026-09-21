@@ -15,12 +15,13 @@ import (
 // only thing that changes it.
 type State struct {
 	Ticks     int64              // game ticks, 60 to the second
-	NextID    int64              // the ID the next robot or building gets
+	NextID    int64              // the ID the next robot, building or pile gets
 	Robots    map[int64]Robot    // the colony, by ID
 	Buildings map[int64]Building // the colony's structures, by ID
 	Stock     Stock              // what the core's stores hold
 	Drain     map[string]float64 // what remains in each deposit patch, by key
 	Jobs      []Job              // build jobs, oldest first
+	Piles     map[int64]Pile     // loose items on the ground, by ID
 	Fog       Fog                // the region's weather: the cycles and the swell
 }
 
@@ -68,6 +69,7 @@ type Robot struct {
 	WorkTicks int64     // ticks of loading left at its post
 	Carry     float64   // what it carries, in the cargo's SI unit
 	Cargo     ThingType // oil, lilac, or "" while empty
+	Pile      int64     // the pile it is loading from; 0 while loading at its post
 }
 
 // BuildingKind names one of the structures the colony can raise. The
@@ -102,6 +104,17 @@ type Job struct {
 	Left     int64
 }
 
+// Pile is what a demolished building leaves on its cell: a container
+// that stands for every loose item lying there. It has no mass, no
+// health and no capacity, and it leaves the state with its last item
+// (sim_piles.go holds the law).
+type Pile struct {
+	ID       int64
+	Col, Row int     // the cell it lies on
+	Oil      float64 // liters
+	Lilac    float64 // kilograms
+}
+
 // hasPost reports whether the robot was sent to a deposit tile.
 func (r Robot) hasPost() bool {
 	return r.PostCol >= 0
@@ -125,6 +138,7 @@ func newGame() *State {
 		NextID:    1,
 		Robots:    map[int64]Robot{},
 		Buildings: map[int64]Building{},
+		Piles:     map[int64]Pile{},
 		Drain:     map[string]float64{},
 		Stock:     Stock{Oil: startingStockOil, Lilac: startingStockLilac},
 		Fog:       Fog{CycleLeft: fogCycleTicks, NextIn: fogSwellPeriod},
