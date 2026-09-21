@@ -18,13 +18,13 @@ A shot starts on the menu; `Enter@1` presses Play (or click it: `Mouse@5:640,390
 MouseLeft@6`). Inside the region:
 
 ```text
-./golib shot niebla 120 --input "Enter@1 Mouse@5:568,372 MouseLeft@6 Mouse@7:700,386 MouseLeft@8 Mouse@9:678,450 MouseLeft@10"
+./golib shot niebla 120 --input "Enter@1 Mouse@5:568,372 MouseLeft@6 Mouse@9:656,478 MouseLeft@10"
 ```
 
-The clicks pick the safe oil pool at tile (11, 14), expand its card
-and press its send robot button: (568, 372) is the tile's center on
-screen, (700, 386) the card's title row, (678, 450) the button. The frame
-shows the card expanded, offering recall robot. The camera at rest centers
+The clicks pick a cell of the safe oil pool at tile (11, 14), whose card
+opens by itself, and press its send robot button: (568, 372) is the
+tile's center on screen and (656, 478) the button. The frame shows the
+card offering recall robot. The camera at rest centers
 the view on world point (640, 372) — the middle of its bounds — so screen
 and world differ by (0, -12) at rest zoom; click targets in scripted shots
 aim at a tile's center (`projectTile` + half a tile, plus that offset),
@@ -57,7 +57,7 @@ scripted shot:
 | `radial.go` | The build menu: the radial of blueprints a click on empty ground opens |
 | `state.go` | The simulation's state: robots (core or built), buildings, stock, what remains of each deposit, build jobs; `newGame`, which deals the starting region |
 | `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, and the dev tools' `DevHoldSwell` and `DevSpawnRobot`) and `Apply`, the only door into the state |
-| `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, oldest build job, pick up loose items, own post, idle by the core |
+| `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, oldest build job, pick up loose items, own post, rest by the core —, the claim on a section of pipe (`stepLayPipe`) and the idle ranks (`parkSlot`, `idleRank`) |
 | `sim_piles.go` | Demolition and loose items: `canDemolish`, the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, storage caps, refuel spots, the factories' robot works |
 | `sim_oil.go` | Oil's tanks: the core's, the silos' and the chargers'; `oilTotal`, `oilCap`, `payOil`, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
@@ -65,19 +65,19 @@ scripted shot:
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
 | `swell.go` | How a pressing swell looks, by its pressure: waves of shade rolling in to the line and one-pixel static over the mist; a pure picture of the state |
 | `region.go` | The hand-made 25x25 layout, the isometric `project`, tile helpers, the deposit patches flooded out of the layout; pure Go, no drawing |
-| `things.go` | What a tile holds: `Thing` snapshots out of layout plus state (a deposit tile shows its whole patch), `tileAtWorld`, the SI quantities; pure Go, no drawing |
+| `things.go` | What a cell holds, the unit the player picks by: `Thing` snapshots out of layout plus state (a deposit's cell shows its whole patch), `tileAtWorld`, the SI quantities; pure Go, no drawing |
 | `catalog.go` | The entity database: per thing type its name, color, unit and card lines, plus the stable-color fallback |
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
-| `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons; tile highlights |
+| `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons; the cell's outline (`cellDiamond`) |
 | `mites.go` | The fog's wear, for looks only: mites of darkness orbiting whatever stands in the mist, by its volume, trailing walkers and closing in on what stands still; view, never state |
 | `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, the blobs of oil by the state's tick) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
 | `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots —; view only, acting through the `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
-| `draw.go` | The region painter: ground, the core's monolith, buildings, robots, fog, bubbles, build-site wireframes, the marking ghost |
+| `draw.go` | The region painter: ground, the core's monolith, buildings, robots, fog, bubbles, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `markup_test.go` | Markup parser and tooltip layout/button tests |
 | `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
-| `pipes_test.go` | Pumps and pipes driven directly: a pump stands on a pool and a pool takes one, a pipe is paid by the section and laid by the robots, a laid pipe carries the pool into its tank and stops at a full one or a dry pool, oil has a place and pipes move it between tanks (shares, ports, payments, a demolished tank's oil), robots carry oil to a tank with room and refill where there is oil, what `LayPipe` refuses, a pipe leaves with its ends and its cost falls as a pile, the curve passes through its bends, pipes survive a save, the pool's cards carry the pump and its pipe |
+| `pipes_test.go` | Pumps and pipes driven directly: a pump stands on a pool and a pool takes one, a pipe is paid by the section and laid by the robots, who claim a section each - the nearest free one - and stand by it until it is laid, a half-laid pipe from an old save keeps its work, a laid pipe carries the pool into its tank and stops at a full one or a dry pool, oil has a place and pipes move it between tanks (shares, ports, payments, a demolished tank's oil), robots carry oil to a tank with room and refill where there is oil, what `LayPipe` refuses, a pipe leaves with its ends and its cost falls as a pile, the curve passes through its bends, pipes survive a save, the pool's cards carry the pump and its pipe |
 | `mites_test.go` | The mites driven with no window: counted by volume and only in the fog, tight on what stands still and trailing a walker, fading over what is gone, the falloff's layers |
 | `dev_test.go` | The dev actions: a held swell stays up and doesn't count, a placed robot is built, full and free, `unitsAtWorld` undoes `project` |
 | `fog_test.go` | The fog driven directly: cycles, the first swell on schedule, the pressed line, the bubble's margin, the pushed band's drag, the swell's burn, the HUD's forecast |
@@ -108,7 +108,7 @@ robot-sized form:
   over it.
   Anything that iterates entities iterates them in sorted ID order.
 - The play scene sends input actions and one `Tick` per update; `Draw`
-  only reads. View state — camera, picked tile, marked blueprint, open
+  only reads. View state — camera, picked cell, marked blueprint, open
   cards, pointer — lives in the scene and never serializes.
 - The catalog and the markup palette are view-side metadata, not state:
   package-level tables, like a schema. Card lines read the state, so
@@ -170,7 +170,7 @@ instead of ground: on a pool with oil left and no pump yet
 (`patchPumped`), inside a bubble. It isn't in the radial menu - a click on
 a pool inspects it - so the pool's card carries `build pump`, which marks
 it on `pumpCell`, the patch's middle; `sameGround` makes `thingsAt` show
-a pool's pump and site on every tile of the pool.
+a pool's pump and site on every cell of the pool.
 
 A **pipe** (`State.Pipes`, by ID) carries oil one way, `From` a pump or
 a tank `To` a tank, through the player's `Bends`, in units. `canJoin` is
@@ -181,10 +181,19 @@ ends and the bends with `pipePath` - a centripetal Catmull-Rom spline
 cut into `pipeSpanSamples` pieces a span, with a `sagPoint` when there
 are no bends - so the sim (length, sections, where the robots stand) and
 the view (the drawing, the blobs) read the same line. `Sections` is what
-was paid and `Left` the robot work owed: `building` claims a robot for
-the oldest unlaid pipe once no site is left, and `stepLayPipe` stands it
-at the pipe's head (`pipeLaidPart` along the curve), working a tick per
-arrival. `stepPipes` runs after the factories: every `pipeFlowing` pipe
+was paid and `Left` the robot work owed, which goes in a section at a
+time, by many hands: once no site is left, `stepLayPipe` has a robot
+claim a section (`freeSection`: of the oldest unlaid pipe's sections
+nobody else holds, the nearest), walk to its middle (`sectionSpot`) and
+stand by it for its `pipeSectionWorkTicks`, then claim another. The
+claim is state - `Robot.Pipe`, `Robot.Section` - because the other
+robots read it; it is dropped the tick the robot's task stops being the
+build line, and it dies with the robot. `Pipe.SectionLeft` holds the
+work left by section, and is nil before the first tick of work and once
+the pipe is laid, when `Left` alone reads as work put in from the source
+out (`sectionLeft`), which is how a save from before the sections
+loads. `building` claims a robot only while it holds a section or one is
+free, so the robots a pipe has no section for go on with their day. `stepPipes` runs after the factories: every `pipeFlowing` pipe
 (laid, `pipeSupply` in its source, `tankRoom` at its end) moves up to
 `pipeLitersPerSecond`, the pipes of one source sharing what it gives -
 for a pump, the `pumpLitersPerSecond` it draws from `State.Drain`.
@@ -248,7 +257,17 @@ every silo and warehouse. A robot hauling into a full store stands at
 the store trying again each tick (its card says waiting for storage), and
 deposits what fits when a silo opens room. The stores are one stock, but
 a load's walk ends at the nearest store of its kind (`storeSpot`): a
-warehouse or the core for lilac, a silo or the core for oil.
+warehouse or the core for lilac, a silo, a charger or the core for oil.
+The core is a store like the others: a robot unloads `storeStandoff`
+from its middle, never out at a parking spot.
+
+Idle robots rest by the core, in ranks before the monolith's broad face
+(`parkSlot`: `parkSlots` 10 places, `parkRankSize` 5 to a rank,
+`parkSpacing` 7 u). A robot's place is its `idleRank`, how many idle
+robots come before it by ID, so the ranks close up when one leaves; past
+ten the rest stand inside the first ones and the view writes how many
+there are (`drawIdleCount`, also while the view is so far out that the
+ranks are one dot).
 
 Demolition (`sim_piles.go`): `Demolish` takes a building out of the
 state at once and `CancelJob` a site out of the queue. What it was made
@@ -350,14 +369,23 @@ whole patch — one robot per patch, one card per patch, one big scar when
 it runs dry. `draw.go` paints each patch as one continuous body that
 shrinks with what remains of it.
 
-### Tile picking
+### Cell picking
+
+The cell is the unit the player picks and counts by: the ground keeps
+its tiles on the screen, but a click selects the cell under it
+(`cellAtWorld`), the outline is the cell's (`cellDiamond`) and the panel
+lists what stands on that cell alone (`thingsAt`) - its building, site or
+pile and the robots on it -, so a silo's panel never shows the charger
+beside it. What is bigger than a cell shows whole from any cell of it: a
+deposit patch, with its pump, and the core. Deposits stay tile-shaped, so
+the scene hands their actions the cell's tile (`cellTile`).
 
 `tileAtWorld` undoes `project`: a tile's diamond on the screen is the square
 `[col, col+1) x [row, row+1)` in tiles, so the inverse is exact, and a point
-maps to its tile with two `math.Floor` calls. The inspection panel anchors
-on the tile's projected corner through `camera.ToScreen`, so it follows the
-tile while the view pans or zooms, and flips to the tile's left when it
-would leave the screen.
+maps to its tile with two `math.Floor` calls; `cellAtWorld` does the same
+onto cells. The inspection panel anchors on the cell's projected middle
+through `camera.ToScreen`, so it follows the cell while the view pans or
+zooms, and flips to the cell's left when it would leave the screen.
 
 ### Inspection panel
 
@@ -369,12 +397,12 @@ first press arms it — the scene's `armed` holds the card's ID and
 `tooltip.arm` paints it red under `demolish?` —, the second applies
 `Demolish` or `CancelJob`, and any other click disarms. A site and a
 pile have cards of their own (`siteThing`, `pileThing`).
-Cards start open on their own: a tile's primary thing (deposits, the
-core, buildings — `Primary` in the catalog) and, on a tile with a single
+Cards start open on their own: a cell's primary thing (deposits, the
+core, buildings — `Primary` in the catalog) and, on a cell with a single
 thing, that thing. A click on a title folds or opens from where the card
 stands (`cardOpen` gives the default, the scene's `expanded` map stores
-the click). Clicking a tile selects it — unless the cell under the
-pointer is free buildable ground, which opens the build menu instead —
+the click). Clicking a cell selects it — unless it is free buildable
+ground, which opens the build menu instead —
 an expanded deposit card carries a send robot / recall robot button, a
 factory card a build robot button; the panel wins over what sits under
 it, so its buttons work even where it covers buildable ground; a right
@@ -388,11 +416,12 @@ tile depends on float rounding.
 ## Testing
 
 `region_test.go` pins the layout's placement rules, the deposit patches
-(shape and spread), the projection's round trip, the things a tile holds,
+(shape and spread), the projection's round trip, the things a cell holds,
 the SI formatter and the catalog's stability. `markup_test.go` covers the
 parser (nesting, unknown tags, unclosed color), the tooltip layout's rows
 and hit testing, and the cards' robot buttons. `world_test.go` drives the
-simulation with no window: the starting robots, a haul's conservation
+simulation with no window: the starting robots, the idle ranks by the
+core and how they close up, a haul's conservation
 (store + patch remaining = patch full), the patch law (one robot per
 vein, sends on its other tiles change nothing), who takes a post,
 build-job priority, recall, dry patches, replay determinism and the JSON
@@ -408,6 +437,7 @@ a pile and comes home whole, a factory's robot is cancelled and refunded,
 a silo spills what loses its roof and the oil waits for room with nobody
 holding it, a cancelled site drops its cost, a protector stays while it
 alone shelters a building, a load goes to the nearest store of its kind,
+the core one among them, a cell's panel leaves out the cell beside it,
 piles survive a save (and a save from before them takes one), and the
 cards carry their trash cans. `fog_test.go` does the same for the fog slice: the
 cycles tick, the first swell rises on schedule and drains whole, the

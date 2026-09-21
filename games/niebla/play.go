@@ -54,8 +54,8 @@ type playScene struct {
 	savedTicks int64 // ticks since the base last saved itself
 	saveFailed bool  // the last autosave couldn't be written
 
-	picked       bool // a tile is selected and shows its panel
-	pickedCol    int  // the selected tile
+	picked       bool // a cell is selected and shows its panel
+	pickedCol    int  // the selected cell
 	pickedRow    int
 	expanded     map[string]bool // which cards stand open, by thing ID
 	armed        string          // the card whose trash can was pressed once, by thing ID
@@ -63,12 +63,9 @@ type playScene struct {
 	radialCol    int             // the cell the menu opened on
 	radialRow    int
 	laying       pipeLaying // the pipe the pointer is drawing, if any
-	hovering     bool       // the pointer is over the region
-	hoverCol     int        // the tile under the pointer
-	hoverRow     int
-	hoverCellCol int  // the cell under the pointer, the cursor
-	hoverCellRow int  //
-	hoverCell    bool // the pointer is over a cell
+	hoverCellCol int        // the cell under the pointer, the cursor
+	hoverCellRow int        //
+	hoverCell    bool       // the pointer is over a cell
 	rightWasDown bool
 	rightFrom    golib.Vector2 // where the right button went down
 }
@@ -225,7 +222,7 @@ func (s *playScene) dragCamera(input *golib.Input) {
 	s.dragFrom = golib.Vector2{X: mx, Y: my}
 }
 
-// updateInspection picks the tile under the pointer with the left button,
+// updateInspection picks the cell under the pointer with the left button,
 // cancels with a right click that never became a drag, expands or folds
 // a card when a click lands on its title, and acts when a click lands on
 // a card's button. A click on empty ground opens the build menu instead,
@@ -237,9 +234,6 @@ func (s *playScene) dragCamera(input *golib.Input) {
 func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 	mx, my := input.MousePosition()
 	world := s.camera.ToWorld(mx, my)
-	col, row, inside := tileAtWorld(world.X, world.Y)
-	s.hovering = inside
-	s.hoverCol, s.hoverRow = col, row
 	// The cursor is the cell, the grid's last subdivision, whatever the
 	// scene is doing with it.
 	if cc, cr, inCell := cellAtWorld(float64(world.X), float64(world.Y)); inCell {
@@ -308,8 +302,8 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 			s.radialCol, s.radialRow = s.hoverCellCol, s.hoverCellRow
 			s.picked = false
 		} else {
-			s.picked = inside
-			s.pickedCol, s.pickedRow = col, row
+			s.picked = s.hoverCell
+			s.pickedCol, s.pickedRow = s.hoverCellCol, s.hoverCellRow
 		}
 	}
 }
@@ -358,18 +352,19 @@ func (s *playScene) buildableCell(col, row int) bool {
 }
 
 // pressButton applies the action a card's button asks for on the picked
-// tile.
+// cell. Deposits are tiles, so their actions take the cell's tile.
 func (s *playScene) pressButton(row tooltipRow) {
 	thing := row.thing
+	tcol, trow := cellTile(s.pickedCol, s.pickedRow)
 	switch row.button {
 	case buttonSend:
-		Apply(s.state, SendRobot{Col: s.pickedCol, Row: s.pickedRow})
+		Apply(s.state, SendRobot{Col: tcol, Row: trow})
 	case buttonRecall:
-		Apply(s.state, RecallRobot{Col: s.pickedCol, Row: s.pickedRow})
+		Apply(s.state, RecallRobot{Col: tcol, Row: trow})
 	case buttonBuildRobot:
 		Apply(s.state, QueueRobot{Building: thing.Ref})
 	case buttonBuildPump:
-		if d, ok := depositAt(s.pickedCol, s.pickedRow); ok {
+		if d, ok := depositAt(tcol, trow); ok {
 			col, row := pumpCell(d)
 			Apply(s.state, MarkBuilding{Kind: BuildingPump, Col: col, Row: row})
 		}
@@ -415,28 +410,24 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	// subdivision, about four robots across. Far out it lifts to a
 	// readable size on the screen.
 	if s.hoverCell {
-		x, y := cellCenterUnits(s.hoverCellCol, s.hoverCellRow)
-		gx, gy := project(float32(x), float32(y))
-		scale := float32(buildingCell) / unitsPerTile
-		if min := 12 / s.zoom / tileW; scale < min {
-			scale = min
-		}
-		cursor := scaledDiamond(gx, gy, scale)
+		cursor, gx, gy := cellDiamond(s.hoverCellCol, s.hoverCellRow, s.zoom)
 		screen.DrawPolygonOutline(cursor, 2/s.zoom, hoveredTileColor)
 		screen.DrawCircle(gx, gy, 2.5/s.zoom, hoveredTileColor)
 	}
 	if s.picked {
-		drawTileHighlight(screen, s.pickedCol, s.pickedRow, 2/s.zoom, pickedTileColor)
+		outline, _, _ := cellDiamond(s.pickedCol, s.pickedRow, s.zoom)
+		screen.DrawPolygonOutline(outline, 2/s.zoom, pickedTileColor)
 	}
 	if s.laying.on {
 		s.drawLaying(screen)
 	}
 	screen.SetCamera(nil)
 	drawSwellStatic(s.state, screen, s.camera)
+	drawIdleCount(s.state, screen, s.camera)
 	screen.DrawText("niebla", 16, 12, 24, textColor, uiText)
 	drawMarkup(screen, s.hudLine(), 16, 44, 15, textColor)
 	s.dev.draw(s, screen)
-	help := "click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a tile, Esc saves and returns to the menu, F11 fullscreen, F2 filter"
+	help := "click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a cell, Esc saves and returns to the menu, F11 fullscreen, F2 filter"
 	if s.laying.on {
 		help = "laying a pipe: click the ground to bend it, click a ringed tank (silo, charger, core) to connect it, click the last node for its menu, right-click takes the last bend back"
 	}

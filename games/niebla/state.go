@@ -61,7 +61,8 @@ const (
 
 // Robot is one worker. It carries no plan: every tick the rules (see
 // sim_robots.go) derive what it does from the state, so a save reproduces
-// its future. Its post is one tile of a deposit patch, and working it
+// its future. What it claims - a section of pipe to lay - is state too,
+// since the other robots read it. Its post is one tile of a deposit patch, and working it
 // drains the whole patch.
 type Robot struct {
 	ID        int64
@@ -74,6 +75,8 @@ type Robot struct {
 	Carry     float64   // what it carries, in the cargo's SI unit
 	Cargo     ThingType // oil, lilac, or "" while empty
 	Pile      int64     // the pile it is loading from; 0 while loading at its post
+	Pipe      int64     // the pipe whose section it claimed to lay; 0 with no claim
+	Section   int64     // the claimed section, from the pipe's source out
 }
 
 // BuildingKind names one of the structures the colony can raise. The
@@ -154,7 +157,7 @@ func newGame() *State {
 		s.Drain[depositKey(d)] = depositFull(d)
 	}
 	for i := 0; i < startingRobots; i++ {
-		x, y := parkSpot(s.NextID)
+		x, y := parkSlot(i)
 		s.spawnRobot(RobotCore, x, y)
 	}
 	return s
@@ -193,8 +196,8 @@ func tileCenterUnits(col, row int) (x, y float64) {
 		float64(row)*unitsPerTile + unitsPerTile*0.5
 }
 
-// robotTile returns the tile a robot stands on, from its position.
-func robotTile(r Robot) (col, row int) {
-	return int(math.Floor(r.X / unitsPerTile)),
-		int(math.Floor(r.Y / unitsPerTile))
+// robotCell returns the cell a robot stands on, from its position.
+func robotCell(r Robot) (col, row int) {
+	return int(math.Floor(r.X / buildingCell)),
+		int(math.Floor(r.Y / buildingCell))
 }

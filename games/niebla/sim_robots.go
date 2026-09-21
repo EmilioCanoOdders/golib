@@ -19,8 +19,15 @@ const (
 	robotCarryOil   = 30.0 // liters per trip
 	robotCarryLilac = 20.0 // kilograms per trip
 
-	robotParkRadius = 150.0             // units, the idle ring around the core: past the core tile, so the far view shows the dots spread around it
-	goldenAngle     = 2.399963229728653 // spreads the parking spots
+	// Idle robots rest by the core, lined up in ranks before its broad
+	// face. Past parkSlots of them the ranks are full: the rest stand
+	// inside the first ones, and the view writes how many there are.
+	parkSlots    = 10   // robots the ranks show
+	parkRankSize = 5    // robots to a rank
+	parkSpacing  = 7.0  // u between two parked robots: one, and a bit
+	parkFromCore = 10.0 // u from the core's middle to the first rank
+
+	goldenAngle = 2.399963229728653 // spreads robots around what they work at
 )
 
 // stepSim moves the world one tick forward: the weather, the
@@ -64,7 +71,7 @@ const (
 	taskHaul    = "haul"    // bring home what it carries
 	taskRefuel  = "refuel"  // mind its tank
 	taskLoad    = "load"    // finish loading, at its post or at a pile
-	taskBuild   = "build"   // raise the oldest build job, then lay pipe
+	taskBuild   = "build"   // raise the oldest build job, then lay its section of pipe
 	taskCollect = "collect" // pick up loose items
 	taskPost    = "post"    // work its own post
 	taskIdle    = "idle"    // stand by the core
@@ -78,14 +85,20 @@ const (
 // with nothing of all that idles by the core. A robot arriving home
 // therefore builds first and returns to its own task after, exactly as
 // the design asks.
-var robotDay = []robotTask{
-	{taskHaul, (*Robot).hauling, (*Robot).stepHaul},
-	{taskRefuel, (*Robot).refueling, (*Robot).stepRefuel},
-	{taskLoad, (*Robot).loading, (*Robot).stepLoad},
-	{taskBuild, (*Robot).building, (*Robot).stepBuild},
-	{taskCollect, (*Robot).collecting, (*Robot).stepCollect},
-	{taskPost, (*Robot).posted, (*Robot).stepPost},
-	{taskIdle, (*Robot).idling, (*Robot).stepIdle},
+var robotDay []robotTask
+
+// Idling asks what the other robots are at, which reads the day back:
+// filling it here keeps Go from seeing an initialization cycle.
+func init() {
+	robotDay = []robotTask{
+		{taskHaul, (*Robot).hauling, (*Robot).stepHaul},
+		{taskRefuel, (*Robot).refueling, (*Robot).stepRefuel},
+		{taskLoad, (*Robot).loading, (*Robot).stepLoad},
+		{taskBuild, (*Robot).building, (*Robot).stepBuild},
+		{taskCollect, (*Robot).collecting, (*Robot).stepCollect},
+		{taskPost, (*Robot).posted, (*Robot).stepPost},
+		{taskIdle, (*Robot).idling, (*Robot).stepIdle},
+	}
 }
 
 // taskNow returns the line of the day that owns the robot this tick.
@@ -100,6 +113,8 @@ func (r *Robot) taskNow(s *State) robotTask {
 
 // stepRobot burns the tank and gives the tick to the robot's task. The
 // robot carries no plan: the task is derived from the state every tick.
+// The one thing it remembers is the section of pipe it claimed, so the
+// others take another, and only while it builds.
 func stepRobot(s *State, r *Robot) {
 	if r.Kind == RobotBuilt && r.Tank > 0 {
 		burn := robotBurnPerSecond / 60
@@ -109,7 +124,11 @@ func stepRobot(s *State, r *Robot) {
 		}
 		r.Tank = math.Max(0, r.Tank-burn)
 	}
-	r.taskNow(s).step(r, s)
+	task := r.taskNow(s)
+	if task.name != taskBuild {
+		r.Pipe, r.Section = 0, 0
+	}
+	task.step(r, s)
 }
 
 func (r *Robot) hauling(s *State) bool {
@@ -150,8 +169,11 @@ func (r *Robot) building(s *State) bool {
 	if _, hasJob := oldestJob(s); hasJob {
 		return true
 	}
-	_, laying := unlaidPipe(s)
-	return laying
+	if claimStands(s, *r) {
+		return true
+	}
+	_, _, free := freeSection(s, *r)
+	return free
 }
 
 // Builders stand on their cell's edge, spread by ID, so the rising body
@@ -162,6 +184,7 @@ func (r *Robot) stepBuild(s *State) {
 		r.stepLayPipe(s)
 		return
 	}
+	r.Pipe, r.Section = 0, 0
 	cx, cy := cellCenterUnits(job.Col, job.Row)
 	angle := float64(r.ID) * goldenAngle
 	if r.walkTowards(s, cx+math.Cos(angle)*11, cy+math.Sin(angle)*11) {
@@ -169,20 +192,33 @@ func (r *Robot) stepBuild(s *State) {
 	}
 }
 
-// stepLayPipe works on the oldest unlaid pipe, at its head: the pipe
-// grows from its pump out, and whoever lays it walks along with it.
+// stepLayPipe lays one section of pipe: the robot claims the next one
+// nobody has, walks to it and stands by it until it is laid, then claims
+// another. The claim is in the state, so every robot takes its own
+// section and a pipe is laid by as many hands as there are.
 func (r *Robot) stepLayPipe(s *State) {
-	p, _ := unlaidPipe(s)
-	path, ok := pipeSpine(s, p)
+	if !claimStands(s, *r) {
+		pipe, section, free := freeSection(s, *r)
+		if !free {
+			r.Pipe, r.Section = 0, 0
+			return
+		}
+		r.Pipe, r.Section = pipe, section
+	}
+	path, ok := pipeSpine(s, s.Pipes[r.Pipe])
 	if !ok {
+		r.Pipe, r.Section = 0, 0
 		return
 	}
-	head := pathPointAt(path, pathLength(path)*pipeLaidPart(p))
+	spot := sectionSpot(path, r.Section)
 	angle := float64(r.ID) * goldenAngle
-	x := head.X + math.Cos(angle)*pipeLayStandoff
-	y := head.Y + math.Sin(angle)*pipeLayStandoff
+	x := spot.X + math.Cos(angle)*pipeLayStandoff
+	y := spot.Y + math.Sin(angle)*pipeLayStandoff
 	if r.walkTowards(s, x, y) {
-		s.workPipe(p.ID)
+		s.workSection(r.Pipe, r.Section)
+		if !claimStands(s, *r) {
+			r.Pipe, r.Section = 0, 0
+		}
 	}
 }
 
@@ -217,8 +253,36 @@ func (r *Robot) idling(s *State) bool {
 }
 
 func (r *Robot) stepIdle(s *State) {
-	px, py := parkSpot(r.ID)
+	px, py := parkSlot(idleRank(s, *r))
 	r.walkTowards(s, px, py)
+}
+
+// idleRank returns how many idle robots come before this one, by ID:
+// its place in the ranks. When one leaves, the ranks close up.
+func idleRank(s *State, r Robot) int {
+	rank := 0
+	for _, id := range sortedRobotIDs(s) {
+		if id >= r.ID {
+			break
+		}
+		other := s.Robots[id]
+		if other.taskNow(s).name == taskIdle {
+			rank++
+		}
+	}
+	return rank
+}
+
+// idleRobots returns how many robots have nothing to do.
+func idleRobots(s *State) int {
+	idle := 0
+	for _, id := range sortedRobotIDs(s) {
+		r := s.Robots[id]
+		if r.taskNow(s).name == taskIdle {
+			idle++
+		}
+	}
+	return idle
 }
 
 // refueling reports whether the tank owns the robot's day: low, it
@@ -359,13 +423,22 @@ func (s *State) workJob() {
 	}
 }
 
-// parkSpot returns where a robot idles: a spot on a small ring around
-// the core, spread by the golden angle, so idle robots never stack.
-func parkSpot(id int64) (x, y float64) {
+// parkSlot returns where the idle robot of a rank rests: in ranks of
+// parkRankSize before the core's broad face, which looks down the
+// world's x axis, centered on it. Past parkSlots the ranks start over.
+func parkSlot(rank int) (x, y float64) {
 	cx, cy := tileCenterUnits(coreCol, coreRow)
-	angle := float64(id) * goldenAngle
-	return cx + math.Cos(angle)*robotParkRadius,
-		cy + math.Sin(angle)*robotParkRadius
+	slot := rank % parkSlots
+	line, place := slot/parkRankSize, slot%parkRankSize
+	return cx + parkFromCore + float64(line)*parkSpacing,
+		cy + (float64(place)-float64(parkRankSize-1)/2)*parkSpacing
+}
+
+// parkCenter returns the middle of the ranks.
+func parkCenter() (x, y float64) {
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	lines := float64(parkSlots/parkRankSize - 1)
+	return cx + parkFromCore + lines*parkSpacing/2, cy
 }
 
 // oldestJob returns the build job that has waited longest.

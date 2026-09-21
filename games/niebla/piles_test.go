@@ -201,9 +201,10 @@ func TestALoadGoesToTheNearestStoreOfItsKind(t *testing.T) {
 		t.Errorf("lilac next to a warehouse unloads %v u from it, want at its side", d)
 	}
 	r.Cargo = TypeOil
-	px, py := parkSpot(r.ID)
-	if x, y := storeSpot(s, r); x != px || y != py {
-		t.Errorf("oil with no silo unloads at %v, %v, want the core's %v, %v", x, y, px, py)
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	x, y = storeSpot(s, r)
+	if d := math.Hypot(x-cx, y-cy); math.Abs(d-storeStandoff) > 0.001 {
+		t.Errorf("oil with no silo unloads %v u from the core, want at its side", d)
 	}
 }
 
@@ -237,30 +238,66 @@ func TestCardsCarryTheirTrashCan(t *testing.T) {
 	col, row := groundNearCore()
 	b := raised(t, s, BuildingSilo, col, row)
 	Apply(s, MarkBuilding{Kind: BuildingCharger, Col: col + 1, Row: row})
-	tcol, trow := cellTile(col, row)
-	panel := tooltipLayout(s, camera, tcol, trow, map[string]bool{})
-	trash := map[ThingType]*tooltipRow{}
-	for i := range panel.rows {
-		if r := &panel.rows[i]; r.trash {
-			trash[r.thing.Type] = r
+	// The cell is the unit: the silo's panel is the silo's alone, and the
+	// site beside it has its own.
+	panel := tooltipLayout(s, camera, col, row, map[string]bool{})
+	site := tooltipLayout(s, camera, col+1, row, map[string]bool{})
+	trashOf := func(p *tooltip, kind ThingType) *tooltipRow {
+		for i := range p.rows {
+			if r := &p.rows[i]; r.trash && r.thing.Type == kind {
+				return r
+			}
 		}
+		return nil
 	}
-	if trash[TypeSilo] == nil || trash[TypeSite] == nil {
-		t.Fatalf("the silo's and the site's cards want a trash can each, got %v", trash)
+	can, siteCan := trashOf(&panel, TypeSilo), trashOf(&site, TypeSite)
+	if can == nil || siteCan == nil {
+		t.Fatalf("the silo's and the site's cards want a trash can each, got %v and %v",
+			can, siteCan)
 	}
-	can := trash[TypeSilo]
+	if trashOf(&panel, TypeSite) != nil {
+		t.Error("the silo's cell shows the site on the cell beside it")
+	}
 	thing, blocked, ok := panel.trashAt(can.bx+can.bw/2, can.by+can.bh/2)
 	if !ok || blocked || thing.Ref != b.ID {
 		t.Errorf("the silo's trash can answered %v, %v, %v", thing, blocked, ok)
 	}
 	panel.arm(thing.ID)
-	if !can.armed || trash[TypeSite].armed {
+	site.arm(thing.ID)
+	if !can.armed || siteCan.armed {
 		t.Error("arming the silo's card should arm it alone")
 	}
-	core := tooltipLayout(s, camera, coreCol, coreRow, map[string]bool{})
+	coreCellCol, coreCellRow := tileCell(coreCol, coreRow)
+	core := tooltipLayout(s, camera, coreCellCol, coreCellRow, map[string]bool{})
 	for _, r := range core.rows {
 		if r.trash {
 			t.Error("the core's card carries a trash can: it is indestructible both ways")
+		}
+	}
+}
+
+func TestALoadEndsItsWalkAtTheNearestStore(t *testing.T) {
+	s := newGame()
+	col, row := groundNearCore()
+	warehouse := raised(t, s, BuildingWarehouse, col+8, row)
+	silo := raised(t, s, BuildingSilo, col+8, row+2)
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	near := func(x, y, wantX, wantY float64) bool {
+		return math.Abs(math.Hypot(x-wantX, y-wantY)-storeStandoff) < 0.001
+	}
+	for _, cargo := range []ThingType{TypeLilac, TypeOil} {
+		store := warehouse
+		if cargo == TypeOil {
+			store = silo
+		}
+		sx, sy := cellCenterUnits(store.Col, store.Row)
+		r := Robot{ID: 7, Carry: 10, Cargo: cargo, X: cx + 5, Y: cy}
+		if x, y := storeSpot(s, r); !near(x, y, cx, cy) {
+			t.Errorf("%s by the core unloads at %v, %v, want the core's side", cargo, x, y)
+		}
+		r.X, r.Y = sx+5, sy
+		if x, y := storeSpot(s, r); !near(x, y, sx, sy) {
+			t.Errorf("%s by its %s unloads at %v, %v, want its side", cargo, store.Kind, x, y)
 		}
 	}
 }

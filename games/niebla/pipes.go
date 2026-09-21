@@ -71,7 +71,7 @@ func projectPoint(p PipePoint) (x, y float32) {
 // loses sight of its things. A pipe runs above the ground: its shadow
 // lies on the ground under it, where the mist doesn't hide it, posts
 // hold it up a section apart, and the pipe itself is drawn lifted. The
-// part still to be laid shows as a faint line, over the fog too. Oil
+// sections still to be laid show as a faint line, over the fog too. Oil
 // runs down a pipe that carries it as blobs, placed by the state's tick
 // and nothing else.
 func drawPipes(s *State, screen *golib.Screen, zoom float32, sheltered bool) {
@@ -87,7 +87,11 @@ func drawPipes(s *State, screen *golib.Screen, zoom float32, sheltered bool) {
 			continue
 		}
 		length := pathLength(path)
-		laid := length * pipeLaidPart(p)
+		laidAt := func(along float64) bool {
+			section := int64(math.Floor(along / pipeSectionMeters))
+			inside := section >= 0 && section < p.Sections
+			return inside && sectionLeft(p, section) == 0
+		}
 		var solid, ghost []pipeSegment
 		at := 0.0
 		for i := 1; i < len(path); i++ {
@@ -97,7 +101,7 @@ func drawPipes(s *State, screen *golib.Screen, zoom float32, sheltered bool) {
 			var seg pipeSegment
 			seg.ax, seg.ay = projectPoint(a)
 			seg.bx, seg.by = projectPoint(b)
-			if start >= laid {
+			if !laidAt((start + at) / 2) {
 				ghost = append(ghost, seg)
 			} else if inPass(lerpPoint(a, b, 0.5)) {
 				solid = append(solid, seg)
@@ -112,9 +116,10 @@ func drawPipes(s *State, screen *golib.Screen, zoom float32, sheltered bool) {
 			}
 		}
 		stride := math.Ceil(float64(pipePostPx/zoom) / float64(pipeSectionMeters*unitW))
-		for along := 0.0; along <= laid; along += pipeSectionMeters * math.Max(1, stride) {
+		for along := 0.0; along <= length; along += pipeSectionMeters * math.Max(1, stride) {
 			post := pathPointAt(path, along)
-			if !inPass(post) {
+			standing := laidAt(along) || laidAt(along-pipeSectionMeters/2)
+			if !standing || !inPass(post) {
 				continue
 			}
 			x, y := projectPoint(post)

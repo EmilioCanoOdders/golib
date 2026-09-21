@@ -269,7 +269,7 @@ func TestFullStoresHoldTheCargoUntilASiloOpens(t *testing.T) {
 	s.Stock.Oil = oilCap(s)
 	id := s.NextID
 	s.NextID++
-	x, y := parkSpot(id)
+	x, y := parkSlot(0)
 	s.Robots[id] = Robot{
 		ID: id, Kind: RobotCore, X: x, Y: y,
 		Carry: 30, Cargo: TypeOil, PostCol: -1, PostRow: -1,

@@ -166,7 +166,7 @@ func TestASwellBurnsTanksFasterOutside(t *testing.T) {
 	}
 	// The bubble keeps its word: inside it, the swell burns nothing extra.
 	id2 := s.NextID
-	px, py := parkSpot(id2)
+	px, py := parkSlot(0)
 	s.spawnRobot(RobotBuilt, px, py)
 	runTicks(s, 60)
 	inside := robotTankLiters - s.Robots[id2].Tank

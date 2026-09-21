@@ -164,7 +164,7 @@ func (a CancelJob) apply(s *State) {
 
 // LayPipe marks a pipe from a pump or a tank to a tank, through the
 // bends the player clicked: its sections are paid in lilac at once, and
-// the robots lay it from its source out. It does nothing when the ends
+// the robots lay it a section each. It does nothing when the ends
 // can't take a pipe (see canLayPipe) or when the stores can't pay.
 type LayPipe struct {
 	From  int64       // the pump's or the tank's entity ID; 0 is the core

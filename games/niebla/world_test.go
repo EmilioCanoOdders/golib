@@ -23,6 +23,13 @@ func nearestTileOf(kind byte) (col, row int, ok bool) {
 	return col, row, ok
 }
 
+// tileCell returns a cell of a tile, the one at its top corner: what a
+// click on the tile's ground would pick.
+func tileCell(tcol, trow int) (col, row int) {
+	const cellsPerTile = unitsPerTile / buildingCell
+	return tcol * cellsPerTile, trow * cellsPerTile
+}
+
 func runTicks(s *State, n int) {
 	for i := 0; i < n; i++ {
 		Apply(s, Tick{})
@@ -45,9 +52,9 @@ func TestNewGameStartsTwoIdleRobotsByTheCore(t *testing.T) {
 			t.Errorf("robot %d starts carrying %v %v, want empty arms",
 				id, r.Carry, r.Cargo)
 		}
-		if d := math.Hypot(r.X-cx, r.Y-cy); d > robotParkRadius+0.01 {
-			t.Errorf("robot %d idles %v units from the core, want it on the %v unit ring",
-				id, d, robotParkRadius)
+		if d := math.Hypot(r.X-cx, r.Y-cy); d > parkFromCore+parkSlots*parkSpacing {
+			t.Errorf("robot %d idles %v units from the core, want it in the ranks beside it",
+				id, d)
 		}
 	}
 	if s.Stock.Oil != startingStockOil || s.Stock.Lilac != startingStockLilac {
@@ -272,5 +279,38 @@ func TestTheStateSerializesRound(t *testing.T) {
 	}
 	if !reflect.DeepEqual(&back, s) {
 		t.Errorf("the state changed across a JSON round trip")
+	}
+}
+
+func TestIdleRobotsRestInRanksByTheCore(t *testing.T) {
+	s := newGame()
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	for len(s.Robots) < parkSlots+2 {
+		s.spawnRobot(RobotCore, cx+60, cy+60)
+	}
+	runTicks(s, 60*10)
+	if idle := idleRobots(s); idle != parkSlots+2 {
+		t.Fatalf("%d robots idle, want all %d", idle, parkSlots+2)
+	}
+	taken := map[[2]float64]int{}
+	for _, id := range sortedRobotIDs(s) {
+		r := s.Robots[id]
+		taken[[2]float64{r.X, r.Y}]++
+		if d := math.Hypot(r.X-cx, r.Y-cy); d > parkFromCore+parkSlots*parkSpacing {
+			t.Errorf("robot %d rests %v u from the core, want it in the ranks", id, d)
+		}
+	}
+	if len(taken) != parkSlots {
+		t.Errorf("the idle robots stand on %d spots, want the ranks' %d", len(taken), parkSlots)
+	}
+	// One leaves for a post, and the ranks close up behind it.
+	col, row, _ := nearestTileOf(kindLilac)
+	first := s.Robots[1]
+	first.PostCol, first.PostRow = col, row
+	s.Robots[1] = first
+	runTicks(s, 60*5)
+	x, y := parkSlot(0)
+	if r := s.Robots[2]; r.X != x || r.Y != y {
+		t.Errorf("robot 2 rests at %v, %v, want the first place %v, %v", r.X, r.Y, x, y)
 	}
 }

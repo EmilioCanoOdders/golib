@@ -119,6 +119,11 @@ var (
 	pipeDarkColor   = golib.Color{R: 36, G: 40, B: 52, A: 255}
 	pipeShadowColor = golib.Color{R: 18, G: 22, B: 32, A: 110}
 
+	// The bar a store wears to say how full it is: an empty well, dark,
+	// inside a darker edge, so the oil and the lilac read over any body.
+	fillBarColor     = golib.Color{R: 30, G: 34, B: 44, A: 255}
+	fillBarEdgeColor = golib.Color{R: 12, G: 14, B: 20, A: 255}
+
 	// The inspection panel: a dark plate with light text, so the cards'
 	// colors read over any ground. The picked tile keeps the core's warm
 	// white.

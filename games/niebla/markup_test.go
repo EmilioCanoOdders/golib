@@ -77,7 +77,8 @@ func TestParseMarkupUnclosed(t *testing.T) {
 func TestTooltipLayoutRowsAndCards(t *testing.T) {
 	s := newGame()
 	camera := golib.NewCamera(screenWidth, screenHeight)
-	panel := tooltipLayout(s, camera, coreCol, coreRow, map[string]bool{})
+	coreCellCol, coreCellRow := tileCell(coreCol, coreRow)
+	panel := tooltipLayout(s, camera, coreCellCol, coreCellRow, map[string]bool{})
 	titles := 0
 	for _, r := range panel.rows {
 		if r.title {
@@ -85,10 +86,10 @@ func TestTooltipLayoutRowsAndCards(t *testing.T) {
 		}
 	}
 	if titles != 1 {
-		t.Fatalf("the core tile laid %d card titles, want 1", titles)
+		t.Fatalf("a cell of the core laid %d card titles, want 1", titles)
 	}
 	open := map[string]bool{"core@12,12": true}
-	panel = tooltipLayout(s, camera, coreCol, coreRow, open)
+	panel = tooltipLayout(s, camera, coreCellCol, coreCellRow, open)
 	details := 0
 	for _, r := range panel.rows {
 		if r.title {
@@ -118,7 +119,8 @@ func TestPrimaryCardsStartOpen(t *testing.T) {
 	camera := golib.NewCamera(screenWidth, screenHeight)
 	s := newGame()
 	// The core's card starts open with no clicks: its details are there.
-	panel := tooltipLayout(s, camera, coreCol, coreRow, map[string]bool{})
+	coreCellCol, coreCellRow := tileCell(coreCol, coreRow)
+	panel := tooltipLayout(s, camera, coreCellCol, coreCellRow, map[string]bool{})
 	details := 0
 	for _, r := range panel.rows {
 		if !r.header && !r.title && r.button == "" {
@@ -134,19 +136,19 @@ func TestPrimaryCardsStartOpen(t *testing.T) {
 	if !ok {
 		t.Fatal("the region has no oil to test with")
 	}
-	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
+	oilCellCol, oilCellRow := tileCell(col, row)
+	panel = tooltipLayout(s, camera, oilCellCol, oilCellRow, map[string]bool{})
 	if panel.findButton(buttonSend) == nil {
 		t.Error("the oil patch's card starts folded, want it open with its button")
 	}
 
-	// A robot alone on a tile starts open; the same robot beside a
-	// deposit starts folded, for the deposit is the card that opens.
+	// A robot alone on a cell starts open; the same robot on a deposit
+	// starts folded, for the deposit is the card that opens.
 	r := s.Robots[1]
-	col, row = robotTile(r)
-	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
-	if panel.findButton(buttonSend) != nil {
-		t.Fatal("the robot's tile has a deposit, want bare ground to test with")
-	}
+	gcol, grow := groundNearCore()
+	r.X, r.Y = cellCenterUnits(gcol, grow)
+	s.Robots[1] = r
+	panel = tooltipLayout(s, camera, gcol, grow, map[string]bool{})
 	if len(panel.rows) < 3 {
 		t.Fatal("the lone robot's card starts folded, want it open")
 	}
@@ -154,7 +156,8 @@ func TestPrimaryCardsStartOpen(t *testing.T) {
 	cx, cy := tileCenterUnits(oilCol, oilRow)
 	r.X, r.Y = cx, cy
 	s.Robots[1] = r
-	panel = tooltipLayout(s, camera, oilCol, oilRow, map[string]bool{})
+	oilCellCol, oilCellRow = robotCell(r)
+	panel = tooltipLayout(s, camera, oilCellCol, oilCellRow, map[string]bool{})
 	for _, thing := range panel.rows {
 		if thing.title && thing.open && thing.thing.Type == TypeRobot {
 			t.Error("the robot's card starts open beside a deposit, want it folded")
@@ -173,7 +176,8 @@ func TestTooltipOffersRobotButtons(t *testing.T) {
 	// top corner tile, not the tile clicked.
 	patch, _ := depositAt(col, row)
 	open := map[string]bool{fmt.Sprintf("oil@%d,%d", patch.Col, patch.Row): true}
-	panel := tooltipLayout(s, camera, col, row, open)
+	cellCol, cellRow := tileCell(col, row)
+	panel := tooltipLayout(s, camera, cellCol, cellRow, open)
 	if thing, label, ok := panel.buttonAt(panel.x+1, panel.y+1); ok {
 		t.Errorf("the panel's corner hit %v's %q button, want nothing", thing, label)
 	}
@@ -187,7 +191,7 @@ func TestTooltipOffersRobotButtons(t *testing.T) {
 	}
 	// Sent for, the same card asks for the robot back.
 	Apply(s, SendRobot{Col: col, Row: row})
-	panel = tooltipLayout(s, camera, col, row, open)
+	panel = tooltipLayout(s, camera, cellCol, cellRow, open)
 	if panel.findButton(buttonSend) != nil {
 		t.Error("an occupied post still offers to send a robot")
 	}
@@ -197,7 +201,7 @@ func TestTooltipOffersRobotButtons(t *testing.T) {
 	// A dry deposit has nobody to send.
 	drained := newGame()
 	drained.Drain[depositKey(patch)] = 0
-	panel = tooltipLayout(drained, camera, col, row, open)
+	panel = tooltipLayout(drained, camera, cellCol, cellRow, open)
 	if panel.findButton(buttonSend) != nil || panel.findButton(buttonRecall) != nil {
 		t.Error("a dry deposit still offers a robot button")
 	}

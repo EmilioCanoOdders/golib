@@ -7,7 +7,7 @@ import (
 )
 
 // Tooltip tuning, in screen pixels. The panel is one dark plate with a row
-// per line: the tile's header, one card title per thing with its headline
+// per line: the cell's header, one card title per thing with its headline
 // at the right, the expanded cards' details and, for deposits, a button
 // that sends the card's robot to it, or recalls it. The card of a
 // building or a site ends its title in a trash can, which demolishes it
@@ -24,7 +24,7 @@ const (
 	barWidth      = 3  // the color bar on a card's left
 	detailLabelW  = 80 // where a detail's value starts, past its label
 	detailIndent  = 12 // how far details sit inside their card
-	tooltipGap    = 14 // from the tile's corner to the panel
+	tooltipGap    = 14 // from the cell's corner to the panel
 	tooltipMargin = 8  // kept between the panel and the screen's edges
 	trashWidth    = 11 // the trash can at the end of a card's title
 	trashHeight   = 13
@@ -71,14 +71,14 @@ type tooltipRow struct {
 	armed   bool    // the trash can was pressed once and asks again
 }
 
-// tooltip is the picked tile's panel, laid out: where it stands on the
+// tooltip is the picked cell's panel, laid out: where it stands on the
 // screen and the rows it draws. Update hit-tests it and Draw paints it, so
 // both see the same geometry.
 type tooltip struct {
-	col, row int
+	col, row int // the picked cell
 	x, y     float32
 	w, h     float32
-	lone     bool // the tile holds one thing, whose card starts open
+	lone     bool // the cell holds one thing, whose card starts open
 	rows     []tooltipRow
 }
 
@@ -92,10 +92,10 @@ func cardOpen(info ThingInfo, lone bool, expanded map[string]bool, id string) bo
 	return info.Primary || lone
 }
 
-// tooltipLayout lays the picked tile's panel out. The camera decides where
-// the tile's corner lands, so the panel follows the tile while the view
-// moves. Cards start open on their own: the tile's primary thing and, on
-// a tile with a single thing, that thing. Deposit cards that still hold
+// tooltipLayout lays the picked cell's panel out. The camera decides where
+// the cell's corner lands, so the panel follows the cell while the view
+// moves. Cards start open on their own: the cell's primary thing and, on
+// a cell with a single thing, that thing. Deposit cards that still hold
 // something get their robot button.
 func tooltipLayout(
 	s *State,
@@ -105,6 +105,7 @@ func tooltipLayout(
 ) tooltip {
 	t := tooltip{col: col, row: row, w: tooltipWidth}
 	things := thingsAt(s, col, row)
+	tcol, trow := cellTile(col, row)
 	t.lone = len(things) == 1
 	t.rows = append(t.rows, tooltipRow{header: true})
 	for _, thing := range things {
@@ -153,11 +154,11 @@ func tooltipLayout(
 			continue // a dry deposit has nobody to send
 		}
 		label := buttonSend
-		if _, owned := postOwner(s, col, row); owned {
+		if _, owned := postOwner(s, tcol, trow); owned {
 			label = buttonRecall
 		}
 		t.rows = append(t.rows, tooltipRow{thing: thing, button: label})
-		if d, ok := depositAt(col, row); ok && thing.Type == TypeOil {
+		if d, ok := depositAt(tcol, trow); ok && thing.Type == TypeOil {
 			if pc, pr := pumpCell(d); canPlace(s, BuildingPump, pc, pr) {
 				lilac, oil := buildingCost(BuildingPump)
 				t.rows = append(t.rows, tooltipRow{
@@ -188,14 +189,16 @@ func tooltipLayout(
 		y += rowHeight(r)
 	}
 	t.h = y + tooltipPad
-	sx, sy := projectTile(float32(col), float32(row))
-	corner := camera.ToScreen(golib.Vector2{X: sx, Y: sy})
-	t.x = corner.X + tileW/2 + tooltipGap
+	ux, uy := cellCenterUnits(col, row)
+	sx, sy := project(float32(ux), float32(uy))
+	middle := camera.ToScreen(golib.Vector2{X: sx, Y: sy})
+	half := float32(buildingCell) * unitW / 2 * camera.Zoom
+	t.x = middle.X + half + tooltipGap
 	if t.x+t.w > screenWidth-tooltipMargin {
-		t.x = corner.X - tileW/2 - tooltipGap - t.w
+		t.x = middle.X - half - tooltipGap - t.w
 	}
 	t.x = clampf(t.x, tooltipMargin, screenWidth-tooltipMargin-t.w)
-	t.y = clampf(corner.Y-titleRow/2, tooltipMargin, screenHeight-tooltipMargin-t.h)
+	t.y = clampf(middle.Y-titleRow/2, tooltipMargin, screenHeight-tooltipMargin-t.h)
 	for i := range t.rows {
 		t.rows[i].bx += t.x
 		t.rows[i].by += t.y
@@ -335,7 +338,7 @@ func drawTooltip(screen *golib.Screen, t tooltip, mx, my float32) {
 		r := &t.rows[i]
 		switch {
 		case r.header:
-			drawMarkup(screen, fmt.Sprintf("[dim]tile %d, %d[/]", t.col, t.row),
+			drawMarkup(screen, fmt.Sprintf("[dim]cell %d, %d[/]", t.col, t.row),
 				x, y, textSize, panelTextColor)
 		case r.title:
 			info := catalogInfo(r.thing.Type)
@@ -422,10 +425,16 @@ func (t tooltip) findButton(label string) *tooltipRow {
 	return nil
 }
 
-// drawTileHighlight outlines a tile, in world space.
-func drawTileHighlight(screen *golib.Screen, col, row int, thickness float32, color golib.Color) {
-	x, y := projectTile(float32(col), float32(row))
-	screen.DrawPolygonOutline(tileDiamond(x, y), thickness, color)
+// cellDiamond returns a cell's outline in world space, lifted to a
+// readable size on the screen while the view is far out.
+func cellDiamond(col, row int, zoom float32) (shape []golib.Vector2, gx, gy float32) {
+	x, y := cellCenterUnits(col, row)
+	gx, gy = project(float32(x), float32(y))
+	scale := float32(buildingCell) / unitsPerTile
+	if min := 12 / zoom / tileW; scale < min {
+		scale = min
+	}
+	return scaledDiamond(gx, gy, scale), gx, gy
 }
 
 // clampf keeps v inside low and high.

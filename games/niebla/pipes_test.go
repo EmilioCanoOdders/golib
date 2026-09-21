@@ -249,7 +249,7 @@ func TestRobotsCarryOilToATankWithRoomAndRefillFromTheirPost(t *testing.T) {
 	col, row := groundNearCore()
 	silo := raised(t, s, BuildingSilo, col, row)
 	s.Stock.Oil = coreOilCap
-	x, y := parkSpot(1)
+	x, y := parkSlot(0)
 	r := s.Robots[1]
 	r.X, r.Y, r.Carry, r.Cargo = x, y, 20, TypeOil
 	s.Robots[1] = r
@@ -421,12 +421,13 @@ func TestAPoolsCardsCarryThePumpAndItsPipe(t *testing.T) {
 	seedStock(s)
 	d := safePool(t)
 	camera := newPlayScene(s).camera
-	panel := tooltipLayout(s, camera, d.Col, d.Row, map[string]bool{})
+	dc, dr := tileCell(d.Col, d.Row)
+	panel := tooltipLayout(s, camera, dc, dr, map[string]bool{})
 	if panel.findButton(buttonBuildPump) == nil {
 		t.Fatal("a pool with no pump offers none")
 	}
 	s.Stock.Lilac = 0
-	panel = tooltipLayout(s, camera, d.Col, d.Row, map[string]bool{})
+	panel = tooltipLayout(s, camera, dc, dr, map[string]bool{})
 	if row := panel.findButton(buttonBuildPump); row == nil || !row.dim {
 		t.Error("empty stores don't dim the pump's button")
 	}
@@ -435,7 +436,8 @@ func TestAPoolsCardsCarryThePumpAndItsPipe(t *testing.T) {
 	// The pool is one thing: every tile of it shows its pump.
 	for row := d.Row; row < d.Row+d.Rows; row++ {
 		for col := d.Col; col < d.Col+d.Cols; col++ {
-			panel = tooltipLayout(s, camera, col, row, map[string]bool{})
+			cc, cr := tileCell(col, row)
+			panel = tooltipLayout(s, camera, cc, cr, map[string]bool{})
 			if panel.findButton(buttonLayPipe) == nil {
 				t.Errorf("tile %d, %d of the pool doesn't show its pump", col, row)
 			}
@@ -445,8 +447,80 @@ func TestAPoolsCardsCarryThePumpAndItsPipe(t *testing.T) {
 		}
 	}
 	Apply(s, LayPipe{From: pump.ID, To: 0})
-	panel = tooltipLayout(s, camera, d.Col, d.Row, map[string]bool{})
+	panel = tooltipLayout(s, camera, dc, dr, map[string]bool{})
 	if panel.findButton(buttonRemovePipe) == nil {
 		t.Error("a piped pump doesn't offer to remove its pipe")
+	}
+}
+
+func TestRobotsLayAPipeASectionEachAndStandByIt(t *testing.T) {
+	s := newGame()
+	seedStock(s)
+	pump := pumpOn(t, s, safePool(t))
+	from, _ := pipeEndSpot(s, pump.ID)
+	bends := []PipePoint{{from.X + 120, from.Y - 60}}
+	Apply(s, LayPipe{From: pump.ID, To: coreTank, Bends: bends})
+	p, _ := pipeOut(s, pump.ID)
+	if p.Sections < 3 {
+		t.Fatalf("the pipe has %d sections, want three or more to share", p.Sections)
+	}
+	// Each robot claims a section of its own, the free one nearest to it,
+	// and the others know.
+	runTicks(s, 1)
+	first, second := s.Robots[1], s.Robots[2]
+	if first.Pipe != p.ID || second.Pipe != p.ID {
+		t.Fatalf("the robots claimed pipes %d and %d, want %d both",
+			first.Pipe, second.Pipe, p.ID)
+	}
+	if first.Section == second.Section {
+		t.Errorf("both robots claimed section %d, want one each", first.Section)
+	}
+	path, _ := pipeSpine(s, p)
+	mine := pointGap(PipePoint{first.X, first.Y}, sectionSpot(path, first.Section))
+	for i := int64(0); i < p.Sections; i++ {
+		gap := pointGap(PipePoint{first.X, first.Y}, sectionSpot(path, i))
+		if gap < mine-0.001 {
+			t.Errorf("robot 1 claimed section %d, %v u away, with section %d at %v u",
+				first.Section, mine, i, gap)
+		}
+	}
+	// Whoever lays a section stands by it for as long as it takes.
+	working := func() bool { return s.Pipes[p.ID].Left < p.Left }
+	if !tickUntil(s, 60*120, working) {
+		t.Fatal("nobody ever started laying")
+	}
+	var layer Robot
+	for _, id := range sortedRobotIDs(s) {
+		r := s.Robots[id]
+		if sectionLeft(s.Pipes[p.ID], r.Section) < pipeSectionWorkTicks {
+			layer = r
+		}
+	}
+	runTicks(s, pipeSectionWorkTicks-2)
+	if r := s.Robots[layer.ID]; r.X != layer.X || r.Y != layer.Y || r.Section != layer.Section {
+		t.Errorf("robot %d moved on before its section was laid", layer.ID)
+	}
+	// A robot that goes takes its claim with it, and another lays that
+	// section.
+	delete(s.Robots, layer.ID)
+	laid(t, s)
+	for _, r := range s.Robots {
+		if r.Pipe != 0 {
+			t.Errorf("robot %d keeps a claim on a laid pipe", r.ID)
+		}
+	}
+}
+
+func TestAHalfLaidPipeFromAnOldSaveKeepsItsWork(t *testing.T) {
+	p := Pipe{Sections: 4, Left: 4*pipeSectionWorkTicks - 150}
+	want := []int64{0, pipeSectionWorkTicks - 30, pipeSectionWorkTicks, pipeSectionWorkTicks}
+	for i, left := range want {
+		if got := sectionLeft(p, int64(i)); got != left {
+			t.Errorf("section %d asks %d ticks, want %d", i, got, left)
+		}
+	}
+	p.Left = 0
+	if sectionLeft(p, 2) != 0 {
+		t.Error("a laid pipe still asks for work")
 	}
 }

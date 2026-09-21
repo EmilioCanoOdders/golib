@@ -36,18 +36,6 @@ func pileAt(s *State, col, row int) (Pile, bool) {
 	return Pile{}, false
 }
 
-// pilesOnTile returns every pile lying on a tile, in ID order.
-func pilesOnTile(s *State, tcol, trow int) []Pile {
-	var found []Pile
-	for _, id := range sortedPileIDs(s) {
-		p := s.Piles[id]
-		if ccol, crow := cellTile(p.Col, p.Row); ccol == tcol && crow == trow {
-			found = append(found, p)
-		}
-	}
-	return found
-}
-
 // dropPile leaves loose items on a cell, joining the pile already there
 // when there is one. Nothing to drop leaves no pile.
 func (s *State) dropPile(col, row int, oil, lilac float64) {
@@ -182,34 +170,29 @@ func (s *State) takeFromPile(r *Robot) {
 	s.Piles[p.ID] = p
 }
 
-// storeSpot returns where a robot unloads. Lilac is one stock, so the
+// storeSpot returns where a robot unloads: by the nearest store of its
+// cargo's kind, the core one among them. Lilac is one stock, so the
 // nearest warehouse or the core is only where the walking ends; oil goes
 // into the tank it is carried to, the nearest with room for it
 // (haulTank). Robots spread around a store by ID, as builders do.
 func storeSpot(s *State, r Robot) (x, y float64) {
-	x, y = parkSpot(r.ID)
-	angle := float64(r.ID) * goldenAngle
+	spot, _ := tankSpot(s, coreTank)
 	if r.Cargo == TypeOil {
-		tank := haulTank(s, r)
-		if tank == coreTank {
-			return x, y
-		}
-		spot, _ := tankSpot(s, tank)
-		return spot.X + math.Cos(angle)*storeStandoff,
-			spot.Y + math.Sin(angle)*storeStandoff
-	}
-	best := math.Hypot(r.X-x, r.Y-y)
-	for _, id := range sortedBuildingIDs(s) {
-		b := s.Buildings[id]
-		if b.Kind != BuildingWarehouse {
-			continue
-		}
-		cx, cy := cellCenterUnits(b.Col, b.Row)
-		cx += math.Cos(angle) * storeStandoff
-		cy += math.Sin(angle) * storeStandoff
-		if d := math.Hypot(r.X-cx, r.Y-cy); d < best {
-			best, x, y = d, cx, cy
+		spot, _ = tankSpot(s, haulTank(s, r))
+	} else {
+		best := pointGap(PipePoint{r.X, r.Y}, spot)
+		for _, id := range sortedBuildingIDs(s) {
+			b := s.Buildings[id]
+			if b.Kind != BuildingWarehouse {
+				continue
+			}
+			cx, cy := cellCenterUnits(b.Col, b.Row)
+			if d := math.Hypot(r.X-cx, r.Y-cy); d < best {
+				best, spot = d, PipePoint{cx, cy}
+			}
 		}
 	}
-	return x, y
+	angle := float64(r.ID) * goldenAngle
+	return spot.X + math.Cos(angle)*storeStandoff,
+		spot.Y + math.Sin(angle)*storeStandoff
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"sort"
 
@@ -109,7 +110,7 @@ func drawBuildings(s *State, screen *golib.Screen, zoom float32) {
 	sort.SliceStable(spots, func(i, j int) bool { return spots[i].y < spots[j].y })
 	for _, sp := range spots {
 		if sp.core {
-			drawCore(screen, zoom)
+			drawCore(s, screen, zoom)
 			continue
 		}
 		b := s.Buildings[sp.id]
@@ -117,7 +118,52 @@ func drawBuildings(s *State, screen *golib.Screen, zoom float32) {
 		across, height := buildingSize(b.Kind)
 		k := buildingIcon(across, height, zoom)
 		drawBuilding(screen, b, gx, gy, across*k, height*k)
+		if part, color, holds := buildingFill(s, b); holds {
+			// Down the middle of the body's left face.
+			x := gx - across*k*unitW/4
+			foot := gy + across*k*unitH/4
+			drawFillBar(screen, x, foot, height*k*unitH, zoom, part, color)
+		}
 	}
+}
+
+// buildingFill returns how full a building that stores something is, 0
+// to 1, and the color of what it stores. Oil is in the building's own
+// tank; lilac is one stock under every roof, so every warehouse reads
+// the same.
+func buildingFill(s *State, b Building) (part float32, color golib.Color, holds bool) {
+	switch b.Kind {
+	case BuildingSilo, BuildingCharger:
+		return float32(b.Oil / tankCapOf(b.Kind)), oilColor, true
+	case BuildingWarehouse:
+		return float32(s.Stock.Lilac / lilacCap(s)), lilacColor, true
+	}
+	return 0, golib.Color{}, false
+}
+
+// drawFillBar paints how full a store is on its own body: a bar
+// standing on foot, as tall as the face it is on, filling from the
+// bottom. It keeps a width the eye can read while the view is far out.
+func drawFillBar(
+	screen *golib.Screen,
+	x, foot, height, zoom, part float32,
+	color golib.Color,
+) {
+	width := 2 * dotRadius(1.2, zoom, 1)
+	edge := width / 4
+	height -= 2 * edge
+	foot -= edge
+	screen.DrawRectangle(golib.Rectangle{
+		X: x - width/2 - edge, Y: foot - height - edge,
+		Width: width + 2*edge, Height: height + 2*edge,
+	}, fillBarEdgeColor)
+	screen.DrawRectangle(golib.Rectangle{
+		X: x - width/2, Y: foot - height, Width: width, Height: height,
+	}, fillBarColor)
+	filled := height * golib.Clamp(part, 0, 1)
+	screen.DrawRectangle(golib.Rectangle{
+		X: x - width/2, Y: foot - filled, Width: width, Height: filled,
+	}, color)
 }
 
 // buildingIcon returns the factor that lifts a body's true size until it
@@ -318,7 +364,7 @@ func projectCore() (cx, cy float32) {
 // broad face to the right, under a top that shines the core's warm white
 // - the one part bright enough for the monitor's glow. It obeys the
 // buildings' icon law, so far out it is a small lit pillar.
-func drawCore(screen *golib.Screen, zoom float32) {
+func drawCore(s *State, screen *golib.Screen, zoom float32) {
 	cx, cy := projectCore()
 	k := buildingIcon((coreSlabWide+coreSlabDeep)/2, coreHeight, zoom)
 	deep, wide, height := coreSlabDeep*k, coreSlabWide*k, coreHeight*k
@@ -330,6 +376,21 @@ func drawCore(screen *golib.Screen, zoom float32) {
 	sy := cy + (deep/2+along)*unitH/2
 	screen.DrawLine(sx, sy-height*0.12*unitH, sx, sy-height*0.88*unitH,
 		dotRadius(0.5, zoom, 1), coreGlowColor)
+	// The core's own stores, on the far half of the same face.
+	bars := []struct {
+		along float32
+		part  float64
+		color golib.Color
+	}{
+		{-wide * 0.08, s.Stock.Oil / coreOilCap, oilColor},
+		{-wide * 0.3, s.Stock.Lilac / lilacCap(s), lilacColor},
+	}
+	for _, bar := range bars {
+		x := cx + (deep/2-bar.along)*unitW/2
+		foot := cy + (deep/2+bar.along)*unitH/2 - height*0.12*unitH
+		drawFillBar(screen, x, foot, height*0.76*unitH, zoom,
+			float32(bar.part), bar.color)
+	}
 }
 
 // protectorBubbleCenter returns where a protector's bubble sits on the
@@ -576,6 +637,29 @@ func drawRobots(s *State, screen *golib.Screen, zoom float32) {
 		}
 		screen.DrawCircle(p.X, p.Y-R*0.56, R*0.28, eye)
 	}
+}
+
+// drawIdleCount writes how many robots rest by the core, in screen
+// pixels over their ranks: when they are more than the ranks show, and
+// while the view is so far out that the ranks are one dot.
+func drawIdleCount(s *State, screen *golib.Screen, camera *golib.Camera) {
+	idle := idleRobots(s)
+	merged := parkSpacing*unitW*camera.Zoom < 6
+	if idle <= parkSlots && (idle < 2 || !merged) {
+		return
+	}
+	x, y := parkCenter()
+	gx, gy := project(float32(x), float32(y))
+	at := camera.ToScreen(golib.Vector2{X: gx, Y: gy})
+	reach := float32(parkSlots/parkRankSize) * parkSpacing * unitH * camera.Zoom
+	words := fmt.Sprintf("%d idle", idle)
+	width := screen.TextWidth(words, textSize, uiText)
+	top := at.Y + reach + 8
+	screen.DrawRectangle(golib.Rectangle{
+		X: at.X - width/2 - 5, Y: top - 3, Width: width + 10, Height: textRow + 3,
+	}, panelColor)
+	screen.DrawText(words, at.X, top, textSize, panelTextColor,
+		golib.TextOptions{Font: uiFont, Align: golib.AlignCenter})
 }
 
 // drawFogLine paints the fog's front: pressed in and in a stronger hand

@@ -98,20 +98,23 @@ type Thing struct {
 	Rows    int     //
 }
 
-// thingsAt returns the things standing on a tile: its building or deposit
-// first, then its sites and piles, then the robots on it by ID. A deposit tile shows its whole
+// thingsAt returns the things standing on a cell, the unit the player
+// picks and counts by: the ground's own thing first - the deposit or the
+// core whose tile the cell is part of -, then its building, its site and
+// its pile, then the robots on it by ID. A deposit's cell shows its whole
 // patch's card: the vein is one thing, however many tiles it spans.
 // Rocks and bushes are decoration, so they have no card yet.
 func thingsAt(s *State, col, row int) []Thing {
 	var things []Thing
-	switch tileAt(col, row) {
+	tcol, trow := cellTile(col, row)
+	switch tileAt(tcol, trow) {
 	case kindOil, kindLilac:
-		d, _ := depositAt(col, row)
+		d, _ := depositAt(tcol, trow)
 		thing := depositThing(d)
-		thing.Amount = remainingAt(s, col, row)
+		thing.Amount = remainingAt(s, tcol, trow)
 		things = append(things, thing)
 	case kindCore:
-		things = append(things, coreAt(col, row))
+		things = append(things, coreAt(tcol, trow))
 	}
 	for _, id := range sortedBuildingIDs(s) {
 		b := s.Buildings[id]
@@ -134,30 +137,29 @@ func thingsAt(s *State, col, row int) []Thing {
 			things = append(things, siteThing(job))
 		}
 	}
-	for _, p := range pilesOnTile(s, col, row) {
+	if p, littered := pileAt(s, col, row); littered {
 		things = append(things, pileThing(p))
 	}
-	for _, r := range robotsOnTile(s, col, row) {
+	for _, r := range robotsOnCell(s, col, row) {
 		things = append(things, robotThing(s, r))
 	}
 	return things
 }
 
-// sameGround reports whether a cell belongs to a tile's card: it stands
-// on that tile, or on another tile of the same deposit patch - a pool is
-// one thing, so its pump shows on every tile of it.
+// sameGround reports whether what stands on one cell shows on another's
+// card: it is the same cell, or both lie on the same deposit patch - a
+// pool is one thing, so its pump shows wherever the pool is picked.
 func sameGround(cellCol, cellRow, col, row int) bool {
-	tcol, trow := cellTile(cellCol, cellRow)
-	if tcol == col && trow == row {
+	if cellCol == col && cellRow == row {
 		return true
 	}
-	here, ok := depositAt(col, row)
-	there, okThere := depositAt(tcol, trow)
+	here, ok := depositAt(cellTile(col, row))
+	there, okThere := depositAt(cellTile(cellCol, cellRow))
 	return ok && okThere && here == there
 }
 
-// robotsOnTile returns the robots standing on a tile, in ID order.
-func robotsOnTile(s *State, col, row int) []Robot {
+// robotsOnCell returns the robots standing on a cell, in ID order.
+func robotsOnCell(s *State, col, row int) []Robot {
 	var found []Robot
 	for _, id := range sortedRobotIDs(s) {
 		if r := s.Robots[id]; r.standsOn(col, row) {
@@ -252,9 +254,9 @@ func pileWords(p Pile, joint string) string {
 	return strings.Join(words, joint)
 }
 
-// standsOn reports whether the robot's position falls on this tile.
+// standsOn reports whether the robot's position falls on this cell.
 func (r Robot) standsOn(col, row int) bool {
-	c, rw := robotTile(r)
+	c, rw := robotCell(r)
 	return c == col && rw == row
 }
 

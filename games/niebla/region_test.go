@@ -216,7 +216,11 @@ func TestThingsAtKnowsTheRegion(t *testing.T) {
 	}
 
 	// A deposit tile shows its whole patch's card, at the patch's amount.
-	if things := thingsAt(s, firstOil[0], firstOil[1]); len(things) != 1 || things[0].Type != TypeOil {
+	at := func(tile [2]int) []Thing {
+		col, row := tileCell(tile[0], tile[1])
+		return thingsAt(s, col, row)
+	}
+	if things := at(firstOil); len(things) != 1 || things[0].Type != TypeOil {
 		t.Errorf("thingsAt an oil tile returned %v, want one oil thing", things)
 	} else {
 		patch, _ := depositAt(firstOil[0], firstOil[1])
@@ -232,14 +236,14 @@ func TestThingsAtKnowsTheRegion(t *testing.T) {
 		if !ok {
 			t.Fatalf("the oil patch has no second tile to test with")
 		}
-		again := thingsAt(s, other[0], other[1])
+		again := at(other)
 		if len(again) != 1 || again[0].ID != things[0].ID {
 			t.Errorf("thingsAt %v, %v returned %v, want the patch's one card %v",
 				other[0], other[1], again, things[0])
 		}
 	}
 
-	if things := thingsAt(s, firstLilac[0], firstLilac[1]); len(things) != 1 || things[0].Type != TypeLilac {
+	if things := at(firstLilac); len(things) != 1 || things[0].Type != TypeLilac {
 		t.Errorf("thingsAt a lilac tile returned %v, want one lilac thing", things)
 	} else {
 		patch, _ := depositAt(firstLilac[0], firstLilac[1])
@@ -248,7 +252,7 @@ func TestThingsAtKnowsTheRegion(t *testing.T) {
 		}
 	}
 
-	core := thingsAt(s, coreCol, coreRow)
+	core := at([2]int{coreCol, coreRow})
 	if len(core) != 1 || core[0].Type != TypeCore {
 		t.Fatalf("thingsAt the core returned %v, want one core thing", core)
 	}
@@ -261,10 +265,10 @@ func TestThingsAtKnowsTheRegion(t *testing.T) {
 		t.Errorf("thingsAt bare ground returned %v, want none", things)
 	}
 
-	// Each robot's card shows on the tile it stands on.
+	// Each robot's card shows on the cell it stands on.
 	for _, id := range sortedRobotIDs(s) {
 		r := s.Robots[id]
-		col, row := robotTile(r)
+		col, row := robotCell(r)
 		found := false
 		for _, thing := range thingsAt(s, col, row) {
 			if thing.Type == TypeRobot && thing.Ref == id {
@@ -272,7 +276,7 @@ func TestThingsAtKnowsTheRegion(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("robot %d stands on tile %d, %d but its card is missing",
+			t.Errorf("robot %d stands on cell %d, %d but its card is missing",
 				id, col, row)
 		}
 	}

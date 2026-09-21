@@ -11,7 +11,7 @@ import (
 // - into another tank. Pipes make a network by meeting at buildings: each
 // building takes a few, in or out. A pipe is a curve through the
 // player's clicks, paid in lilac by the section and laid by the robots,
-// from its source out.
+// a section each.
 const (
 	pumpLitersPerSecond = 2.0 // L/s a pump draws, shared by its pipes
 	pipeLitersPerSecond = 4.0 // L/s one pipe carries at the most
@@ -21,7 +21,7 @@ const (
 
 	pipeSectionMeters    = 25.0 // u, one section of pipe: a cell's side
 	pipeSectionLilac     = 5.0  // kg a section
-	pipeSectionWorkTicks = 60   // ticks of robot work a section: 1 s
+	pipeSectionWorkTicks = 120  // ticks of robot work a section: 2 s
 
 	pipeMaxBends    = 16   // the clicks a pipe takes between its ends
 	pipeBendGap     = 1.0  // u; a bend closer than this to the last one is dropped
@@ -38,7 +38,8 @@ type PipePoint struct {
 // Pipe carries oil one way, From a pump or a tank To a tank. Its ends
 // are buildings, so they are IDs - the core's tank is 0 - and only the
 // bends between them are its own. Left counts the robot work still owed,
-// and the pipe carries oil once it reaches zero.
+// and the pipe carries oil once it reaches zero. The robots lay it a
+// section each, so SectionLeft says which sections the work went into.
 type Pipe struct {
 	ID       int64
 	From     int64       // the pump or the tank it draws
@@ -46,6 +47,10 @@ type Pipe struct {
 	Bends    []PipePoint // the clicks between its ends
 	Sections int64       // its length in whole sections: what it cost
 	Left     int64       // ticks of robot work left; 0 is laid
+	// Ticks of work left by section, from the source out. It is nil until
+	// the first tick of work and once the pipe is laid: Left alone then
+	// says the work went in from the source out, as old saves have it.
+	SectionLeft []int64
 }
 
 func sortedPipeIDs(s *State) []int64 {
@@ -300,13 +305,99 @@ func canLayPipe(s *State, from, to int64, bends []PipePoint) (int64, bool) {
 	return pipeSections(pathLength(pipePath(a, bends, b))), true
 }
 
-// workPipe puts a tick of robot work into a pipe.
-func (s *State) workPipe(id int64) {
+// sectionLeft returns the ticks of work a pipe's section still asks for.
+func sectionLeft(p Pipe, section int64) int64 {
+	if section < 0 || section >= p.Sections || p.Left <= 0 {
+		return 0
+	}
+	if len(p.SectionLeft) > 0 {
+		return p.SectionLeft[section]
+	}
+	done := p.Sections*pipeSectionWorkTicks - p.Left - section*pipeSectionWorkTicks
+	if done < 0 {
+		done = 0
+	}
+	return max(0, pipeSectionWorkTicks-done)
+}
+
+// sectionSpot returns the middle of a pipe's section, where whoever lays
+// it stands by.
+func sectionSpot(path []PipePoint, section int64) PipePoint {
+	from := float64(section) * pipeSectionMeters
+	to := math.Min(from+pipeSectionMeters, pathLength(path))
+	return pathPointAt(path, (from+to)/2)
+}
+
+// freeSection returns the section of pipe a robot lays next: of the
+// oldest unlaid pipe's sections nobody else has claimed, the one nearest
+// to it, the lower one on a tie. A robot's claim is in the state
+// (Robot.Pipe, Robot.Section), which is how the others know.
+func freeSection(s *State, r Robot) (pipe, section int64, ok bool) {
+	for _, id := range sortedPipeIDs(s) {
+		p := s.Pipes[id]
+		if p.Left <= 0 {
+			continue
+		}
+		taken := make([]bool, p.Sections)
+		free := int64(0)
+		for i := range taken {
+			taken[i] = sectionLeft(p, int64(i)) <= 0
+		}
+		for _, other := range s.Robots {
+			claims := other.ID != r.ID && other.Pipe == id
+			if claims && other.Section >= 0 && other.Section < p.Sections {
+				taken[other.Section] = true
+			}
+		}
+		for _, is := range taken {
+			if !is {
+				free++
+			}
+		}
+		path, stands := pipeSpine(s, p)
+		if free == 0 || !stands {
+			continue
+		}
+		best := math.Inf(1)
+		for i := int64(0); i < p.Sections; i++ {
+			if taken[i] {
+				continue
+			}
+			gap := pointGap(PipePoint{r.X, r.Y}, sectionSpot(path, i))
+			if gap < best {
+				best, section = gap, i
+			}
+		}
+		return id, section, true
+	}
+	return 0, 0, false
+}
+
+// claimStands reports whether the section a robot claimed still asks for
+// work.
+func claimStands(s *State, r Robot) bool {
+	p, ok := s.Pipes[r.Pipe]
+	return ok && r.Pipe != 0 && sectionLeft(p, r.Section) > 0
+}
+
+// workSection puts a tick of robot work into a pipe's section.
+func (s *State) workSection(id, section int64) {
 	p, ok := s.Pipes[id]
-	if !ok || p.Left <= 0 {
+	if !ok || sectionLeft(p, section) <= 0 {
 		return
 	}
+	if len(p.SectionLeft) == 0 {
+		left := make([]int64, p.Sections)
+		for i := range left {
+			left[i] = sectionLeft(p, int64(i))
+		}
+		p.SectionLeft = left
+	}
+	p.SectionLeft[section]--
 	p.Left--
+	if p.Left <= 0 {
+		p.SectionLeft = nil
+	}
 	s.Pipes[id] = p
 }
 
