@@ -7,8 +7,9 @@ import "math"
 // squad: one unit, ordered as one. A squad guards a spot or attacks a
 // rival party, a vehicle of it first; nobody places a trooper by hand.
 // A trooper shoots whatever rival comes in its reach, whatever it is
-// doing, and pays each shot out of its own tank. The rivals shoot back,
-// at troopers and at nothing else.
+// doing, and pays each shot out of its own tank. The rivals' guns shoot
+// back, at troopers and at nothing else; their shells are another matter
+// (sim_shots.go).
 
 // Tuning: the squads' numbers, with units in the name.
 const (
@@ -164,26 +165,14 @@ func (r *Robot) shoot(s *State) {
 	}
 	r.Tank -= trooperShotOil
 	r.Reload, r.Aim = trooperReloadTicks, target.ID
-	target.Health -= trooperShotDamage
-	s.Enemies[target.ID] = target
-	if target.Health <= 0 {
-		s.killEnemy(target.ID)
-	}
-}
-
-// trooperFiring reports whether a trooper's last shot still shows, and
-// at whom.
-func trooperFiring(s *State, r Robot) (Enemy, bool) {
-	if r.Aim == 0 || r.Reload <= trooperReloadTicks-guardFlashTicks {
-		return Enemy{}, false
-	}
-	e, ok := s.Enemies[r.Aim]
-	return e, ok
+	s.fire(Shot{
+		Kind: ShotBullet, FromX: r.X, FromY: r.Y, ToX: target.X, ToY: target.Y,
+		Enemy: target.ID, Damage: trooperShotDamage,
+	})
 }
 
 // stepEnemyGuns is the rivals shooting back: a vehicle with a gun fires
-// at the nearest trooper in its reach, and at nothing else. A trooper
-// that falls leaves a wreck's worth of lilac and what its tank held.
+// at the nearest trooper in its reach, and at nothing else.
 func stepEnemyGuns(s *State) {
 	for _, id := range sortedEnemyIDs(s) {
 		e := s.Enemies[id]
@@ -204,13 +193,10 @@ func stepEnemyGuns(s *State) {
 		}
 		e.Reload, e.Aim = spec.reload, target.ID
 		s.Enemies[id] = e
-		target.Health -= spec.damage
-		s.Robots[target.ID] = target
-		if target.Health <= 0 {
-			delete(s.Robots, target.ID)
-			col, row := robotCell(target)
-			s.dropPile(col, row, target.Tank, trooperWreckLilac)
-		}
+		s.fire(Shot{
+			Kind: ShotBullet, FromX: e.X, FromY: e.Y, ToX: target.X, ToY: target.Y,
+			Robot: target.ID, Damage: spec.damage, Rival: true,
+		})
 	}
 }
 
@@ -229,14 +215,4 @@ func nearestTrooper(s *State, x, y, reach float64) (Robot, bool) {
 		}
 	}
 	return best, found
-}
-
-// enemyFiring reports whether a vehicle's last shot still shows, and at
-// whom.
-func enemyFiring(s *State, e Enemy) (Robot, bool) {
-	if e.Aim == 0 || e.Reload <= enemySpecOf(e.Kind).reload-guardFlashTicks {
-		return Robot{}, false
-	}
-	r, ok := s.Robots[e.Aim]
-	return r, ok
 }

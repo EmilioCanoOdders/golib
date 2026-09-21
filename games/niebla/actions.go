@@ -162,15 +162,23 @@ func (a Demolish) apply(s *State) {
 	if !ok || !canDemolish(s, b) {
 		return
 	}
+	s.takeDown(b, demolishRefund)
+}
+
+// takeDown is a building leaving the state, demolished or destroyed: the
+// given part of what it and its pipes cost, the robot it was building,
+// the oil it held and what the stores lose the roof for fall on its cell
+// as one pile.
+func (s *State) takeDown(b Building, refund float64) {
 	delete(s.Buildings, b.ID)
 	lilac, oil := buildingCost(b.Kind)
-	lilac *= demolishRefund
-	oil *= demolishRefund
+	lilac *= refund
+	oil *= refund
 	if _, robotLilac, robotOil, _, builds := robotWorks(b.Kind); builds && b.Work > 0 {
-		lilac += robotLilac
-		oil += robotOil
+		lilac += robotLilac * refund
+		oil += robotOil * refund
 	}
-	lilac += s.takePipesOf(b.ID) * demolishRefund
+	lilac += s.takePipesOf(b.ID) * refund
 	s.dropPile(b.Col, b.Row, oil+b.Oil, lilac)
 	s.spillOverflow(b.Col, b.Row)
 }
@@ -277,26 +285,42 @@ func (a DevResetWorld) apply(s *State) {
 	*s = *newGameOn(a.Seed)
 }
 
-// DevNextVisit brings the rivals' next visit in at once. It does nothing
-// while a party is in the region: they come one at a time.
-type DevNextVisit struct{}
+// DevNextVisit brings the rivals' next visit in at once, to stay when
+// Settle asks for it. It does nothing while a party is on the move in
+// the region: they come one at a time.
+type DevNextVisit struct {
+	Settle bool
+}
 
-func (DevNextVisit) apply(s *State) {
-	if len(s.Parties) == 0 {
-		s.Raids.NextAt = s.Ticks + 1
+func (a DevNextVisit) apply(s *State) {
+	for _, p := range s.Parties {
+		if p.Stage != StageSettled {
+			return
+		}
+	}
+	s.Raids.NextAt = s.Ticks + 1
+	if a.Settle {
+		s.Raids.Settle = true
+		if s.Raids.Visits == 0 {
+			s.Raids.Visits = 1 // the scout never stays
+		}
 	}
 }
 
-// DevHurryRivals ends the wait of every camped party: it moves in on the
-// next tick. It does nothing for a party that isn't camped.
+// DevHurryRivals ends the wait of every party that is waiting: a camped
+// one moves in on the next tick, and a base grows its next level.
 type DevHurryRivals struct{}
 
 func (DevHurryRivals) apply(s *State) {
 	for _, id := range sortedPartyIDs(s) {
-		if p := s.Parties[id]; p.Stage == StageCamp {
+		p := s.Parties[id]
+		switch p.Stage {
+		case StageCamp:
 			p.Wait = 0
-			s.Parties[id] = p
+		case StageSettled:
+			p.Grow = 0
 		}
+		s.Parties[id] = p
 	}
 }
 

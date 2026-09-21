@@ -75,7 +75,7 @@ func vehicleIcon(across, zoom, minPx float32) float32 {
 // drawEnemies paints the rivals over the fog, so a party reads from far
 // out as what it is: a pocket of clear air moving through the mist. The
 // pockets go first, then the vehicles back to front, then the squads'
-// marks and the shots (squads.go).
+// marks (squads.go).
 func drawEnemies(s *State, screen *golib.Screen, zoom float32) {
 	type spot struct {
 		e    Enemy
@@ -93,10 +93,60 @@ func drawEnemies(s *State, screen *golib.Screen, zoom float32) {
 	}
 	sort.SliceStable(spots, func(i, j int) bool { return spots[i].y < spots[j].y })
 	for _, sp := range spots {
+		if sp.e.Kind == EnemyBase {
+			drawBase(screen, sp.e, s.Parties[sp.e.Party].Level, sp.x, sp.y, zoom)
+			continue
+		}
 		drawVehicle(screen, sp.e, sp.x, sp.y, zoom)
 	}
 	drawSquadMarks(s, screen, zoom)
-	drawShots(s, screen, zoom)
+}
+
+// drawBase paints a dug-in crawler: a bunker with the repulsor's lamp on
+// its mast, a tent per level, and from level 2 the gun, a long barrel
+// lying toward the colony.
+func drawBase(screen *golib.Screen, e Enemy, level int64, gx, gy, zoom float32) {
+	k := vehicleIcon(30, zoom, 12)
+	isoBox(screen, gx, gy, 30*k, 9*k, enemyColor, mid(enemyColor, enemyDark), enemyDark)
+	isoBox(screen, gx, gy-9*k*unitH, 5*k, 16*k, enemyDark, enemyDark, enemyDark)
+	screen.DrawCircle(gx, gy-27*k*unitH, 4*k*unitW, enemyLampColor)
+	for tent := int64(0); tent < level; tent++ {
+		angle := float64(tent)*2.1 + 0.6
+		tx := gx + float32(math.Cos(angle))*34*k*unitW
+		ty := gy + float32(math.Sin(angle))*34*k*unitH
+		isoBox(screen, tx, ty, 10*k, 5*k, enemyColor, enemyDark, enemyDark)
+	}
+	if level >= 2 {
+		cx, cy := projectCore()
+		dx, dy := cx-gx, cy-gy
+		if gap := float32(math.Hypot(float64(dx), float64(dy))); gap > 0 {
+			dx, dy = dx/gap, dy/gap
+		}
+		reach := 34 * k * unitW
+		screen.DrawLine(gx, gy-12*k*unitH, gx+dx*reach, gy+dy*reach-20*k*unitH,
+			dotRadius(1.6, zoom, 1)*2, enemyDark)
+	}
+	drawHealthBar(screen, gx, gy, 30*k, zoom, e.Health, enemySpecOf(e.Kind).health, dangerColor)
+}
+
+// drawHealthBar paints what is left of something hurt under its foot;
+// nothing for what is whole.
+func drawHealthBar(
+	screen *golib.Screen,
+	gx, gy, across, zoom float32,
+	health, full float64,
+	color golib.Color,
+) {
+	if health >= full {
+		return
+	}
+	w := across * unitW
+	bar := golib.Rectangle{
+		X: gx - w/2, Y: gy + across*unitH/2 + 2/zoom, Width: w, Height: 2 / zoom,
+	}
+	screen.DrawRectangle(bar, fillBarColor)
+	bar.Width *= float32(math.Max(0, health) / full)
+	screen.DrawRectangle(bar, color)
 }
 
 // drawVehicle paints one rival vehicle on its ground point: the crawler
@@ -126,17 +176,8 @@ func drawVehicle(screen *golib.Screen, e Enemy, gx, gy, zoom float32) {
 			screen.DrawCircle(gx, gy-5*k*unitH, 2.4*k*unitW, oilColor)
 		}
 	}
-	full := enemySpecOf(e.Kind).health
-	if e.Health >= full {
-		return
-	}
-	w := across * unitW
-	bar := golib.Rectangle{
-		X: gx - w/2, Y: gy + across*unitH/2 + 2/zoom, Width: w, Height: 2 / zoom,
-	}
-	screen.DrawRectangle(bar, fillBarColor)
-	bar.Width *= float32(math.Max(0, e.Health) / full)
-	screen.DrawRectangle(bar, dangerColor)
+	drawHealthBar(screen, gx, gy, across, zoom, e.Health,
+		enemySpecOf(e.Kind).health, dangerColor)
 }
 
 // compassWord names the way from the core to a spot as the screen shows
@@ -176,6 +217,12 @@ func threatWords(s *State) string {
 				return "an intruder, " + where
 			}
 			return "raid under way, " + where
+		case StageSettled:
+			// A base is news once; a party on the move is what the line is for.
+			if len(s.Parties) > 1 {
+				continue
+			}
+			return fmt.Sprintf("rival base %s, level %d", where, p.Level)
 		default:
 			return "rivals leaving, " + where
 		}
@@ -204,6 +251,19 @@ func reportWords(r Report) string {
 			si(math.Round(r.Oil), "L"))
 	case ReportDestroyed:
 		return "The rivals are gone to the last vehicle. What they carried lies where they fell."
+	case ReportSettled:
+		return fmt.Sprintf("[danger]The rivals have dug in to the %s: a base.[/] "+
+			"It will grow a gun. Squads and artillery can bring it down.", where)
+	case ReportGun:
+		if r.Oil >= baseMaxLevel {
+			return fmt.Sprintf("The base to the %s fires faster now.", where)
+		}
+		return fmt.Sprintf("[danger]The base to the %s has its gun up[/]: it shells buildings within %s.",
+			where, si(baseGunRangeUnits, "m"))
+	case ReportBaseDown:
+		return fmt.Sprintf("The base to the %s has fallen. Its garrison runs for the mist.", where)
+	case ReportRazed:
+		return fmt.Sprintf("[danger]A shell brought a building down, %s.[/] Half of it lies there as a pile.", where)
 	}
 	return ""
 }

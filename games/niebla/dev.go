@@ -29,6 +29,7 @@ const (
 	devVisitButton = 4 // the rivals' next visit, now
 	devHurryButton = 5 // a camped party stops waiting; it sits under the visit's
 	devFastButton  = 6 // the game at devFastTicks a frame; under new world's
+	devBaseButton  = 7 // the rivals' next visit, now and to stay; under reset world's
 
 	devFastTicks = 8 // ticks of simulation per update while fast forward is on
 )
@@ -63,6 +64,7 @@ func devButtonBounds(index int) golib.Rectangle {
 	under := map[int]int{
 		devHurryButton: devVisitButton,
 		devFastButton:  devWorldButton,
+		devBaseButton:  devResetButton,
 	}
 	if above, second := under[index]; second {
 		bounds := devButtonBounds(above)
@@ -125,6 +127,10 @@ func (d *devTools) update(s *playScene, input *golib.Input) bool {
 		Apply(s.state, DevNextVisit{})
 		return true
 	}
+	if devButtonBounds(devBaseButton).Contains(mx, my) {
+		Apply(s.state, DevNextVisit{Settle: true})
+		return true
+	}
 	if devButtonBounds(devHurryButton).Contains(mx, my) {
 		Apply(s.state, DevHurryRivals{})
 		return true
@@ -154,6 +160,7 @@ func (d *devTools) resetWorld(s *playScene, seed int64) {
 	s.ordering = 0
 	s.expanded = map[string]bool{}
 	s.mites = newMiteField()
+	s.fx = newFxField()
 	s.saveNow()
 }
 
@@ -182,6 +189,7 @@ func (d *devTools) draw(s *playScene, screen *golib.Screen) {
 		devWorldButton: "new world",
 		devVisitButton: "rivals: next visit",
 		devHurryButton: "rivals: stop waiting",
+		devBaseButton:  "rivals: a base",
 		devFastButton:  fmt.Sprintf("fast forward x%d", devFastTicks),
 	}
 	lit := []bool{
@@ -191,6 +199,7 @@ func (d *devTools) draw(s *playScene, screen *golib.Screen) {
 		devWorldButton: false,
 		devVisitButton: len(s.state.Parties) > 0,
 		devHurryButton: false,
+		devBaseButton:  settled(s.state),
 		devFastButton:  d.fast,
 	}
 	for i, label := range labels {

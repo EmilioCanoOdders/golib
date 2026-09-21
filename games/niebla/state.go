@@ -32,6 +32,7 @@ type State struct {
 	Reports   []Report           // the news the rivals made, oldest first
 	Rolls     uint64             // random numbers drawn so far: the state's own PRNG
 	Squads    map[int64]Squad    // the squads' orders, by their war factory's ID
+	Shots     map[int64]Shot     // bullets and shells in the air, by ID (sim_shots.go)
 }
 
 // Fog is the region's weather, where the fog's breath has got to. The
@@ -115,6 +116,7 @@ const (
 	BuildingGuard     BuildingKind = "guard"     // shoots the rivals in its reach
 
 	BuildingWarFactory BuildingKind = "warfactory" // builds troopers, its squad
+	BuildingArtillery  BuildingKind = "artillery"  // shells the rivals the colony sees
 )
 
 // Building is one raised structure. Its Col, Row are cell coordinates
@@ -129,6 +131,7 @@ type Building struct {
 	Oil      float64 // liters in its tank: silos and chargers (sim_oil.go)
 	Reload   int64   // guard posts: ticks until the next shot (sim_enemies.go)
 	Aim      int64   // guard posts: the vehicle the last shot went to
+	Damage   float64 // what it has taken; at its health it falls (sim_shots.go)
 }
 
 // Job is one build job: what to raise, on which cell, and the ticks of
@@ -187,6 +190,7 @@ func newGameOn(seed int64) *State {
 		Parties:   map[int64]Party{},
 		Marks:     map[int64]Mark{},
 		Squads:    map[int64]Squad{},
+		Shots:     map[int64]Shot{},
 		Raids:     Raids{NextAt: raidFirstScoutTicks},
 		Drain:     map[string]float64{},
 		Stock:     Stock{Oil: startingStockOil, Lilac: startingStockLilac},

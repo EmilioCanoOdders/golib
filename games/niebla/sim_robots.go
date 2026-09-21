@@ -43,6 +43,8 @@ func stepSim(s *State) {
 	stepSquads(s)
 	stepEnemies(s)
 	stepGuards(s)
+	stepArtillery(s)
+	stepShots(s)
 	for _, id := range sortedRobotIDs(s) {
 		r := s.Robots[id]
 		// A trooper the rivals shot this tick is gone already.
@@ -193,6 +195,9 @@ func (r *Robot) building(s *State) bool {
 	if _, hasJob := oldestJob(s); hasJob {
 		return true
 	}
+	if _, damaged := damagedBuilding(s); damaged {
+		return true
+	}
 	if claimStands(s, *r) {
 		return true
 	}
@@ -204,6 +209,15 @@ func (r *Robot) building(s *State) bool {
 // doesn't swallow them. With no site left to raise, they lay pipe.
 func (r *Robot) stepBuild(s *State) {
 	job, hasJob := oldestJob(s)
+	if b, damaged := damagedBuilding(s); !hasJob && damaged {
+		r.Pipe, r.Section = 0, 0
+		cx, cy := cellCenterUnits(b.Col, b.Row)
+		angle := float64(r.ID) * goldenAngle
+		if r.walkTowards(s, cx+math.Cos(angle)*11, cy+math.Sin(angle)*11) {
+			s.mend(b.ID)
+		}
+		return
+	}
 	if !hasJob {
 		r.stepLayPipe(s)
 		return

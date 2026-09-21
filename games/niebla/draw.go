@@ -126,6 +126,8 @@ func drawBuildings(s *State, screen *golib.Screen, zoom float32) {
 			foot := gy + across*k*unitH/4
 			drawFillBar(screen, x, foot, height*k*unitH, zoom, part, color)
 		}
+		health := buildingHealth(b.Kind)
+		drawHealthBar(screen, gx, gy, across*k, zoom, health-b.Damage, health, dangerColor)
 	}
 }
 
@@ -266,6 +268,8 @@ func buildingSize(kind BuildingKind) (across, height float32) {
 		return 14, 18
 	case BuildingWarFactory:
 		return 24, 12
+	case BuildingArtillery:
+		return 20, 10
 	}
 	return 20, 10
 }
@@ -315,6 +319,20 @@ func drawBuilding(
 		isoBox(screen, gx, gy-height*0.4*unitH, across*0.4, height*0.6,
 			pumpColor, mid(pumpColor, pumpDark), pumpDark)
 		screen.DrawCircle(gx, gy-(height+1)*unitH, across*unitW*0.22, oilColor)
+	case BuildingArtillery:
+		// A round pit of sandbags and a long barrel, up and away from the core.
+		isoBox(screen, gx, gy, across, height*0.35,
+			warFactoryColor, mid(warFactoryColor, warFactoryDark), warFactoryDark)
+		isoBox(screen, gx, gy-height*0.35*unitH, across*0.4, height*0.4,
+			guardColor, mid(guardColor, guardDark), guardDark)
+		cx, cy := projectCore()
+		dx, dy := gx-cx, gy-cy
+		if gap := float32(math.Hypot(float64(dx), float64(dy))); gap > 0 {
+			dx, dy = dx/gap, dy/gap
+		}
+		reach := across * unitW * 0.9
+		screen.DrawLine(gx, gy-height*0.8*unitH, gx+dx*reach,
+			gy+dy*reach-height*1.9*unitH, across*unitW*0.09, guardDark)
 	case BuildingWarFactory:
 		// A low hangar, a watch tower at its corner and the guard's lamp.
 		isoBox(screen, gx, gy, across, height*0.7,

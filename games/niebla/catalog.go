@@ -260,6 +260,26 @@ var catalog = map[ThingType]ThingInfo{
 			}
 		},
 	},
+	TypeArtillery: {
+		Name:    "Artillery",
+		Color:   warFactoryColor,
+		Primary: true,
+		Summary: func(amount float64) string {
+			return "shells what is seen"
+		},
+		Details: func(s *State, thing Thing) []Detail {
+			return []Detail{
+				{"reach", fmt.Sprintf("%s to %s",
+					si(artilleryMinUnits, "m"), si(artilleryRangeUnits, "m"))},
+				{"shell", fmt.Sprintf("%.0f damage within %s, every %s",
+					artilleryShellDamage, si(shellBlastUnits, "m"),
+					si(artilleryReloadTicks/60, "s"))},
+				{"shell cost", costWords(artilleryShellLilac, artilleryShellOil)},
+				{"fires at", "rivals within " + si(sightUnits, "m") + " of a robot or a building"},
+			}
+		},
+	},
+	TypeBase:    {Name: "Rival base", Color: enemyLampColor, Primary: true, Details: enemyDetails},
 	TypeScout:   {Name: "Rival scout", Color: enemyLampColor, Details: enemyDetails},
 	TypeCrawler: {Name: "Rival crawler", Color: enemyLampColor, Details: enemyDetails},
 	TypeRaider:  {Name: "Rival raider", Color: enemyLampColor, Details: enemyDetails},
@@ -308,6 +328,23 @@ func enemyDetails(s *State, thing Thing) []Detail {
 		details = append(details, Detail{"repulsor", "r = " + si(spec.bubble, "m")})
 	} else {
 		details = append(details, Detail{"repulsor", "none: it lives under its crawler's"})
+	}
+	if e.Kind == EnemyBase {
+		p := s.Parties[e.Party]
+		gun := "none yet"
+		if p.Level >= 2 {
+			gun = fmt.Sprintf("shells buildings, %s to %s",
+				si(baseGunMinUnits, "m"), si(baseGunRangeUnits, "m"))
+		}
+		details = append(details,
+			Detail{"level", fmt.Sprintf("%d of %d", p.Level, baseMaxLevel)},
+			Detail{"gun", gun})
+		if p.Level < baseMaxLevel {
+			left := (p.Grow + 59) / 60
+			details = append(details, Detail{
+				"grows in", fmt.Sprintf("%d:%02d", left/60, left%60),
+			})
+		}
 	}
 	if spec.oilCap > 0 {
 		details = append(details, Detail{

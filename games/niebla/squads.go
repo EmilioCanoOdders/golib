@@ -94,40 +94,6 @@ func drawSquadMarks(s *State, screen *golib.Screen, zoom float32) {
 	}
 }
 
-// drawShots paints the shots that still show: the guard posts', the
-// troopers' and the rivals'.
-func drawShots(s *State, screen *golib.Screen, zoom float32) {
-	shot := func(fx, fy, tx, ty float32, color golib.Color) {
-		screen.DrawLine(fx, fy, tx, ty, 1.5/zoom, color)
-		screen.DrawCircle(tx, ty, 2.5/zoom, color)
-	}
-	for _, id := range sortedBuildingIDs(s) {
-		b := s.Buildings[id]
-		if target, firing := guardFiring(s, b); firing {
-			gx, gy := projectBuilding(b)
-			_, height := buildingSize(b.Kind)
-			tx, ty := project(float32(target.X), float32(target.Y))
-			shot(gx, gy-height*unitH, tx, ty-2*unitH, shotColor)
-		}
-	}
-	for _, id := range sortedRobotIDs(s) {
-		r := s.Robots[id]
-		if target, firing := trooperFiring(s, r); firing {
-			fx, fy := project(float32(r.X), float32(r.Y))
-			tx, ty := project(float32(target.X), float32(target.Y))
-			shot(fx, fy-2*unitH, tx, ty-2*unitH, shotColor)
-		}
-	}
-	for _, id := range sortedEnemyIDs(s) {
-		e := s.Enemies[id]
-		if target, firing := enemyFiring(s, e); firing {
-			fx, fy := project(float32(e.X), float32(e.Y))
-			tx, ty := project(float32(target.X), float32(target.Y))
-			shot(fx, fy-2*unitH, tx, ty-2*unitH, enemyLampColor)
-		}
-	}
-}
-
 // squadWords says a squad in a few words: how many it is and what it is
 // at.
 func squadWords(s *State, home int64) string {

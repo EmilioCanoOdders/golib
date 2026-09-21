@@ -56,7 +56,10 @@ camped party, which moves in on the next tick (`DevHurryRivals`). Under
 instead of one (`devTools.ticksPerUpdate`) until it is pressed again:
 the same ticks, so the same game, only sooner. `Mouse@14:588,99
 MouseLeft@15` presses `rivals: stop waiting` in a shot, and
-`Mouse@14:460,99` aims at `fast forward x8`.
+`Mouse@14:460,99` aims at `fast forward x8`. `rivals: stop waiting`
+also grows a base its next level at once, and `rivals: a base`, under
+`reset world`, brings the next visit in to stay
+(`DevNextVisit{Settle: true}`).
 
 ## Files
 
@@ -78,7 +81,9 @@ MouseLeft@15` presses `rivals: stop waiting` in a shot, and
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
 | `sim_enemies.go` | The rivals' law and tuning: `Enemy`, `Party`, `Raids`, `Mark` and `Report`; the clock that sends a visit (`stepRaids`, `spawnVisit`), a party's stages (`stepParty`: approach, camp, raid, leave), the siphoning (`raid`), the fog's due on a vehicle with no repulsor over it (`stepExposure`), the wrecks' loot (`killEnemy`), the guard posts (`stepGuards`) and the state's own PRNG (`State.roll`) |
 | `sim_squads.go` | The squads' law and tuning: troopers (`RobotCombat`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), the war factory's room (`squadRoom`), and the rivals shooting back (`stepEnemyGuns`) |
-| `squads.go` | The squads on the screen: the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the pennant and the ring (`drawSquadMarks`), every shot that still shows (`drawShots`) and `squadWords` for the cards |
+| `squads.go` | The squads on the screen: the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
+| `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), who they hurt, the buildings' health and the robots' mending, what the colony sees (`seen`) and its artillery (`stepArtillery`) |
+| `shots.go` | Shots on the screen and their light, for looks only: bullets as streaks, shells on their arc over a shadow, pools of light added over the ground and what stands on it (`lightPool`), guns' flashes, and bursts of sparks that cool from yellow to red, embers and smoke; the field (`fxField`) learns of fired and landed shots by comparing the state's with the ones it saw last; view, never state |
 | `enemies.go` | The rivals on the screen: the scouts' marks on the ground, the vehicles under their repulsors' pockets over the fog, the guard posts' shots, and the words the player is told (`threatWords` for the HUD, `reportWords` and `drawReport` for the news) |
 | `mist.go` | The fog on the screen: a haze outside every repulsor's circle and `mistLayers` layers that thicken it past the line, each the region minus the clear circles (`clearDiscs`: the core's, the protectors', the rivals'), cut in strips whose gaps join into quads (`drawMist`, `mistGaps`), so the circles are round at every zoom and the air inside them is clear |
 | `swell.go` | How a pressing swell looks, by its pressure: waves of shade rolling in to the line, stopping at the clear circles, and one-pixel static over the mist; a pure picture of the state |
@@ -343,9 +348,40 @@ cell, which the robots haul home like any other.
 A guard post (`BuildingGuard`, in the build menu) reloads in
 `Building.Reload` and shoots the nearest vehicle within
 `guardRangeUnits` (`nearestEnemy`), `guardShotDamage` a shot, paid
-`guardShotOil` out of any tank; `Building.Aim` and the reload say
-whether a shot still shows (`guardFiring`). Nobody damages the colony
-yet.
+`guardShotOil` out of any tank.
+
+Shots (`sim_shots.go`). No gun hits at once: `State.fire` puts a `Shot`
+in `State.Shots` and `stepShots` flies it - a bullet at `bulletSpeed`
+after its target, which it hurts on arrival if it still stands, a shell
+at `shellSpeed` to the spot it was aimed at, where `land` hurts
+everybody of the other side within `shellBlastUnits`: rival vehicles
+for the colony's shells, troopers and buildings for the rivals'
+(`hurtEnemy`, `hurtTrooper`, `hurtBuilding`). Guard posts, troopers and
+the rivals' guns fire bullets. A building counts what it has taken in
+`Building.Damage`; at `buildingHealth` it goes through `takeDown`, the
+door `Demolish` uses too, with `wreckRefund` of its cost, and
+`ReportRazed` says so. The robots mend the oldest damaged building as
+part of their build line, after the sites and before the pipes
+(`damagedBuilding`, `mend`). The core is no building and takes nothing.
+
+The settled enemy. From `settleFromVisit` on, a visit that finds no base
+in the region has `Party.Settles`: at its camp the crawler turns into an
+`EnemyBase` - the same vehicle, the same ID, so orders, cards, guard
+posts and loot treat it as any other -, the party goes to `StageSettled`
+with `Level` 1 and counts as a visit done (`startCalm`), so the raids go
+on around it: `stepRaids` waits only for parties on the move. Every
+`baseGrowTicks` the base grows a level up to `baseMaxLevel`; from level
+2 `fireBaseGun` shells the colony's nearest building between
+`baseGunMinUnits` and `baseGunRangeUnits`, or the nearest trooper with
+none, faster at level 3. The raiders that came with it are its garrison
+and shoot troopers as ever. A base that falls reports `ReportBaseDown`,
+and its party, with no repulsor left, runs.
+
+The colony's artillery (`BuildingArtillery`, `stepArtillery`) shells
+rivals between `artilleryMinUnits` and `artilleryRangeUnits` that the
+colony sees (`seen`: within `sightUnits` of a robot, a building or the
+core), a base before a vehicle and then the nearest, and pays every
+shell in lilac and oil.
 
 Squads (`sim_squads.go`). A war factory (`BuildingWarFactory`) builds
 troopers through the same `QueueRobot` the factory answers, while
@@ -572,7 +608,15 @@ a dry colony doesn't shoot; raiders whose crawler dies are digested on
 the fog's tick; and a raid replays the same, survives a JSON round
 trip, and a save from before the rivals wakes up to its scout.
 `noRivals` keeps them out of a test that is about something else.
-`squads_test.go` pins the squads: a war factory charges for a trooper,
+`shots_test.go` pins the shots and what came with them: a bullet is in
+the air before it hurts; a visit that settles digs in with a base's
+health, counts as a visit done, grows its gun on the tick, and shells a
+silo 800 m away down to a pile of half its cost while the core takes
+nothing; robots mend a damaged building; the colony's artillery holds
+its fire at a base nobody sees, fires once a spotter stands within
+sight, pays its shells, hurts the base after the shell's flight and
+brings it down, after which the garrison leaves; and a shell misses who
+moved on. `squads_test.go` pins the squads: a war factory charges for a trooper,
 rolls it out whole into its squad and stops at `squadSize`, and troopers
 touch no job, pile or post; a squad walks to the spot it is told to
 guard and mends there, and an order for anything but a war factory is

@@ -104,6 +104,8 @@ func buildingCost(kind BuildingKind) (lilac, oil float64) {
 		return guardCostLilac, guardCostOil
 	case BuildingWarFactory:
 		return warFactoryCostLilac, warFactoryCostOil
+	case BuildingArtillery:
+		return artilleryCostLilac, artilleryCostOil
 	}
 	return 0, 0
 }

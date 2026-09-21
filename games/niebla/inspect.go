@@ -128,6 +128,13 @@ func tooltipLayout(
 		for _, detail := range info.Details(s, thing) {
 			t.rows = append(t.rows, tooltipRow{thing: thing, detail: detail})
 		}
+		if b, ok := s.Buildings[thing.Ref]; ok && b.Damage > 0 &&
+			buildingType(b.Kind) == thing.Type {
+			left := 100 * (1 - b.Damage/buildingHealth(b.Kind))
+			t.rows = append(t.rows, tooltipRow{thing: thing, detail: Detail{
+				"integrity", fmt.Sprintf("[danger]%.0f%%[/], robots will mend it", left),
+			}})
+		}
 		if thing.Type == TypeFactory {
 			if b, ok := s.Buildings[thing.Ref]; ok && b.Work <= 0 {
 				t.rows = append(t.rows, tooltipRow{thing: thing, button: buttonBuildRobot})

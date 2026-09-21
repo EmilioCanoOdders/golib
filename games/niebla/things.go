@@ -51,10 +51,12 @@ const (
 	TypeGuard     ThingType = "guard"
 
 	TypeWarFactory ThingType = "warfactory"
+	TypeArtillery  ThingType = "artillery"
 
 	TypeScout   ThingType = "scout" // the rivals' vehicles
 	TypeCrawler ThingType = "crawler"
 	TypeRaider  ThingType = "raider"
+	TypeBase    ThingType = "base"
 
 	TypeSite ThingType = "site" // a building still being raised
 	TypePile ThingType = "pile" // loose items on the ground
@@ -79,6 +81,8 @@ func buildingType(kind BuildingKind) ThingType {
 		return TypeGuard
 	case BuildingWarFactory:
 		return TypeWarFactory
+	case BuildingArtillery:
+		return TypeArtillery
 	}
 	return TypeRobot
 }
@@ -191,6 +195,8 @@ func stageWords(stage PartyStage) string {
 		return "camped, getting ready"
 	case StageRaid:
 		return "after your oil"
+	case StageSettled:
+		return "dug in"
 	}
 	return "leaving"
 }
@@ -339,10 +345,13 @@ func robotCaption(s *State, r Robot) string {
 		}
 		return "loading " + postWord(r)
 	case taskBuild:
-		if _, hasJob := oldestJob(s); !hasJob {
-			return "laying pipe"
+		if _, hasJob := oldestJob(s); hasJob {
+			return "building"
 		}
-		return "building"
+		if _, damaged := damagedBuilding(s); damaged {
+			return "repairing"
+		}
+		return "laying pipe"
 	case taskCollect:
 		return "fetching loose items"
 	case taskPost:

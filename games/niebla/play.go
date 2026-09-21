@@ -40,6 +40,7 @@ const autosaveTicks = 900
 type playScene struct {
 	state *State
 	mites *miteField // the fog's wear on what stands in it; looks only
+	fx    *fxField   // shots' light, flashes, sparks and smoke; looks only
 	dev   devTools
 
 	camera       *golib.Camera
@@ -83,6 +84,7 @@ func newPlayScene(state *State) *playScene {
 	s := &playScene{
 		state:    state,
 		mites:    newMiteField(),
+		fx:       newFxField(),
 		expanded: map[string]bool{},
 	}
 	s.camera = golib.NewCamera(screenWidth, screenHeight)
@@ -123,6 +125,7 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 		Apply(s.state, Tick{})
 	}
 	s.mites.update(s.state, dt)
+	s.fx.update(s.state, dt)
 	s.savedTicks += int64(ticks)
 	if s.savedTicks >= autosaveTicks {
 		s.saveNow()
@@ -425,6 +428,7 @@ func (s *playScene) Draw(screen *golib.Screen) {
 		Width: screenWidth / s.zoom, Height: screenHeight / s.zoom,
 	})
 	s.mites.draw(screen, s.zoom)
+	s.fx.draw(s.state, screen, s.zoom)
 	// The cursor is the cell under the pointer, the grid's last
 	// subdivision, about four robots across. Far out it lifts to a
 	// readable size on the screen.
@@ -441,6 +445,15 @@ func (s *playScene) Draw(screen *golib.Screen) {
 			gx, gy := projectBuilding(b)
 			ellipseOutline(screen, gx, gy, guardRangeUnits/unitsPerTile,
 				1.5/s.zoom, golib.WithOpacity(guardColor, 0.8))
+		}
+		// And a picked artillery piece its two: the reach, and the ring it
+		// can't fire inside.
+		if b, ok := buildingAt(s.state, s.pickedCol, s.pickedRow); ok && b.Kind == BuildingArtillery {
+			gx, gy := projectBuilding(b)
+			for _, reach := range []float32{artilleryRangeUnits, artilleryMinUnits} {
+				ellipseOutline(screen, gx, gy, reach/unitsPerTile,
+					1.5/s.zoom, golib.WithOpacity(guardColor, 0.8))
+			}
 		}
 	}
 	if s.laying.on {
