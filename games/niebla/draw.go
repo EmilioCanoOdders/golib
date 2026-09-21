@@ -36,6 +36,7 @@ func drawRegion(s *State, screen *golib.Screen, zoom float32) {
 	drawBuildings(s, screen, zoom)
 	drawRobots(s, screen, zoom)
 	drawFogCover(screen, fogLineNow(s))
+	drawSwellWaves(s, screen)
 	drawFogLine(screen, zoom, s)
 	drawPiles(s, screen, zoom, false)
 	drawJobs(s, screen, zoom)
@@ -571,9 +572,9 @@ func drawRobots(s *State, screen *golib.Screen, zoom float32) {
 // line standing where the fog will press in.
 func drawFogLine(screen *golib.Screen, zoom float32, s *State) {
 	cx, cy := projectCore()
-	if s.Fog.SwellLeft > 0 {
-		ellipseOutline(screen, cx, cy, fogLineNow(s), 4/zoom,
-			golib.WithOpacity(fogBandColor, 0.9))
+	if p := float32(s.Fog.Pressure); p > 0 {
+		ellipseOutline(screen, cx, cy, fogLineNow(s), (3+p)/zoom,
+			golib.WithOpacity(fogBandColor, golib.Lerp(0.55, 0.9, p)))
 		return
 	}
 	if s.Fog.NextIn <= 1 {

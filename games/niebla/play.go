@@ -39,7 +39,7 @@ const autosaveTicks = 900
 // Draw renders the state and changes nothing.
 type playScene struct {
 	state *State
-	motes *moteField // the fog's wear on what stands in it; looks only
+	mites *miteField // the fog's wear on what stands in it; looks only
 	dev   devTools
 
 	camera       *golib.Camera
@@ -82,7 +82,7 @@ func newPlayScene(state *State) *playScene {
 	}
 	s := &playScene{
 		state:    state,
-		motes:    newMoteField(),
+		mites:    newMiteField(),
 		expanded: map[string]bool{},
 	}
 	s.camera = golib.NewCamera(screenWidth, screenHeight)
@@ -118,7 +118,7 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 	s.updateInspection(input, s.dev.update(s, input))
 	// The loop is the clock: one tick of simulation per update.
 	Apply(s.state, Tick{})
-	s.motes.update(s.state, dt)
+	s.mites.update(s.state, dt)
 	s.savedTicks++
 	if s.savedTicks >= autosaveTicks {
 		s.saveNow()
@@ -385,7 +385,7 @@ func regionOnScreen() golib.Rectangle {
 func (s *playScene) Draw(screen *golib.Screen) {
 	screen.SetCamera(s.camera)
 	drawRegion(s.state, screen, s.zoom)
-	s.motes.draw(screen, s.zoom)
+	s.mites.draw(screen, s.zoom)
 	// The cursor is the cell under the pointer, the grid's last
 	// subdivision, about four robots across. Far out it lifts to a
 	// readable size on the screen.
@@ -404,6 +404,7 @@ func (s *playScene) Draw(screen *golib.Screen) {
 		drawTileHighlight(screen, s.pickedCol, s.pickedRow, 2/s.zoom, pickedTileColor)
 	}
 	screen.SetCamera(nil)
+	drawSwellStatic(s.state, screen, s.camera)
 	screen.DrawText("niebla", 16, 12, 24, textColor, uiText)
 	drawMarkup(screen, s.hudLine(), 16, 44, 15, textColor)
 	s.dev.draw(s, screen)
@@ -431,6 +432,8 @@ func (s *playScene) hudLine() string {
 	switch {
 	case s.state.Fog.SwellLeft > 0:
 		fog += "   swell"
+	case s.state.Fog.Pressure > 0:
+		fog += "   swell easing"
 	case s.state.Fog.NextIn <= 1:
 		fog += "   swell next cycle"
 	}

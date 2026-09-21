@@ -102,8 +102,9 @@ func (r *Robot) taskNow(s *State) robotTask {
 func stepRobot(s *State, r *Robot) {
 	if r.Kind == RobotBuilt && r.Tank > 0 {
 		burn := robotBurnPerSecond / 60
-		if s.Fog.SwellLeft > 0 && !inSafeZone(s, r.X, r.Y) {
-			burn *= fogSwellBurn // the swell's mist is meaner in the open
+		if !inSafeZone(s, r.X, r.Y) {
+			// The swell's mist is meaner in the open, by as much as it presses.
+			burn *= 1 + (fogSwellBurn-1)*s.Fog.Pressure
 		}
 		r.Tank = math.Max(0, r.Tank-burn)
 	}

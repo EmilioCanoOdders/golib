@@ -61,19 +61,20 @@ scripted shot:
 | `sim_piles.go` | Demolition and loose items: `canDemolish`, the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, storage caps, refuel spots, the factories' robot works |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
+| `swell.go` | How a pressing swell looks, by its pressure: waves of shade rolling in to the line and one-pixel static over the mist; a pure picture of the state |
 | `region.go` | The hand-made 25x25 layout, the isometric `project`, tile helpers, the deposit patches flooded out of the layout; pure Go, no drawing |
 | `things.go` | What a tile holds: `Thing` snapshots out of layout plus state (a deposit tile shows its whole patch), `tileAtWorld`, the SI quantities; pure Go, no drawing |
 | `catalog.go` | The entity database: per thing type its name, color, unit and card lines, plus the stable-color fallback |
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
 | `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons; tile highlights |
-| `motes.go` | The fog's wear, for looks only: motes of darkness orbiting whatever stands in the mist, by its volume, trailing walkers and closing in on what stands still; view, never state |
+| `mites.go` | The fog's wear, for looks only: mites of darkness orbiting whatever stands in the mist, by its volume, trailing walkers and closing in on what stands still; view, never state |
 | `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots —; view only, acting through the `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
 | `draw.go` | The region painter: ground, the core's monolith, buildings, robots, fog, bubbles, build-site wireframes, the marking ghost |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `markup_test.go` | Markup parser and tooltip layout/button tests |
 | `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
-| `motes_test.go` | The motes driven with no window: counted by volume and only in the fog, tight on what stands still and trailing a walker, fading over what is gone, the falloff's layers |
+| `mites_test.go` | The mites driven with no window: counted by volume and only in the fog, tight on what stands still and trailing a walker, fading over what is gone, the falloff's layers |
 | `dev_test.go` | The dev actions: a held swell stays up and doesn't count, a placed robot is built, full and free, `unitsAtWorld` undoes `project` |
 | `fog_test.go` | The fog driven directly: cycles, the first swell on schedule, the pressed line, the bubble's margin, the pushed band's drag, the swell's burn, the HUD's forecast |
 | `identity_test.go` | The identity derived from a machine ID: stable, distinct, and the parsers of what `reg query`, `ioreg` and the machine-id files say |
@@ -155,7 +156,16 @@ presses `fogSwellGrowth` tiles deeper (`fogSwellReach` the first time),
 but never past `fogSwellMargin` of the bubble: `swellReach` caps it, so
 the core's ground is not negotiable whatever the swell count.
 
-A swell rises whole at a cycle's end — which is what makes the HUD's
+A swell starts and ends on its tick, but what the ground feels is its
+`Pressure`, 0 to 1, which `stepPressure` walks up while a swell is up
+and back down in the calm, `fogSwellRampTicks` either way: `fogLineNow`
+is the calm line minus the reach times the pressure, and the extra burn
+scales with it. `swell.go` draws the pressing - crests of shade rolling
+in (`drawSwellWaves`, in the world, under the fog line) and static over
+the mist (`drawSwellStatic`, in screen pixels) - from `State.Ticks`
+alone, through `hashUnit`, with no randomness and no memory.
+
+A swell starts whole at a cycle's end — which is what makes the HUD's
 forecast exact: while it says `swell next cycle` (the ghost line stands
 where the fog will press in), the swell rises at that very boundary.
 While it is up, `fogLineNow` returns the pressed line, the view paints
@@ -344,11 +354,11 @@ cards carry their trash cans. `fog_test.go` does the same for the fog slice: the
 cycles tick, the first swell rises on schedule and drains whole, the
 line presses in and never reaches the bubble, the pushed band drags
 more, a swell burns outside but not inside, and the HUD forecasts.
-`motes_test.go` pins the fog's motes, which are view but need no
+`mites_test.go` pins the fog's mites, which are view but need no
 window: their count follows the body's volume and the fog on it, none
 under a bubble; they sit on a robot that stands still and trail one that
 walks; they fade over a host that left the state; and the layers they
-are drawn with stack into `moteFalloff`.
+are drawn with stack into `miteFalloff`.
 `identity_test.go` pins the identity: stable for a machine, distinct
 between machines, 64 hex characters, and the three parsers of what the
 systems report. `store_test.go` pins the database: an identity (and a

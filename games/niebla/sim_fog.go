@@ -33,6 +33,8 @@ const (
 	fogSwellGrowth = 0.35 // tiles more of reach each swell
 	fogSwellMargin = 0.75 // tiles of ground the line never takes off the bubble
 
+	fogSwellRampTicks = 300 // ticks the line takes to press in, and to let go: 5 s
+
 	fogSwellSpeedFactor = 0.25 // speed left in the pushed band; fog that was already there keeps fogSpeedFactor
 	fogSwellBurn        = 1.5  // a built robot's tank burn outside a bubble
 )
@@ -41,6 +43,7 @@ const (
 // tick, the cycle's clock runs always, and the swell that is due rises
 // at the boundary, whole.
 func stepFog(s *State) {
+	stepPressure(s)
 	if s.Fog.SwellLeft > 0 && !s.Fog.Held {
 		s.Fog.SwellLeft--
 	}
@@ -61,6 +64,19 @@ func stepFog(s *State) {
 	s.Fog.Swells++
 	s.Fog.SwellLeft = left
 	s.Fog.NextIn = swellPeriod(s)
+}
+
+// stepPressure moves the swell's pressure a tick toward where the
+// weather wants it: all the way in while a swell is up, all the way out
+// in the calm. The swell starts and ends on its tick, whole; what it
+// does to the ground comes and goes with the pressure.
+func stepPressure(s *State) {
+	step := 1.0 / fogSwellRampTicks
+	if s.Fog.SwellLeft > 0 {
+		s.Fog.Pressure = math.Min(1, s.Fog.Pressure+step)
+		return
+	}
+	s.Fog.Pressure = math.Max(0, s.Fog.Pressure-step)
 }
 
 // swellTicks returns how long a swell lasts: the longer, the more have
@@ -98,12 +114,9 @@ func swellReach(s *State) float32 {
 }
 
 // fogLineNow returns where the fog's front stands, in tiles from the
-// core: the calm line, pressed in while a swell is up.
+// core: the calm line, pressed in as far as the swell's pressure says.
 func fogLineNow(s *State) float32 {
-	if s.Fog.SwellLeft > 0 {
-		return fogLineRadius - swellReach(s)
-	}
-	return fogLineRadius
+	return fogLineRadius - swellReach(s)*float32(s.Fog.Pressure)
 }
 
 // fogDistanceAt returns how far the tile under a world point sits from
@@ -124,7 +137,7 @@ func fogDrag(s *State, x, y float64) float64 {
 		return 1
 	}
 	factor := fogSpeedFactor
-	if s.Fog.SwellLeft > 0 && fogCover(fogDistanceAt(x, y), fogLineRadius) <= 0 {
+	if s.Fog.Pressure > 0 && fogCover(fogDistanceAt(x, y), fogLineRadius) <= 0 {
 		factor = fogSwellSpeedFactor
 	}
 	return 1 - (1-factor)*fog

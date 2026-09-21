@@ -50,6 +50,41 @@ func TestTheFirstSwellRisesOnSchedule(t *testing.T) {
 	}
 }
 
+// swellUp puts a swell up and pressed in whole, the way it stands once
+// its ramp is over.
+func swellUp(s *State) {
+	s.Fog.SwellLeft = fogSwellTicks
+	s.Fog.Pressure = 1
+}
+
+func TestASwellPressesInAndLetsGoLittleByLittle(t *testing.T) {
+	s := newGame()
+	Apply(s, DevHoldSwell{On: true})
+	last := fogLineNow(s)
+	for i := 0; i < fogSwellRampTicks; i++ {
+		Apply(s, Tick{})
+		line := fogLineNow(s)
+		if line >= last || last-line > 0.05 {
+			t.Fatalf("tick %d moved the line from %v to %v, want a small step in",
+				i, last, line)
+		}
+		last = line
+	}
+	if want := fogLineRadius - swellReach(s); math.Abs(float64(last-want)) > 1e-4 {
+		t.Fatalf("the ramp over, the line stands at %v, want %v", last, want)
+	}
+	Apply(s, DevHoldSwell{On: false})
+	runTicks(s, fogSwellRampTicks/2)
+	if line := fogLineNow(s); line <= last || line >= fogLineRadius {
+		t.Errorf("half way out the line stands at %v, want it between %v and %v",
+			line, last, float32(fogLineRadius))
+	}
+	runTicks(s, fogSwellRampTicks/2+1)
+	if line := fogLineNow(s); line != fogLineRadius {
+		t.Errorf("let go, the line rests at %v, want %v", line, float32(fogLineRadius))
+	}
+}
+
 func TestASwellPressesTheLineIn(t *testing.T) {
 	s := newGame()
 	band := fogLineRadius - 1.5 // a ring the calm fog leaves clear, the swell does not
@@ -60,7 +95,7 @@ func TestASwellPressesTheLineIn(t *testing.T) {
 	if line := fogLineNow(s); line != fogLineRadius {
 		t.Fatalf("the calm line stands at %v, want %v", line, fogLineRadius)
 	}
-	s.Fog.SwellLeft = fogSwellTicks
+	swellUp(s)
 	if line := fogLineNow(s); line >= fogLineRadius {
 		t.Fatalf("the swell left the line at %v, want it pressed in", line)
 	}
@@ -76,7 +111,7 @@ func TestASwellPressesTheLineIn(t *testing.T) {
 func TestASwellNeverReachesTheBubble(t *testing.T) {
 	s := newGame()
 	s.Fog.Swells = 1000 // a fog grown as hard as it will go
-	s.Fog.SwellLeft = fogSwellTicks
+	swellUp(s)
 	x, y := pointAtTiles(float64(coreBubbleRadius) + 0.5/unitsPerTile)
 	if fogAt(s, x, y) != 0 {
 		t.Errorf("the fog sits at the bubble's rim during a swell, line at %v",
@@ -102,7 +137,7 @@ func TestThePushedBandDragsMore(t *testing.T) {
 		t.Errorf("the calm fog dragged at %v tiles: %v a tick, want the whole %v",
 			band, calm, robotSpeed/60)
 	}
-	s.Fog.SwellLeft = fogSwellTicks
+	swellUp(s)
 	swell := moved()
 	if swell >= calm {
 		t.Errorf("the pushed band let a robot keep %v of its step against the calm %v",
@@ -120,7 +155,7 @@ func TestASwellBurnsTanksFasterOutside(t *testing.T) {
 	calm := robotTankLiters - r.Tank
 	r.Tank = robotTankLiters
 	s.Robots[id] = r
-	s.Fog.SwellLeft = fogSwellTicks
+	swellUp(s)
 	runTicks(s, 60)
 	swell := robotTankLiters - s.Robots[id].Tank
 	if math.Abs(calm-robotBurnPerSecond) > 0.001 {
