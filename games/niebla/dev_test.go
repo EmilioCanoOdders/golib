@@ -74,3 +74,38 @@ func TestUnitsAtWorldUndoesProject(t *testing.T) {
 		t.Fatalf("1234, 567 came back as %v, %v", x, y)
 	}
 }
+
+func TestFastForwardSendsMoreOfTheSameTicksAndSitsUnderTheVisitButton(t *testing.T) {
+	was := devOpen
+	defer func() { devOpen = was }()
+	d := devTools{fast: true}
+	devOpen = false
+	if got := d.ticksPerUpdate(); got != 1 {
+		t.Errorf("with the strip closed an update sends %d ticks, want 1", got)
+	}
+	devOpen = true
+	if got := d.ticksPerUpdate(); got != devFastTicks {
+		t.Errorf("fast forward sends %d ticks an update, want %d", got, devFastTicks)
+	}
+	visit, hurry := devButtonBounds(devVisitButton), devButtonBounds(devHurryButton)
+	if hurry.X != visit.X || hurry.Y <= visit.Y+visit.Height-1 {
+		t.Errorf("the hurry button stands at %v, want it under the visit's %v", hurry, visit)
+	}
+}
+
+func TestDevHurryRivalsEndsACampsWait(t *testing.T) {
+	s := newGame()
+	s.Raids.Visits = 1
+	visitNow(s)
+	Apply(s, DevHurryRivals{}) // on its way in, a party has no wait to end
+	tickUntil(s, 60*600, func() bool { return lastReport(s).Kind == ReportCamp })
+	runTicks(s, 60)
+	if lastReport(s).Kind != ReportCamp {
+		t.Fatalf("the party moved in by itself a second into its camp")
+	}
+	Apply(s, DevHurryRivals{})
+	runTicks(s, 1)
+	if lastReport(s).Kind != ReportRaid {
+		t.Errorf("hurried, the camped party reports %q, want it moving in", lastReport(s).Kind)
+	}
+}

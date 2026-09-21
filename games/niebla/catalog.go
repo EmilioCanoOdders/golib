@@ -98,14 +98,22 @@ var catalog = map[ThingType]ThingInfo{
 				return nil
 			}
 			model := "core"
-			if r.Kind == RobotBuilt {
+			switch r.Kind {
+			case RobotBuilt:
 				model = "factory"
+			case RobotCombat:
+				model = "trooper"
 			}
 			details := []Detail{
 				{"task", robotCaption(s, r)},
 				{"model", model},
 			}
-			if r.Kind == RobotBuilt {
+			if r.Kind == RobotCombat {
+				details = append(details, Detail{
+					"health", fmt.Sprintf("%.0f / %.0f", math.Max(0, r.Health), trooperHealth),
+				})
+			}
+			if r.tanked() {
 				details = append(details, Detail{
 					"tank",
 					fmt.Sprintf("[oil]%s[/] / %s",
@@ -215,6 +223,46 @@ var catalog = map[ThingType]ThingInfo{
 			}
 		},
 	},
+	TypeGuard: {
+		Name:    "Guard post",
+		Color:   guardColor,
+		Primary: true,
+		Summary: func(amount float64) string {
+			return "shoots rivals"
+		},
+		Details: func(s *State, thing Thing) []Detail {
+			return []Detail{
+				{"reach", si(guardRangeUnits, "m")},
+				{"shot", fmt.Sprintf("%.0f damage, every %.1f s",
+					guardShotDamage, guardReloadTicks/60.0)},
+				{"shot cost", fmt.Sprintf("[oil]%s[/], from any tank", si(guardShotOil, "L"))},
+			}
+		},
+	},
+	TypeWarFactory: {
+		Name:    "War factory",
+		Color:   warFactoryColor,
+		Primary: true,
+		Summary: func(amount float64) string {
+			return "builds troopers"
+		},
+		Details: func(s *State, thing Thing) []Detail {
+			return []Detail{
+				{"squad", squadWords(s, thing.Ref)},
+				{"room", fmt.Sprintf("%d of %d troopers",
+					len(squadMembers(s, thing.Ref)), squadSize)},
+				{"trooper cost", costWords(trooperCostLilac, trooperCostOil)},
+				{"pace", "one per " + si(trooperBuildTicks/60, "s")},
+				{"trooper", fmt.Sprintf("%.0f health, reach %s",
+					trooperHealth, si(trooperRangeUnits, "m"))},
+				{"shot", fmt.Sprintf("%.0f damage every %.1f s, [oil]%s[/] of its tank",
+					trooperShotDamage, trooperReloadTicks/60.0, si(trooperShotOil, "L"))},
+			}
+		},
+	},
+	TypeScout:   {Name: "Rival scout", Color: enemyLampColor, Details: enemyDetails},
+	TypeCrawler: {Name: "Rival crawler", Color: enemyLampColor, Details: enemyDetails},
+	TypeRaider:  {Name: "Rival raider", Color: enemyLampColor, Details: enemyDetails},
 	TypeSite: {
 		Name:    "Building site",
 		Color:   siteColor,
@@ -243,6 +291,31 @@ var catalog = map[ThingType]ThingInfo{
 			return append(details, Detail{"state", pileState(s, p)})
 		},
 	},
+}
+
+// enemyDetails are a rival vehicle's card lines: how much of it is left,
+// what it carries and what it has stolen.
+func enemyDetails(s *State, thing Thing) []Detail {
+	e, ok := s.Enemies[thing.Ref]
+	if !ok {
+		return nil
+	}
+	spec := enemySpecOf(e.Kind)
+	details := []Detail{
+		{"health", fmt.Sprintf("%.0f / %.0f", math.Max(0, e.Health), spec.health)},
+	}
+	if spec.bubble > 0 {
+		details = append(details, Detail{"repulsor", "r = " + si(spec.bubble, "m")})
+	} else {
+		details = append(details, Detail{"repulsor", "none: it lives under its crawler's"})
+	}
+	if spec.oilCap > 0 {
+		details = append(details, Detail{
+			"stolen", fmt.Sprintf("[oil]%s[/] / %s",
+				si(math.Round(e.Oil*10)/10, "L"), si(spec.oilCap, "L")),
+		})
+	}
+	return details
 }
 
 // siteDetails are a site's card lines. They name the building from the

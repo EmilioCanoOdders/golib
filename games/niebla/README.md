@@ -48,6 +48,15 @@ scripted shot:
 `reset world` deals the region again on the seed it has and `new world`
 on another (`DevResetWorld`), saving at once; the seed stands beside
 `dev`. `Mouse@50:460,77 MouseLeft@51` presses `new world` in a shot.
+`rivals: next visit` brings the rivals' next party in at once
+(`DevNextVisit`), and stays lit while one is in the region, since they
+come one at a time. Under it, `rivals: stop waiting` ends the wait of a
+camped party, which moves in on the next tick (`DevHurryRivals`). Under
+`new world`, `fast forward x8` sends `devFastTicks` ticks an update
+instead of one (`devTools.ticksPerUpdate`) until it is pressed again:
+the same ticks, so the same game, only sooner. `Mouse@14:588,99
+MouseLeft@15` presses `rivals: stop waiting` in a shot, and
+`Mouse@14:460,99` aims at `fast forward x8`.
 
 ## Files
 
@@ -60,14 +69,19 @@ on another (`DevResetWorld`), saving at once; the seed stands beside
 | `play.go` | The play scene: input to actions plus one `Tick` per update; the camera, the selection, the marking blueprint and the open cards live here, never serialized; Esc saves and returns to the menu, autosave every `autosaveTicks` |
 | `radial.go` | The build menu: the radial of blueprints a click on empty ground opens |
 | `state.go` | The simulation's state: robots (core or built), buildings, stock, what remains of each deposit, build jobs; `newGame`, which deals the starting region |
-| `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, and the dev tools' `DevHoldSwell` and `DevSpawnRobot`) and `Apply`, the only door into the state |
+| `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, and the dev tools' `DevHoldSwell`, `DevSpawnRobot`, `DevResetWorld`, `DevNextVisit` and `DevHurryRivals`; `OrderSquad` for the squads) and `Apply`, the only door into the state |
 | `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, oldest build job, pick up loose items, own post, rest by the core —, the claim on a section of pipe (`stepLayPipe`) and the idle ranks (`parkSlot`, `idleRank`) |
 | `sim_piles.go` | Demolition and loose items: `canDemolish`, the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, storage caps, refuel spots, the factories' robot works |
 | `sim_oil.go` | Oil's tanks: the core's, the silos' and the chargers'; `oilTotal`, `oilCap`, `payOil`, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
 | `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus` |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
-| `swell.go` | How a pressing swell looks, by its pressure: waves of shade rolling in to the line and one-pixel static over the mist; a pure picture of the state |
+| `sim_enemies.go` | The rivals' law and tuning: `Enemy`, `Party`, `Raids`, `Mark` and `Report`; the clock that sends a visit (`stepRaids`, `spawnVisit`), a party's stages (`stepParty`: approach, camp, raid, leave), the siphoning (`raid`), the fog's due on a vehicle with no repulsor over it (`stepExposure`), the wrecks' loot (`killEnemy`), the guard posts (`stepGuards`) and the state's own PRNG (`State.roll`) |
+| `sim_squads.go` | The squads' law and tuning: troopers (`RobotCombat`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), the war factory's room (`squadRoom`), and the rivals shooting back (`stepEnemyGuns`) |
+| `squads.go` | The squads on the screen: the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the pennant and the ring (`drawSquadMarks`), every shot that still shows (`drawShots`) and `squadWords` for the cards |
+| `enemies.go` | The rivals on the screen: the scouts' marks on the ground, the vehicles under their repulsors' pockets over the fog, the guard posts' shots, and the words the player is told (`threatWords` for the HUD, `reportWords` and `drawReport` for the news) |
+| `mist.go` | The fog on the screen: a haze outside every repulsor's circle and `mistLayers` layers that thicken it past the line, each the region minus the clear circles (`clearDiscs`: the core's, the protectors', the rivals'), cut in strips whose gaps join into quads (`drawMist`, `mistGaps`), so the circles are round at every zoom and the air inside them is clear |
+| `swell.go` | How a pressing swell looks, by its pressure: waves of shade rolling in to the line, stopping at the clear circles, and one-pixel static over the mist; a pure picture of the state |
 | `region.go` | The region's measures, `land` (the generated ground of the seed in hand) and `useRegion`, the isometric `project` that lifts by the relief and its inverse `unproject`, tile helpers, `Deposit` and `depositAt`; pure Go, no drawing |
 | `worldgen.go` | The generator, a pure function of the seed: relief by wave function collapse, ground cover, deposits as fields of richness; its own PRNG and noise; pure Go, no drawing |
 | `ground.go` | The ground's painter: relief as lit slopes, cover colors with a grain, blocks sized to the zoom and culled to the view, rocks, bushes, tufts, and the deposits cell by cell (`oreCut` wears them from the rim in) |
@@ -77,8 +91,8 @@ on another (`DevResetWorld`), saving at once; the seed stands beside
 | `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons; the cell's outline (`cellDiamond`) |
 | `mites.go` | The fog's wear, for looks only: mites of darkness orbiting whatever stands in the mist, by its volume, trailing walkers and closing in on what stands still; view, never state |
 | `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, the blobs of oil by the state's tick) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
-| `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset world, new world —; view only, acting through the `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
-| `draw.go` | The region painter: the core's monolith, buildings, robots, fog, bubbles, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
+| `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset world, new world, the rivals' next visit —; view only, acting through the `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
+| `draw.go` | The region painter: the core's monolith, buildings, robots, the bubbles' rings, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `markup_test.go` | Markup parser and tooltip layout/button tests |
 | `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
@@ -250,11 +264,13 @@ bubble burn their tanks 1.5x (`fogSwellBurn`). Nothing else changes:
 placement (`canPlace`) and the bubbles never read the swell.
 
 Two kinds of robot (`RobotKind`): the core's own, free and tankless, and
-the factory's, paid in lilac and oil. A built one burns oil as it walks,
-hauls or idles; under the low line (`robotLowTankAt`) the tank claims its
+the factory's, paid in lilac and oil. A built one burns oil while it
+carries something and at no other time (troopers carry nothing: they pay
+for their shots); under the low line (`robotLowTankAt`) the tank claims its
 day and walks it to the nearest charger or the core, where it stands
 until the tank is full — even past the low line, so it doesn't dance
-between post and work — and outside a bubble, a tank at zero means the
+between post and work; full is `tankFullSlack` short of the brim, and a
+dry post holds nobody with oil left in its tank — and outside a bubble, a tank at zero means the
 fog digests the robot. Both the burn and the drag are dials at the top
 of `sim_buildings.go`.
 
@@ -288,6 +304,79 @@ holds something the stores have free room for (`freeRoom` counts what
 is already on its way home, so nobody loads what won't fit), one kind
 per trip, lilac first, loading for `robotLoadTicks`; `Robot.Pile` says
 which pile a loading robot stands at, 0 at its post.
+
+### The rivals
+
+`sim_enemies.go` is the rivals' law. The state holds their vehicles
+(`State.Enemies`, by ID: kind, party, position, health, the oil it
+stole, `Fogged`), the visits under way (`State.Parties`: stage, entry,
+camp, `Wait`, `Siphon`), their clock (`State.Raids`: `Visits` and
+`NextAt`), the scouts' marks (`State.Marks`) and the news
+(`State.Reports`, the last `reportsKept`). `stepSim` runs `stepEnemies`
+and `stepGuards` after the pipes and before the robots.
+
+One party at a time. `stepRaids` sends the next when `Raids.NextAt`
+comes, at a bearing the state rolls (`State.roll`: splitmix64 over the
+seed and `State.Rolls`, the first gameplay randomness, so a save
+reproduces it). Visit 0 is a lone scout, whose party starts at
+`StageRaid`; every later one is a crawler and `raidersOf(visit)`
+raiders, which start at `StageApproach`, camp `campRadiusTiles` out for
+`prepareTicks(visit)` and then raid. Vehicles carry no plan: `stepParty`
+derives the tick from the party's stage. A party moves as one
+(`driveParty`: every member to its `formationOffset` around the spot,
+at the pace of the slowest), led by its oldest vehicle with a repulsor
+(`partyMembers` puts it first). A raid goes for `raidTarget`, the
+nearest tank with oil to the leader, asked again every tick, stops
+`siphonReachUnits` from it and every vehicle with room draws
+`siphonLitersPerSecond`; it ends with every tank aboard full, with no
+oil left anywhere or after `raidSiphonTicks`. A scout paints its `Mark`
+as its raid ends. A party whose leader has no repulsor runs for its
+entry. `endParty` counts the visit and starts the calm (`calmTicks`).
+
+The fog is the same law for them: `stepExposure` counts the ticks a
+vehicle stands in fog (`fogAt`, so the colony's bubbles and the clear
+ground count as clear) with no repulsor of its own party within reach
+(`repulsed`), and at `enemyFogTicks` it is digested. However a vehicle
+dies, `killEnemy` leaves its loot and all it stole as a pile on its
+cell, which the robots haul home like any other.
+
+A guard post (`BuildingGuard`, in the build menu) reloads in
+`Building.Reload` and shoots the nearest vehicle within
+`guardRangeUnits` (`nearestEnemy`), `guardShotDamage` a shot, paid
+`guardShotOil` out of any tank; `Building.Aim` and the reload say
+whether a shot still shows (`guardFiring`). Nobody damages the colony
+yet.
+
+Squads (`sim_squads.go`). A war factory (`BuildingWarFactory`) builds
+troopers through the same `QueueRobot` the factory answers, while
+`squadRoom` says it may; `robotWorks` holds what each of the two builds,
+for how much and how long. A trooper is a `Robot` of kind `RobotCombat`
+whose `Squad` is its war factory's ID. `tanked()` is every robot but the
+core's, so the tank's laws - the burn, the refuel line, the fog's
+digestion - cover troopers with no case of their own. The working lines
+of the day refuse a trooper, and its own line, `taskSquad`, comes after
+the tank's: `stepSquad` walks it to its place around the guarded spot
+(`formationOffset`, where it mends under a bubble) or after the squad's
+focus, to `squadStandoff` of its reach. `shoot` runs every tick before
+the day, so a trooper fires on the move: the focus when in reach, else
+the nearest, each shot paid from its own tank. Orders are
+`State.Squads`, by war factory ID, written by `OrderSquad` alone;
+`squadOf` gives a squad with no entry the order of guarding its door,
+and `stepSquads` drops an attack whose party is gone and passes a fallen
+focus on to the party's leader. `stepEnemyGuns` is the rivals' side:
+vehicles whose `enemySpec` has a gun fire at the nearest trooper in
+reach, and a fallen trooper leaves a pile. The robots' loop in `stepSim`
+skips a robot that fell earlier in the same tick.
+
+In the play scene `ordering` holds the war factory whose squad the
+pointer is ordering; while it is set, `updateOrdering` owns the clicks,
+like `laying` does for pipes.
+
+On the screen (`enemies.go`) the marks lie on the ground under
+everything, and the vehicles are drawn after the fog, so a party reads
+from far out as a pocket moving through the mist. `compassWord` names a
+bearing as the screen shows it, north up. A cell with a vehicle on it is
+picked instead of offered the build menu, and each vehicle has a card.
 
 ### The lifecycle, identity and the local database
 
@@ -473,6 +562,24 @@ window: their count follows the body's volume and the fog on it, none
 under a bubble; they sit on a robot that stands still and trail one that
 walks; they fade over a host that left the state; and the layers they
 are drawn with stack into `miteFalloff`.
+`enemies_test.go` pins the rivals: the scout comes on its tick, takes
+its tank's worth, leaves its mark and its report and goes, and the calm
+starts; a raid comes in, camps at its radius, waits its time to the
+tick, fills every raider and leaves with the report counting it, and
+the next is bigger and quicker; a guard post shoots a scout down before
+it marks anything, pays its shots in oil, the wreck drops its loot, and
+a dry colony doesn't shoot; raiders whose crawler dies are digested on
+the fog's tick; and a raid replays the same, survives a JSON round
+trip, and a save from before the rivals wakes up to its scout.
+`noRivals` keeps them out of a test that is about something else.
+`squads_test.go` pins the squads: a war factory charges for a trooper,
+rolls it out whole into its squad and stops at `squadSize`, and troopers
+touch no job, pile or post; a squad walks to the spot it is told to
+guard and mends there, and an order for anything but a war factory is
+none; a squad sent after a camped crawler brings it down with every
+raider still standing, burns its tanks and gets shot at, and goes back
+to its door when the party is gone; a lone trooper falls and leaves its
+wreck, and a demolished war factory's trooper rests by the core.
 `identity_test.go` pins the identity: stable for a machine, distinct
 between machines, 64 hex characters, and the three parsers of what the
 systems report. `store_test.go` pins the database: an identity (and a

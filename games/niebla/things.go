@@ -48,6 +48,13 @@ const (
 	TypeWarehouse ThingType = "warehouse"
 	TypeProtector ThingType = "protector"
 	TypePump      ThingType = "pump"
+	TypeGuard     ThingType = "guard"
+
+	TypeWarFactory ThingType = "warfactory"
+
+	TypeScout   ThingType = "scout" // the rivals' vehicles
+	TypeCrawler ThingType = "crawler"
+	TypeRaider  ThingType = "raider"
 
 	TypeSite ThingType = "site" // a building still being raised
 	TypePile ThingType = "pile" // loose items on the ground
@@ -68,6 +75,10 @@ func buildingType(kind BuildingKind) ThingType {
 		return TypeProtector
 	case BuildingPump:
 		return TypePump
+	case BuildingGuard:
+		return TypeGuard
+	case BuildingWarFactory:
+		return TypeWarFactory
 	}
 	return TypeRobot
 }
@@ -140,7 +151,48 @@ func thingsAt(s *State, col, row int) []Thing {
 	for _, r := range robotsOnCell(s, col, row) {
 		things = append(things, robotThing(s, r))
 	}
+	for _, e := range enemiesOnCell(s, col, row) {
+		things = append(things, enemyThing(s, e))
+	}
 	return things
+}
+
+// enemiesOnCell returns the rival vehicles standing on a cell, in ID
+// order.
+func enemiesOnCell(s *State, col, row int) []Enemy {
+	var found []Enemy
+	for _, id := range sortedEnemyIDs(s) {
+		e := s.Enemies[id]
+		if int(math.Floor(e.X/buildingCell)) == col &&
+			int(math.Floor(e.Y/buildingCell)) == row {
+			found = append(found, e)
+		}
+	}
+	return found
+}
+
+// enemyThing is a rival vehicle's card, headlined by what its party is
+// at.
+func enemyThing(s *State, e Enemy) Thing {
+	return Thing{
+		Type:    ThingType(e.Kind),
+		ID:      fmt.Sprintf("enemy-%d", e.ID),
+		Ref:     e.ID,
+		Caption: stageWords(s.Parties[e.Party].Stage),
+	}
+}
+
+// stageWords says a party's stage the way a card reads it.
+func stageWords(stage PartyStage) string {
+	switch stage {
+	case StageApproach:
+		return "coming in"
+	case StageCamp:
+		return "camped, getting ready"
+	case StageRaid:
+		return "after your oil"
+	}
+	return "leaving"
 }
 
 // sameGround reports whether what stands on one cell shows on another's
@@ -202,6 +254,9 @@ func buildingThing(b Building) Thing {
 	}
 	if b.Kind == BuildingFactory && b.Work > 0 {
 		thing.Caption = fmt.Sprintf("building robot, %d s", b.Work/60)
+	}
+	if b.Kind == BuildingWarFactory && b.Work > 0 {
+		thing.Caption = fmt.Sprintf("building trooper, %d s", b.Work/60)
 	}
 	return thing
 }
@@ -292,6 +347,11 @@ func robotCaption(s *State, r Robot) string {
 		return "fetching loose items"
 	case taskPost:
 		return postWord(r) + " run"
+	case taskSquad:
+		if squadOf(s, r.Squad).Order == OrderAttack {
+			return "attacking"
+		}
+		return "guarding"
 	default:
 		return "idle"
 	}

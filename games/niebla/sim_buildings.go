@@ -34,12 +34,12 @@ const (
 	siloOilCap        = 1000.0 // L apiece
 	warehouseLilacCap = 4000.0 // kg apiece
 
-	// The tank of a built robot. It burns oil walking, hauling, loading
-	// and idling alike; low, it walks to the nearest charger or the core
-	// to refill from the stores; empty outside a bubble, the fog digests
-	// it.
+	// The tank of a built robot. It burns oil while it carries something
+	// and at no other time; low, it walks to the nearest charger or the
+	// core to refill from the stores; empty outside a bubble, the fog
+	// digests it.
 	robotTankLiters     = 120.0 // L
-	robotBurnPerSecond  = 0.25  // L/s
+	robotBurnPerSecond  = 0.25  // L/s, carrying
 	robotLowTankAt      = 0.25  // tank fraction that sends it to refuel
 	chargerRefillPerSec = 20.0  // L/s drawn from the stores
 
@@ -100,6 +100,10 @@ func buildingCost(kind BuildingKind) (lilac, oil float64) {
 		return protectorCostLilac, protectorCostOil
 	case BuildingPump:
 		return pumpCostLilac, 0
+	case BuildingGuard:
+		return guardCostLilac, guardCostOil
+	case BuildingWarFactory:
+		return warFactoryCostLilac, warFactoryCostOil
 	}
 	return 0, 0
 }
@@ -236,19 +240,37 @@ func refuelSpot(s *State, r Robot) (x, y float64) {
 	return spot.X, spot.Y
 }
 
+// robotWorks returns what a building builds, what one costs and how long
+// it takes; ok is false for a building that builds no robots.
+func robotWorks(kind BuildingKind) (robot RobotKind, lilac, oil float64, ticks int64, ok bool) {
+	switch kind {
+	case BuildingFactory:
+		return RobotBuilt, robotCostLilac, robotCostOil, factoryRobotTicks, true
+	case BuildingWarFactory:
+		return RobotCombat, trooperCostLilac, trooperCostOil, trooperBuildTicks, true
+	}
+	return "", 0, 0, 0, false
+}
+
 // stepFactories moves every factory's robot build one tick forward; done,
-// the new robot rolls out of the works with its tank full.
+// the new robot rolls out of the works with its tank full - a war
+// factory's into its squad.
 func stepFactories(s *State) {
 	for _, id := range sortedBuildingIDs(s) {
 		b := s.Buildings[id]
-		if b.Kind != BuildingFactory || b.Work <= 0 {
+		robot, _, _, _, builds := robotWorks(b.Kind)
+		if !builds || b.Work <= 0 {
 			continue
 		}
 		b.Work--
 		s.Buildings[id] = b
 		if b.Work == 0 {
 			x, y := cellCenterUnits(b.Col, b.Row)
-			s.spawnRobot(RobotBuilt, x, y)
+			r := s.Robots[s.spawnRobot(robot, x, y)]
+			if robot == RobotCombat {
+				r.Squad = b.ID
+				s.Robots[r.ID] = r
+			}
 		}
 	}
 }

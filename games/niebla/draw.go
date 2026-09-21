@@ -33,16 +33,18 @@ func drawRegion(
 	drawGround(s, screen, zoom, view)
 	drawCorePad(screen)
 	drawDeposits(s, screen, zoom, view)
+	drawMarks(s, screen, zoom)
 	drawPipes(s, screen, zoom, true)
 	drawPiles(s, screen, zoom, true)
 	drawBuildings(s, screen, zoom)
 	drawRobots(s, screen, zoom)
-	drawFogCover(screen, fogLineNow(s))
+	drawFogCover(s, screen, zoom, view)
 	drawSwellWaves(s, screen)
 	drawFogLine(screen, zoom, s)
 	drawPipes(s, screen, zoom, false)
 	drawPiles(s, screen, zoom, false)
 	drawJobs(s, screen, zoom)
+	drawEnemies(s, screen, zoom)
 	drawBubbles(s, screen, zoom)
 }
 
@@ -260,6 +262,10 @@ func buildingSize(kind BuildingKind) (across, height float32) {
 		return 8, 24
 	case BuildingPump:
 		return 18, 20
+	case BuildingGuard:
+		return 14, 18
+	case BuildingWarFactory:
+		return 24, 12
 	}
 	return 20, 10
 }
@@ -309,6 +315,21 @@ func drawBuilding(
 		isoBox(screen, gx, gy-height*0.4*unitH, across*0.4, height*0.6,
 			pumpColor, mid(pumpColor, pumpDark), pumpDark)
 		screen.DrawCircle(gx, gy-(height+1)*unitH, across*unitW*0.22, oilColor)
+	case BuildingWarFactory:
+		// A low hangar, a watch tower at its corner and the guard's lamp.
+		isoBox(screen, gx, gy, across, height*0.7,
+			warFactoryColor, mid(warFactoryColor, warFactoryDark), warFactoryDark)
+		isoBox(screen, gx-across*unitW*0.22, gy-height*unitH*0.1,
+			across*0.24, height*1.5, warFactoryColor, warFactoryDark, warFactoryDark)
+		screen.DrawCircle(gx-across*unitW*0.22, gy-(height*1.6+1)*unitH,
+			across*unitW*0.08, enemyLampColor)
+	case BuildingGuard:
+		// A bunker, a narrow tower on it and a lamp that watches.
+		isoBox(screen, gx, gy, across, height*0.45,
+			guardColor, mid(guardColor, guardDark), guardDark)
+		isoBox(screen, gx, gy-height*0.45*unitH, across*0.4, height*0.55,
+			guardColor, mid(guardColor, guardDark), guardDark)
+		screen.DrawCircle(gx, gy-(height+1)*unitH, across*unitW*0.16, enemyLampColor)
 	}
 }
 
@@ -401,9 +422,9 @@ func protectorBubbleCenter(b Building) (cx, cy float32) {
 	return project(float32(x), float32(y))
 }
 
-// drawBubbles paints the safe ground: the core's bubble last, so its
-// glow sits over everything, and a dimmer pocket per shadow protector,
-// drawn over the fog it holds back.
+// drawBubbles rings the safe ground: the core's bubble and a dimmer ring
+// per shadow protector. Inside a ring the air is clear - the fog's cover
+// leaves the circles out (mist.go) - so the rings carry no tint.
 func drawBubbles(s *State, screen *golib.Screen, zoom float32) {
 	for _, id := range sortedBuildingIDs(s) {
 		b := s.Buildings[id]
@@ -411,13 +432,11 @@ func drawBubbles(s *State, screen *golib.Screen, zoom float32) {
 			continue
 		}
 		cx, cy := protectorBubbleCenter(b)
-		fillEllipse(screen, cx, cy, protectorBubbleTiles, protectorBubbleColor)
 		ellipseOutline(screen, cx, cy, protectorBubbleTiles, 2/zoom, protectorEdgeColor)
 	}
 	cx, cy := projectCore()
 	// The outlines keep their thickness on the screen, not in the world:
 	// inside the bubble they would grow into roads.
-	fillEllipse(screen, cx, cy, coreBubbleRadius, bubbleColor)
 	ellipseOutline(screen, cx, cy, coreBubbleRadius, 3/zoom, bubbleEdgeColor)
 }
 
@@ -426,24 +445,6 @@ func drawBubbles(s *State, screen *golib.Screen, zoom float32) {
 func drawCorePad(screen *golib.Screen) {
 	cx, cy := projectCore()
 	screen.DrawPolygon(scaledDiamond(cx, cy, 1), coreColor)
-}
-
-// drawFogCover lays the fog over everything, tile by tile, fading in
-// past the line - the line of now, so a swell's pushed band is mist
-// for as long as it lasts. It runs after the robots, so whatever walks
-// into the fog is swallowed by it.
-func drawFogCover(screen *golib.Screen, line float32) {
-	for row := 0; row < regionRows; row++ {
-		for col := 0; col < regionCols; col++ {
-			cover := fogCover(tileDistance(col, row), line)
-			if cover <= 0 {
-				continue
-			}
-			x, y := projectTile(float32(col), float32(row))
-			screen.DrawPolygon(tileDiamond(x, y),
-				golib.WithOpacity(fogColor, cover))
-		}
-	}
 }
 
 // fogCover returns how much fog sits on a tile, from 0 to 1: none inside
@@ -499,8 +500,12 @@ func drawRobots(s *State, screen *golib.Screen, zoom float32) {
 		p := sp.p
 		R := dotRadius(3, zoom, 3) // the body's radius, in projected pixels
 		screen.DrawCircle(p.X, p.Y+R*0.5, R*1.1, robotShadowColor)
+		body := robotColor
+		if r.Kind == RobotCombat {
+			body = guardColor
+		}
 		screen.DrawCircle(p.X, p.Y, R, robotDarkColor)
-		screen.DrawCircle(p.X, p.Y, R*0.68, robotColor)
+		screen.DrawCircle(p.X, p.Y, R*0.68, body)
 		if r.Carry > 0 {
 			cargo := lilacColor
 			if r.Cargo == TypeOil {
@@ -511,13 +516,21 @@ func drawRobots(s *State, screen *golib.Screen, zoom float32) {
 		// The eye says the model: the core's warm white for its own,
 		// the charger's amber for a built one, blinking while it drinks.
 		eye := coreGlowColor
-		if r.Kind == RobotBuilt {
+		if r.tanked() {
 			eye = chargerColor
 			if chargeStatus(s, r) == "refueling" && s.Ticks/20%2 == 0 {
 				eye = robotDarkColor
 			}
 		}
 		screen.DrawCircle(p.X, p.Y-R*0.56, R*0.28, eye)
+		if r.Kind == RobotCombat && r.Health < trooperHealth {
+			bar := golib.Rectangle{
+				X: p.X - R, Y: p.Y + R*1.5, Width: 2 * R, Height: 2 / zoom,
+			}
+			screen.DrawRectangle(bar, fillBarColor)
+			bar.Width *= float32(math.Max(0, r.Health) / trooperHealth)
+			screen.DrawRectangle(bar, guardColor)
+		}
 	}
 }
 
@@ -576,10 +589,6 @@ func ellipsePoints(cx, cy, radius float32) []golib.Vector2 {
 		}
 	}
 	return shape
-}
-
-func fillEllipse(screen *golib.Screen, cx, cy, radius float32, color golib.Color) {
-	screen.DrawPolygon(ellipsePoints(cx, cy, radius), color)
 }
 
 func ellipseOutline(

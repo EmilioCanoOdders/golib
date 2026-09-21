@@ -27,21 +27,30 @@ const (
 	parkSpacing  = 7.0  // u between two parked robots: one, and a bit
 	parkFromCore = 10.0 // u from the core's middle to the first rank
 
+	tankFullSlack = 0.001 // L short of the brim that still count as a full tank
+
 	goldenAngle = 2.399963229728653 // spreads robots around what they work at
 )
 
 // stepSim moves the world one tick forward: the weather, the
-// factories, the pipes, then the robots in ID order, so the outcome never depends
-// on map iteration. A built robot empty of oil outside every bubble is
+// factories, the pipes, the rivals and the guard posts, then the robots
+// in ID order, so the outcome never depends on map iteration. A built robot empty of oil outside every bubble is
 // digested by the fog and leaves the colony.
 func stepSim(s *State) {
 	stepFog(s)
 	stepFactories(s)
 	stepPipes(s)
+	stepSquads(s)
+	stepEnemies(s)
+	stepGuards(s)
 	for _, id := range sortedRobotIDs(s) {
 		r := s.Robots[id]
+		// A trooper the rivals shot this tick is gone already.
+		if _, alive := s.Robots[id]; !alive {
+			continue
+		}
 		stepRobot(s, &r)
-		if r.Kind == RobotBuilt && r.Tank <= 0 && !inSafeZone(s, r.X, r.Y) {
+		if r.tanked() && r.Tank <= 0 && !inSafeZone(s, r.X, r.Y) {
 			delete(s.Robots, id)
 			continue
 		}
@@ -74,6 +83,7 @@ const (
 	taskBuild   = "build"   // raise the oldest build job, then lay its section of pipe
 	taskCollect = "collect" // pick up loose items
 	taskPost    = "post"    // work its own post
+	taskSquad   = "squad"   // troopers: follow the squad's order
 	taskIdle    = "idle"    // stand by the core
 )
 
@@ -97,6 +107,7 @@ func init() {
 		{taskBuild, (*Robot).building, (*Robot).stepBuild},
 		{taskCollect, (*Robot).collecting, (*Robot).stepCollect},
 		{taskPost, (*Robot).posted, (*Robot).stepPost},
+		{taskSquad, (*Robot).squadded, (*Robot).stepSquad},
 		{taskIdle, (*Robot).idling, (*Robot).stepIdle},
 	}
 }
@@ -116,7 +127,17 @@ func (r *Robot) taskNow(s *State) robotTask {
 // The one thing it remembers is the section of pipe it claimed, so the
 // others take another, and only while it builds.
 func stepRobot(s *State, r *Robot) {
-	if r.Kind == RobotBuilt && r.Tank > 0 {
+	// A post with nothing left to give holds nobody: it ran dry under
+	// another robot's hands, or an old save names ground the region has
+	// since lost.
+	if r.hasPost() && remainingAt(s, r.PostCol, r.PostRow) <= 0 {
+		r.clearPost()
+	}
+	if r.Kind == RobotCombat {
+		r.shoot(s)
+	}
+	// The tank pays for carrying: an empty-handed robot burns nothing.
+	if r.tanked() && r.Tank > 0 && r.Carry > 0 {
 		burn := robotBurnPerSecond / 60
 		if !inSafeZone(s, r.X, r.Y) {
 			// The swell's mist is meaner in the open, by as much as it presses.
@@ -166,6 +187,9 @@ func (r *Robot) stepLoad(s *State) {
 }
 
 func (r *Robot) building(s *State) bool {
+	if r.Kind == RobotCombat {
+		return false
+	}
 	if _, hasJob := oldestJob(s); hasJob {
 		return true
 	}
@@ -223,6 +247,9 @@ func (r *Robot) stepLayPipe(s *State) {
 }
 
 func (r *Robot) collecting(s *State) bool {
+	if r.Kind == RobotCombat {
+		return false
+	}
 	_, found := nearestPile(s, *r)
 	return found
 }
@@ -300,9 +327,13 @@ func idleRobots(s *State) int {
 // refueling reports whether the tank owns the robot's day: low, it
 // claims it and walks to the nearest refill post; there it stands until
 // the tank is full, even past the low line, so it doesn't dance between
-// post and work.
+// post and work. A dry post holds nobody with oil left in its tank: the
+// way to fill the posts again is to go and fetch oil.
 func (r *Robot) refueling(s *State) bool {
-	if r.Kind != RobotBuilt || r.Tank >= robotTankLiters {
+	if !r.tanked() || r.Tank >= robotTankLiters-tankFullSlack {
+		return false
+	}
+	if r.Tank > 0 && tankOil(s, refuelTank(s, *r)) <= 0 {
 		return false
 	}
 	if r.Tank < robotTankLiters*robotLowTankAt {
@@ -316,7 +347,7 @@ func (r *Robot) refueling(s *State) bool {
 // any claim: "" when the tank is fine, else low oil on the walk over,
 // refueling while it fills, or out of oil waiting for the stores.
 func chargeStatus(s *State, r Robot) string {
-	if r.Kind != RobotBuilt {
+	if !r.tanked() {
 		return ""
 	}
 	x, y := refuelSpot(s, r)
@@ -496,6 +527,9 @@ func pickRobot(s *State, col, row int) int64 {
 	bestFree, bestDist := false, 0.0
 	for _, id := range sortedRobotIDs(s) {
 		r := s.Robots[id]
+		if r.Kind == RobotCombat {
+			continue
+		}
 		free := !r.hasPost()
 		d := math.Hypot(r.X-cx, r.Y-cy)
 		closer := best < 0 ||

@@ -25,6 +25,13 @@ type State struct {
 	Piles     map[int64]Pile     // loose items on the ground, by ID
 	Pipes     map[int64]Pipe     // oil pipes, laid or being laid, by ID
 	Fog       Fog                // the region's weather: the cycles and the swell
+	Enemies   map[int64]Enemy    // the rivals' vehicles, by ID (sim_enemies.go)
+	Parties   map[int64]Party    // the rivals' visits under way, by ID
+	Raids     Raids              // the rivals' clock: the visits that were, the next one
+	Marks     map[int64]Mark     // what the scouts painted on the ground, by ID
+	Reports   []Report           // the news the rivals made, oldest first
+	Rolls     uint64             // random numbers drawn so far: the state's own PRNG
+	Squads    map[int64]Squad    // the squads' orders, by their war factory's ID
 }
 
 // Fog is the region's weather, where the fog's breath has got to. The
@@ -58,6 +65,9 @@ type RobotKind string
 const (
 	RobotCore  RobotKind = "core"
 	RobotBuilt RobotKind = "built"
+	// RobotCombat is a trooper, a war factory's: a built robot on a combat
+	// chassis, which does no work and follows its squad (sim_squads.go).
+	RobotCombat RobotKind = "combat"
 )
 
 // Robot is one worker. It carries no plan: every tick the rules (see
@@ -78,6 +88,16 @@ type Robot struct {
 	Pile      int64     // the pile it is loading from; 0 while loading at its post
 	Pipe      int64     // the pipe whose section it claimed to lay; 0 with no claim
 	Section   int64     // the claimed section, from the pipe's source out
+	Squad     int64     // troopers: the war factory whose squad it is in
+	Health    float64   // troopers: what is left of it
+	Reload    int64     // troopers: ticks until the next shot
+	Aim       int64     // troopers: the vehicle the last shot went to
+}
+
+// tanked reports whether the robot runs on a tank of oil: every robot
+// but the core's own.
+func (r Robot) tanked() bool {
+	return r.Kind != RobotCore
 }
 
 // BuildingKind names one of the structures the colony can raise. The
@@ -92,6 +112,9 @@ const (
 	BuildingWarehouse BuildingKind = "warehouse" // stores more lilac
 	BuildingProtector BuildingKind = "protector" // a small bubble of safe ground
 	BuildingPump      BuildingKind = "pump"      // draws a pool's oil into a pipe
+	BuildingGuard     BuildingKind = "guard"     // shoots the rivals in its reach
+
+	BuildingWarFactory BuildingKind = "warfactory" // builds troopers, its squad
 )
 
 // Building is one raised structure. Its Col, Row are cell coordinates
@@ -104,6 +127,8 @@ type Building struct {
 	Col, Row int // the cell it stands on
 	Work     int64
 	Oil      float64 // liters in its tank: silos and chargers (sim_oil.go)
+	Reload   int64   // guard posts: ticks until the next shot (sim_enemies.go)
+	Aim      int64   // guard posts: the vehicle the last shot went to
 }
 
 // Job is one build job: what to raise, on which cell, and the ticks of
@@ -158,6 +183,11 @@ func newGameOn(seed int64) *State {
 		Buildings: map[int64]Building{},
 		Piles:     map[int64]Pile{},
 		Pipes:     map[int64]Pipe{},
+		Enemies:   map[int64]Enemy{},
+		Parties:   map[int64]Party{},
+		Marks:     map[int64]Mark{},
+		Squads:    map[int64]Squad{},
+		Raids:     Raids{NextAt: raidFirstScoutTicks},
 		Drain:     map[string]float64{},
 		Stock:     Stock{Oil: startingStockOil, Lilac: startingStockLilac},
 		Fog:       Fog{CycleLeft: fogCycleTicks, NextIn: fogSwellPeriod},
@@ -188,18 +218,19 @@ func (s *State) enterRegion() {
 }
 
 // spawnRobot adds one robot to the colony at a spot, with the tank full
-// when it is a built one.
-func (s *State) spawnRobot(kind RobotKind, x, y float64) {
+// when it has one, and returns its ID.
+func (s *State) spawnRobot(kind RobotKind, x, y float64) int64 {
 	id := s.NextID
 	s.NextID++
-	tank := 0.0
-	if kind == RobotBuilt {
-		tank = robotTankLiters
+	r := Robot{ID: id, Kind: kind, X: x, Y: y, PostCol: -1, PostRow: -1}
+	if r.tanked() {
+		r.Tank = robotTankLiters
 	}
-	s.Robots[id] = Robot{
-		ID: id, Kind: kind, X: x, Y: y, Tank: tank,
-		PostCol: -1, PostRow: -1,
+	if kind == RobotCombat {
+		r.Health = trooperHealth
 	}
+	s.Robots[id] = r
+	return id
 }
 
 // raise turns a finished job into the building it asked for.

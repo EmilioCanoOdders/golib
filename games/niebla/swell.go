@@ -32,6 +32,7 @@ func drawSwellWaves(s *State, screen *golib.Screen) {
 		return
 	}
 	cx, cy := projectCore()
+	clear := clearDiscs(s)
 	line := fogLineNow(s)
 	span := swellWaveRim - line
 	seconds := float32(s.Ticks) / 60
@@ -43,16 +44,17 @@ func drawSwellWaves(s *State, screen *golib.Screen) {
 		radius := swellWaveRim - along*span
 		strength := pressure * swellWaveOpacity *
 			float32(math.Sin(float64(along)*math.Pi*0.5))
-		drawSwellCrest(screen, cx, cy, radius, strength, wave, seconds)
+		drawSwellCrest(screen, clear, cx, cy, radius, strength, wave, seconds)
 	}
 }
 
 // drawSwellCrest paints one crest as a ring of quads, a wide faint one
 // under a narrow one, so its shade has no hard edge. The ring wobbles
 // and breaks into arcs, each crest its own way, so no two read as the
-// same circle.
+// same circle. A crest is the mist's, so it stops at the clear circles.
 func drawSwellCrest(
 	screen *golib.Screen,
+	clear []disc,
 	cx, cy, radius, strength float32,
 	wave int,
 	seconds float32,
@@ -72,6 +74,9 @@ func drawSwellCrest(
 		broken := 0.5 + 0.5*math.Sin(5*angle+phase*3+float64(seconds)*0.3)
 		opacity := strength * float32(broken*broken)
 		if opacity < 0.004 {
+			continue
+		}
+		if a, b := at(i, radius), at(i+1, radius); inDiscs(clear, (a.X+b.X)/2, (a.Y+b.Y)/2) {
 			continue
 		}
 		for _, layer := range []struct{ width, share float32 }{

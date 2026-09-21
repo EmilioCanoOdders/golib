@@ -44,6 +44,8 @@ const (
 	buttonSend       = "send robot"
 	buttonRecall     = "recall robot"
 	buttonBuildRobot = "build robot"
+	buttonTrooper    = "build trooper"
+	buttonOrder      = "give order"
 	buttonBuildPump  = "build pump"
 	buttonLayPipe    = "lay pipe"
 	buttonRemovePipe = "remove"
@@ -129,6 +131,25 @@ func tooltipLayout(
 		if thing.Type == TypeFactory {
 			if b, ok := s.Buildings[thing.Ref]; ok && b.Work <= 0 {
 				t.rows = append(t.rows, tooltipRow{thing: thing, button: buttonBuildRobot})
+			}
+			continue
+		}
+		if thing.Type == TypeWarFactory {
+			if b, ok := s.Buildings[thing.Ref]; ok {
+				if b.Work <= 0 && squadRoom(s, b) {
+					t.rows = append(t.rows, tooltipRow{
+						thing:  thing,
+						button: buttonTrooper,
+						dim: s.Stock.Lilac < trooperCostLilac ||
+							oilTotal(s) < trooperCostOil,
+					})
+				}
+				if len(squadMembers(s, b.ID)) > 0 {
+					t.rows = append(t.rows, tooltipRow{
+						thing: thing, button: buttonOrder,
+						note: "[dim]a rival or the ground[/]",
+					})
+				}
 			}
 			continue
 		}

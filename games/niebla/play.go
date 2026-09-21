@@ -63,6 +63,7 @@ type playScene struct {
 	radialCol    int             // the cell the menu opened on
 	radialRow    int
 	laying       pipeLaying // the pipe the pointer is drawing, if any
+	ordering     int64      // the war factory whose squad the pointer is ordering; 0 is none
 	hoverCellCol int        // the cell under the pointer, the cursor
 	hoverCellRow int        //
 	hoverCell    bool       // the pointer is over a cell
@@ -115,10 +116,14 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 	}
 	s.updateCamera(input, dt)
 	s.updateInspection(input, s.dev.update(s, input))
-	// The loop is the clock: one tick of simulation per update.
-	Apply(s.state, Tick{})
+	// The loop is the clock: one tick of simulation per update, more
+	// while the dev tools fast forward.
+	ticks := s.dev.ticksPerUpdate()
+	for i := 0; i < ticks; i++ {
+		Apply(s.state, Tick{})
+	}
 	s.mites.update(s.state, dt)
-	s.savedTicks++
+	s.savedTicks += int64(ticks)
 	if s.savedTicks >= autosaveTicks {
 		s.saveNow()
 	}
@@ -248,6 +253,10 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 		s.updateLaying(input, clickTaken, rightClick)
 		return
 	}
+	if s.ordering != 0 {
+		s.updateOrdering(input, clickTaken, rightClick)
+		return
+	}
 	if rightClick {
 		s.picked = false
 		s.radial = false
@@ -349,6 +358,9 @@ func (s *playScene) buildableCell(col, row int) bool {
 			return false
 		}
 	}
+	if len(enemiesOnCell(s.state, col, row)) > 0 {
+		return false
+	}
 	return true
 }
 
@@ -362,8 +374,10 @@ func (s *playScene) pressButton(row tooltipRow) {
 		Apply(s.state, SendRobot{Col: tcol, Row: trow})
 	case buttonRecall:
 		Apply(s.state, RecallRobot{Col: tcol, Row: trow})
-	case buttonBuildRobot:
+	case buttonBuildRobot, buttonTrooper:
 		Apply(s.state, QueueRobot{Building: thing.Ref})
+	case buttonOrder:
+		s.ordering = thing.Ref
 	case buttonBuildPump:
 		if d, ok := depositAt(tcol, trow); ok {
 			col, row := pumpCell(d)
@@ -422,6 +436,12 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	if s.picked {
 		outline, _, _ := cellDiamond(s.pickedCol, s.pickedRow, s.zoom)
 		screen.DrawPolygonOutline(outline, 2/s.zoom, pickedTileColor)
+		// A picked guard post shows its reach.
+		if b, ok := buildingAt(s.state, s.pickedCol, s.pickedRow); ok && b.Kind == BuildingGuard {
+			gx, gy := projectBuilding(b)
+			ellipseOutline(screen, gx, gy, guardRangeUnits/unitsPerTile,
+				1.5/s.zoom, golib.WithOpacity(guardColor, 0.8))
+		}
 	}
 	if s.laying.on {
 		s.drawLaying(screen)
@@ -431,8 +451,12 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	drawIdleCount(s.state, screen, s.camera)
 	screen.DrawText("niebla", 16, 12, 24, textColor, uiText)
 	drawMarkup(screen, s.hudLine(), 16, 44, 15, textColor)
+	drawReport(s.state, screen)
 	s.dev.draw(s, screen)
 	help := "click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a cell, Esc saves and returns to the menu, F11 fullscreen, F2 filter"
+	if s.ordering != 0 {
+		help = "ordering a squad: click a rival vehicle to attack its party, that vehicle first, or click the ground to post the squad there; right-click puts the order away"
+	}
 	if s.laying.on {
 		help = "laying a pipe: click the ground to bend it, click a ringed tank (silo, charger, core) to connect it, click the last node for its menu, right-click takes the last bend back"
 	}
@@ -443,7 +467,10 @@ func (s *playScene) Draw(screen *golib.Screen) {
 			s.drawLayMenu(screen)
 		}
 	}
-	if s.picked && !s.radial {
+	if s.ordering != 0 {
+		s.drawOrderingLabel(screen)
+	}
+	if s.picked && !s.radial && s.ordering == 0 {
 		panel := tooltipLayout(s.state, s.camera, s.pickedCol, s.pickedRow, s.expanded)
 		panel.arm(s.armed)
 		drawTooltip(screen, panel, s.mouse.X, s.mouse.Y)
@@ -467,6 +494,9 @@ func (s *playScene) hudLine() string {
 		fog += "   swell easing"
 	case s.state.Fog.NextIn <= 1:
 		fog += "   swell next cycle"
+	}
+	if threat := threatWords(s.state); threat != "" {
+		fog += "   [danger]" + threat + "[/]"
 	}
 	if s.saveFailed {
 		fog += "   save failed"

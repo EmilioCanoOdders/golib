@@ -147,9 +147,17 @@ func TestThePushedBandDragsMore(t *testing.T) {
 
 func TestASwellBurnsTanksFasterOutside(t *testing.T) {
 	s := newGame()
+	// A tank burns while its robot carries, and with the stores full the
+	// load stays in its arms.
+	s.Stock.Lilac = lilacCap(s)
+	loaded := func(x, y float64) int64 {
+		r := s.Robots[s.spawnRobot(RobotBuilt, x, y)]
+		r.Carry, r.Cargo = robotCarryLilac, TypeLilac
+		s.Robots[r.ID] = r
+		return r.ID
+	}
 	x, y := pointAtTiles(4.5) // outside the bubble, clear of even the pushed fog
-	id := s.NextID
-	s.spawnRobot(RobotBuilt, x, y)
+	id := loaded(x, y)
 	runTicks(s, 60)
 	r := s.Robots[id]
 	calm := robotTankLiters - r.Tank
@@ -165,14 +173,20 @@ func TestASwellBurnsTanksFasterOutside(t *testing.T) {
 		t.Errorf("a minute of swell burned %v L, want %v", swell, calm*fogSwellBurn)
 	}
 	// The bubble keeps its word: inside it, the swell burns nothing extra.
-	id2 := s.NextID
 	px, py := parkSlot(0)
-	s.spawnRobot(RobotBuilt, px, py)
+	id2 := loaded(px, py)
 	runTicks(s, 60)
 	inside := robotTankLiters - s.Robots[id2].Tank
 	if math.Abs(inside-robotBurnPerSecond) > 0.001 {
 		t.Errorf("a minute inside the bubble burned %v L during a swell, want %v",
 			inside, robotBurnPerSecond)
+	}
+	// Empty hands burn nothing, anywhere.
+	id3 := s.NextID
+	s.spawnRobot(RobotBuilt, x, y)
+	runTicks(s, 60)
+	if got := s.Robots[id3].Tank; got != robotTankLiters {
+		t.Errorf("an empty-handed robot's tank holds %v L after a swell's second, want it whole", got)
 	}
 }
 

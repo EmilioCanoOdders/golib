@@ -104,16 +104,47 @@ type QueueRobot struct {
 
 func (a QueueRobot) apply(s *State) {
 	b, ok := s.Buildings[a.Building]
-	if !ok || b.Kind != BuildingFactory || b.Work > 0 {
+	_, lilac, oil, ticks, builds := robotWorks(b.Kind)
+	if !ok || !builds || b.Work > 0 {
 		return
 	}
-	if s.Stock.Lilac < robotCostLilac || oilTotal(s) < robotCostOil {
+	if b.Kind == BuildingWarFactory && !squadRoom(s, b) {
 		return
 	}
-	s.Stock.Lilac -= robotCostLilac
-	s.payOil(robotCostOil)
-	b.Work = factoryRobotTicks
+	if s.Stock.Lilac < lilac || oilTotal(s) < oil {
+		return
+	}
+	s.Stock.Lilac -= lilac
+	s.payOil(oil)
+	b.Work = ticks
 	s.Buildings[b.ID] = b
+}
+
+// OrderSquad tells a war factory's squad what to do: attack the party of
+// a rival vehicle, that vehicle first, or guard a spot of the region. It
+// does nothing for a building that is no war factory, and a vehicle that
+// isn't there turns the order into guarding the spot.
+type OrderSquad struct {
+	Squad int64   // the war factory's entity ID
+	Enemy int64   // the vehicle to go after; 0 guards the spot
+	X, Y  float64 // the spot, in units
+}
+
+func (a OrderSquad) apply(s *State) {
+	if b, ok := s.Buildings[a.Squad]; !ok || b.Kind != BuildingWarFactory {
+		return
+	}
+	// A save from before the squads loads with no table for them.
+	if s.Squads == nil {
+		s.Squads = map[int64]Squad{}
+	}
+	sq := Squad{Home: a.Squad, Order: OrderGuard}
+	most := float64(regionCols*unitsPerTile) - 1
+	sq.X, sq.Y = clamp64(a.X, 1, most), clamp64(a.Y, 1, most)
+	if e, ok := s.Enemies[a.Enemy]; ok {
+		sq = Squad{Home: a.Squad, Order: OrderAttack, Party: e.Party, Focus: e.ID}
+	}
+	s.Squads[a.Squad] = sq
 }
 
 // Demolish takes a building down at once: its tasks die with it, and its
@@ -135,9 +166,9 @@ func (a Demolish) apply(s *State) {
 	lilac, oil := buildingCost(b.Kind)
 	lilac *= demolishRefund
 	oil *= demolishRefund
-	if b.Kind == BuildingFactory && b.Work > 0 {
-		lilac += robotCostLilac
-		oil += robotCostOil
+	if _, robotLilac, robotOil, _, builds := robotWorks(b.Kind); builds && b.Work > 0 {
+		lilac += robotLilac
+		oil += robotOil
 	}
 	lilac += s.takePipesOf(b.ID) * demolishRefund
 	s.dropPile(b.Col, b.Row, oil+b.Oil, lilac)
@@ -244,6 +275,29 @@ type DevResetWorld struct {
 
 func (a DevResetWorld) apply(s *State) {
 	*s = *newGameOn(a.Seed)
+}
+
+// DevNextVisit brings the rivals' next visit in at once. It does nothing
+// while a party is in the region: they come one at a time.
+type DevNextVisit struct{}
+
+func (DevNextVisit) apply(s *State) {
+	if len(s.Parties) == 0 {
+		s.Raids.NextAt = s.Ticks + 1
+	}
+}
+
+// DevHurryRivals ends the wait of every camped party: it moves in on the
+// next tick. It does nothing for a party that isn't camped.
+type DevHurryRivals struct{}
+
+func (DevHurryRivals) apply(s *State) {
+	for _, id := range sortedPartyIDs(s) {
+		if p := s.Parties[id]; p.Stage == StageCamp {
+			p.Wait = 0
+			s.Parties[id] = p
+		}
+	}
 }
 
 // DevSpawnRobot puts a built robot, its tank full, on a spot of the

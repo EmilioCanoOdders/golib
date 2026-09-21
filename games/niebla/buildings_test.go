@@ -170,11 +170,10 @@ func TestABuiltRobotRefuelsBeforeItRunsDry(t *testing.T) {
 		t.Fatalf("after a minute by the core the tank holds %v L, want %v",
 			r.Tank, robotTankLiters)
 	}
-	// The refill fills the tank's 110 missing liters; the walk over and
-	// the seconds at the pump burn a little of the robot's own oil.
-	if spent := 200 - s.Stock.Oil; spent < robotTankLiters-10 || spent > robotTankLiters-10+5 {
-		t.Errorf("the refill drank %v L, want %v plus a little burn",
-			spent, robotTankLiters-10)
+	// The refill fills the tank's 110 missing liters and no more: the walk
+	// over, empty-handed, burned nothing.
+	if spent := 200 - s.Stock.Oil; math.Abs(spent-(robotTankLiters-10)) > 0.01 {
+		t.Errorf("the refill drank %v L, want %v", spent, robotTankLiters-10)
 	}
 }
 
@@ -184,7 +183,7 @@ func TestFogDigestsARobotRunDryOutsideTheBubbles(t *testing.T) {
 	s.NextID++
 	fx, fy := tileCenterUnits(2, 2)
 	s.Robots[id] = Robot{
-		ID: id, Kind: RobotBuilt, X: fx, Y: fy, Tank: 0.001,
+		ID: id, Kind: RobotBuilt, X: fx, Y: fy, Tank: 0,
 		PostCol: -1, PostRow: -1,
 	}
 	Apply(s, Tick{})
@@ -217,7 +216,7 @@ func TestFogDigestsARobotRunDryOutsideTheBubbles(t *testing.T) {
 	sid := s.NextID
 	s.NextID++
 	s.Robots[sid] = Robot{
-		ID: sid, Kind: RobotBuilt, X: fx, Y: fy, Tank: 0.001,
+		ID: sid, Kind: RobotBuilt, X: fx, Y: fy, Tank: 0,
 		PostCol: -1, PostRow: -1,
 	}
 	for i := 0; i < 60; i++ {
@@ -307,5 +306,50 @@ func TestAProtectorsBubbleStandsOnItsCell(t *testing.T) {
 	if cx != gx || cy != gy {
 		t.Errorf("the protector's bubble centers at %v, %v, want the building's ground %v, %v",
 			cx, cy, gx, gy)
+	}
+}
+
+// TestARefueledRobotGoesBackToWork pins the way out of the refill post. A
+// robot used to burn a drop before asking whether its tank was full, so
+// at the post it never was, and the first refill parked it for good.
+func TestARefueledRobotGoesBackToWork(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	s.Stock = Stock{Oil: 500}
+	oilCol, oilRow, _ := nearestTileOf(kindOil)
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	id := s.NextID
+	s.NextID++
+	s.Robots[id] = Robot{
+		ID: id, Kind: RobotBuilt, X: cx + 50, Y: cy, Tank: 10,
+		PostCol: oilCol, PostRow: oilRow,
+	}
+	if !tickUntil(s, 60*60, func() bool { return s.Robots[id].Tank > robotTankLiters-1 }) {
+		t.Fatalf("the robot never refilled: %v L", s.Robots[id].Tank)
+	}
+	if !tickUntil(s, 60*120, func() bool { return s.Robots[id].Carry > 0 }) {
+		r := s.Robots[id]
+		t.Fatalf("a refilled robot never worked its post again: it stands at %v, %v doing %q",
+			r.X, r.Y, robotCaption(s, r))
+	}
+	// Neither does a post on ground that holds no deposit, which an old
+	// save can name: the robot is free again, for whoever sends it next.
+	stale := s.Robots[id]
+	stale.PostCol, stale.PostRow = coreCol, coreRow
+	s.Robots[id] = stale
+	runTicks(s, 1)
+	if s.Robots[id].hasPost() {
+		t.Errorf("a robot keeps a post on a tile with no deposit")
+	}
+	stale = s.Robots[id]
+	stale.PostCol, stale.PostRow = oilCol, oilRow
+	s.Robots[id] = stale
+	// A dry post holds nobody with oil left in its tank.
+	s.Stock.Oil = 0
+	r := s.Robots[id]
+	r.Tank, r.Carry, r.Cargo, r.X, r.Y = 20, 0, "", cx, cy
+	s.Robots[id] = r
+	if !tickUntil(s, 60*120, func() bool { return s.Robots[id].Carry > 0 }) {
+		t.Errorf("a robot with 20 L waits at a dry post instead of fetching oil")
 	}
 }

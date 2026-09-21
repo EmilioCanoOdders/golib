@@ -189,6 +189,7 @@ func TestOilHasAPlaceAndPipesMoveItBetweenTanks(t *testing.T) {
 	seedStock(s)
 	delete(s.Robots, 1) // nobody hauls or refuels: the pipes alone move oil
 	delete(s.Robots, 2)
+	noRivals(s) // and nobody siphons
 	col, row := groundNearCore()
 	first := raised(t, s, BuildingSilo, col, row)
 	second := raised(t, s, BuildingSilo, col+2, row)

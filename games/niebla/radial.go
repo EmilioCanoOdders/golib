@@ -20,6 +20,8 @@ var blueprintOrder = []BuildingKind{
 	BuildingSilo,
 	BuildingWarehouse,
 	BuildingProtector,
+	BuildingGuard,
+	BuildingWarFactory,
 }
 
 // Radial tuning, in screen pixels.

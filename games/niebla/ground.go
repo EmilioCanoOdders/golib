@@ -24,6 +24,11 @@ const (
 	slopeShade = 0.12  // how much one turned to the viewer's left loses
 	levelTint  = 0.05  // how much lighter the ground reads per level up
 	grainDepth = 0.035 // the cells' mottle, as a part of their color
+
+	// groundReach is how far from the core a tile's ground is drawn, in
+	// tiles: to where the fog is whole, and a tile's corner past it, so the
+	// ground's stepped edge never shows through the thinner mist.
+	groundReach = fogLineRadius - 0.7 + fogFadeTiles + 0.75
 )
 
 // The cover's colors, from bare ground to thick scrub, and where along
@@ -196,7 +201,7 @@ func drawGround(
 	for row := row0 / stride; row <= min(row1/stride, cols-1); row++ {
 		for col := col0 / stride; col <= min(col1/stride, cols-1); col++ {
 			tcol, trow := cellTile(col*stride, row*stride)
-			if tileDistance(tcol, trow) > fogLineRadius-0.7+fogFadeTiles {
+			if !groundShows(s, tcol, trow) {
 				continue
 			}
 			q := blockQuad(g, col*stride, row*stride, stride)
@@ -219,7 +224,7 @@ func drawGround(
 		for col := col0; col <= min(col1, regionCellCols-1); col++ {
 			tcol, trow := cellTile(col, row)
 			if tileAt(tcol, trow) != kindGround || taken[[2]int{col, row}] ||
-				tileDistance(tcol, trow) > fogLineRadius-0.7+fogFadeTiles {
+				!groundShows(s, tcol, trow) {
 				continue
 			}
 			q := blockQuad(g, col, row, 1)
@@ -518,4 +523,23 @@ func drawCrystals(
 		screen.DrawTriangle(x-w, y, x-w*0.2, y-h, x+w*0.3, y, lilacColor)
 		screen.DrawTriangle(x+w*0.3, y, x-w*0.2, y-h, x+w, y, lilacLightColor)
 	}
+}
+
+// groundShows reports whether a tile's ground is drawn: out to
+// groundReach, and wherever a protector clears the air farther out.
+func groundShows(s *State, tcol, trow int) bool {
+	if tileDistance(tcol, trow) <= groundReach {
+		return true
+	}
+	x, y := tileCenterUnits(tcol, trow)
+	for _, b := range s.Buildings {
+		if b.Kind != BuildingProtector {
+			continue
+		}
+		bx, by := cellCenterUnits(b.Col, b.Row)
+		if math.Hypot(x-bx, y-by) <= (protectorBubbleTiles+0.75)*unitsPerTile {
+			return true
+		}
+	}
+	return false
 }
