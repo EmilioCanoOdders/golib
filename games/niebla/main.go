@@ -194,18 +194,14 @@ func setFilters(on bool) {
 }
 
 // The screen effect settings, sent to the shaders as uniforms. Softer than
-// games/asteroids' 2.4 and 0.2.
-const (
-	glowStrength = 0.9  // how bright the halo around the core and bubble is
-	crtCurvature = 0.08 // how much the picture bulges, like a tube; 0 is flat
-)
+// games/asteroids' 2.4.
+const glowStrength = 0.9 // how bright the halo around the core and bubble is
 
 func main() {
 	monitor.glow = golib.NewShader(glowSource)
 	monitor.crt = golib.NewShader(crtSource)
 	monitor.soft = golib.NewShader(softSource)
 	monitor.glow.SetUniform("strength", glowStrength)
-	monitor.crt.SetUniform("curvature", crtCurvature)
 	monitor.soft.SetUniform("amount", 0.35)
 
 	resolvePlayer()
