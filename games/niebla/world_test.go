@@ -243,6 +243,7 @@ func TestBuildJobsComeFirst(t *testing.T) {
 func TestTheSimulationReplaysTheSame(t *testing.T) {
 	play := func() *State {
 		s := newGame()
+		arriveAll(s)
 		oilCol, oilRow, _ := nearestTileOf(kindOil)
 		veinCol, veinRow, _ := nearestTileOf(kindLilac)
 		Apply(s, SendRobot{Col: oilCol, Row: oilRow})
@@ -251,7 +252,7 @@ func TestTheSimulationReplaysTheSame(t *testing.T) {
 		Apply(s, MarkBuilding{Kind: BuildingCharger, Col: 67, Row: 60})
 		runTicks(s, 1800) // the charger rises in the first half
 		Apply(s, QueueRobot{Building: 3})
-		runTicks(s, 1800) // the factory's robot rolls out in the second
+		runTicks(s, 1800)  // the factory's robot rolls out in the second
 		runTicks(s, 33000) // the run crosses the first swell, at cycle 18
 		return s
 	}
@@ -262,6 +263,7 @@ func TestTheSimulationReplaysTheSame(t *testing.T) {
 
 func TestTheStateSerializesRound(t *testing.T) {
 	s := newGame()
+	arriveAll(s)
 	col, row, _ := nearestTileOf(kindOil)
 	Apply(s, SendRobot{Col: col, Row: row})
 	s.Stock = Stock{Oil: 400, Lilac: 800}

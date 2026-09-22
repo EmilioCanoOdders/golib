@@ -35,6 +35,7 @@ func TestAWarFactoryBuildsItsSquadAndNoMore(t *testing.T) {
 	s := newGame()
 	noRivals(s)
 	s.Stock = Stock{Oil: 1000, Lilac: 2500}
+	arriveAll(s)
 	col, row := groundNearCore()
 	home := raised(t, s, BuildingWarFactory, col, row)
 	lilac, oil := s.Stock.Lilac, oilTotal(s)

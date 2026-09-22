@@ -67,6 +67,7 @@ type playScene struct {
 	radialGroup  buildGroup // the group the second ring shows
 	laying       pipeLaying // the pipe the pointer is drawing, if any
 	ordering     int64      // the war factory whose squad the pointer is ordering; 0 is none
+	techCallout  string     // the schematics drop whose callout stands open, by ID
 	hoverCellCol int        // the cell under the pointer, the cursor
 	hoverCellRow int        //
 	hoverCell    bool       // the pointer is over a cell
@@ -121,8 +122,12 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 	s.updateCamera(input, dt)
 	taken := s.dev.update(s, input)
 	if !taken {
+		taken = s.updateTech(input)
+	}
+	if !taken {
 		taken = s.updateSquadBoxes(input)
 	}
+	s.updateRadial()
 	s.updateInspection(input, taken)
 	s.updateSquadKeys(input)
 	// The loop is the clock: one tick of simulation per update, more
@@ -172,6 +177,29 @@ func (s *playScene) updateSquadKeys(input *golib.Input) {
 			return
 		}
 	}
+}
+
+// updateTech takes a click on the schematics badge over the core, which
+// opens the oldest unopened drop, and any click while a callout stands,
+// which closes it. Both swallow the click, so the region under never
+// hears of it; the badge wins over an open build menu, which stands
+// down while the callout is read.
+func (s *playScene) updateTech(input *golib.Input) bool {
+	if !input.MousePressed(golib.MouseLeft) {
+		return false
+	}
+	mx, my := input.MousePosition()
+	if s.techCallout != "" {
+		s.techCallout = ""
+		return true
+	}
+	if id := techPending(s.state); id != "" && s.techBadgeHolds(mx, my) {
+		Apply(s.state, AckTech{ID: id})
+		s.techCallout = id
+		s.closeRadial()
+		return true
+	}
+	return false
 }
 
 // updateSquadBoxes takes a click on one of the squads' boxes the way
@@ -290,6 +318,24 @@ func (s *playScene) dragCamera(input *golib.Input) {
 	s.dragFrom = golib.Vector2{X: mx, Y: my}
 }
 
+// updateRadial puts a menu away whose ring went empty while it stood
+// open: the stores ran dry or a robot walked onto the cell, and an
+// empty ring is no menu.
+func (s *playScene) updateRadial() {
+	if !s.radial {
+		return
+	}
+	if s.radialLevel == 0 {
+		if len(radialGroupLayout(s)) == 0 {
+			s.closeRadial()
+		}
+		return
+	}
+	if len(radialLeafLayout(s)) == 0 {
+		s.closeRadial()
+	}
+}
+
 // updateInspection picks the cell under the pointer with the left button,
 // cancels with a right click that never became a drag, expands or folds
 // a card when a click lands on its title, and acts when a click lands on
@@ -368,7 +414,8 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 		}
 		if s.radial {
 			s.pickRadial(mx, my)
-		} else if s.buildableCell(s.hoverCellCol, s.hoverCellRow) {
+		} else if techAnyArrived(s.state) &&
+			s.buildableCell(s.hoverCellCol, s.hoverCellRow) {
 			s.openRadial(s.hoverCellCol, s.hoverCellRow)
 			s.picked = false
 		} else {
@@ -397,8 +444,7 @@ func (s *playScene) rightClicked(input *golib.Input) bool {
 // buildable ground, nothing raised, rising or lying there, no robot
 // standing on it.
 func (s *playScene) buildableCell(col, row int) bool {
-	tcol, trow := cellTile(col, row)
-	if tileAt(tcol, trow) != kindGround {
+	if !buildableGround(col, row) {
 		return false
 	}
 	if _, occupied := buildingAt(s.state, col, row); occupied {
@@ -519,9 +565,11 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	screen.SetCamera(nil)
 	drawSwellStatic(s.state, screen, s.camera)
 	drawIdleCount(s.state, screen, s.camera)
+	drawTechBadge(s, screen)
 	screen.DrawText("niebla", 16, 12, 24, textColor, uiText)
 	drawMarkup(screen, s.hudLine(), 16, 44, 15, textColor)
 	drawReport(s.state, screen)
+	drawTechCallout(s, screen)
 	drawSquadStrip(s, screen)
 	s.dev.draw(s, screen)
 	help := "click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a cell, 1-9 call a squad, Esc saves and returns to the menu, F11 fullscreen, F2 filter"
@@ -568,6 +616,9 @@ func (s *playScene) hudLine() string {
 	}
 	if threat := threatWords(s.state); threat != "" {
 		fog += "   [danger]" + threat + "[/]"
+	}
+	if techPending(s.state) != "" {
+		fog += "   [light]schematics at the core[/]"
 	}
 	if s.saveFailed {
 		fog += "   save failed"

@@ -70,6 +70,7 @@ func layNow(t *testing.T, s *State, from, to int64) Pipe {
 func TestAPumpStandsOnAPoolAndAPoolTakesOne(t *testing.T) {
 	s := newGame()
 	seedStock(s)
+	arriveAll(s)
 	col, row := groundNearCore()
 	if canPlace(s, BuildingPump, col, row) {
 		t.Error("a pump was taken on plain ground")
@@ -106,6 +107,7 @@ func TestAPumpStandsOnAPoolAndAPoolTakesOne(t *testing.T) {
 func TestAPipeIsPaidBySectionAndLaidByTheRobots(t *testing.T) {
 	s := newGame()
 	seedStock(s)
+	arriveAll(s)
 	pump := pumpOn(t, s, safePool(t))
 	from, _ := pipeEndSpot(s, pump.ID)
 	bends := []PipePoint{{from.X + 120, from.Y - 60}}
@@ -142,6 +144,7 @@ func TestAPipeIsPaidBySectionAndLaidByTheRobots(t *testing.T) {
 func TestALaidPipeCarriesThePoolIntoItsTank(t *testing.T) {
 	s := newGame()
 	seedStock(s)
+	arriveAll(s)
 	d := safePool(t)
 	pump := pumpOn(t, s, d)
 	Apply(s, LayPipe{From: pump.ID, To: coreTank})
@@ -187,6 +190,7 @@ func TestALaidPipeCarriesThePoolIntoItsTank(t *testing.T) {
 func TestOilHasAPlaceAndPipesMoveItBetweenTanks(t *testing.T) {
 	s := newGame()
 	seedStock(s)
+	arriveAll(s)
 	delete(s.Robots, 1) // nobody hauls or refuels: the pipes alone move oil
 	delete(s.Robots, 2)
 	noRivals(s) // and nobody siphons
@@ -282,6 +286,7 @@ func TestRobotsCarryOilToATankWithRoomAndRefillFromTheirPost(t *testing.T) {
 func TestLayPipeRefusesWhatItCantJoin(t *testing.T) {
 	s := newGame()
 	seedStock(s)
+	arriveAll(s)
 	col, row := groundNearCore()
 	charger := raised(t, s, BuildingCharger, col, row)
 	pump := pumpOn(t, s, safePool(t))
@@ -309,6 +314,7 @@ func TestLayPipeRefusesWhatItCantJoin(t *testing.T) {
 func TestAPipeLeavesWithItsEndsAndItsCostFallsAsAPile(t *testing.T) {
 	s := newGame()
 	seedStock(s)
+	arriveAll(s)
 	pump := pumpOn(t, s, safePool(t))
 	col, row := groundNearCore()
 	silo := raised(t, s, BuildingSilo, col, row)
@@ -389,6 +395,7 @@ func TestAPipesCurvePassesThroughItsBends(t *testing.T) {
 func TestPipesSurviveASave(t *testing.T) {
 	s := newGame()
 	seedStock(s)
+	arriveAll(s)
 	pump := pumpOn(t, s, safePool(t))
 	from, _ := pipeEndSpot(s, pump.ID)
 	Apply(s, LayPipe{
@@ -409,6 +416,7 @@ func TestPipesSurviveASave(t *testing.T) {
 	// A save from before the pipes has no table for them, and takes one.
 	old := newGame()
 	seedStock(old)
+	arriveAll(old)
 	old.Pipes = nil
 	oldPump := pumpOn(t, old, safePool(t))
 	Apply(old, LayPipe{From: oldPump.ID, To: 0})
@@ -420,6 +428,7 @@ func TestPipesSurviveASave(t *testing.T) {
 func TestAPoolsCardsCarryThePumpAndItsPipe(t *testing.T) {
 	s := newGame()
 	seedStock(s)
+	arriveAll(s)
 	d := safePool(t)
 	camera := newPlayScene(s).camera
 	dc, dr := tileCell(d.Col, d.Row)
@@ -429,8 +438,8 @@ func TestAPoolsCardsCarryThePumpAndItsPipe(t *testing.T) {
 	}
 	s.Stock.Lilac = 0
 	panel = tooltipLayout(s, camera, dc, dr, map[string]bool{})
-	if row := panel.findButton(buttonBuildPump); row == nil || !row.dim {
-		t.Error("empty stores don't dim the pump's button")
+	if panel.findButton(buttonBuildPump) != nil {
+		t.Error("empty stores still offer the pump")
 	}
 	seedStock(s)
 	pump := pumpOn(t, s, d)
@@ -458,6 +467,7 @@ func TestAPoolsCardsCarryThePumpAndItsPipe(t *testing.T) {
 func TestRobotsLayAPipeASectionEachAndStandByIt(t *testing.T) {
 	s := newGame()
 	seedStock(s)
+	arriveAll(s)
 	pump := pumpOn(t, s, safePool(t))
 	from, _ := pipeEndSpot(s, pump.ID)
 	bends := []PipePoint{{from.X + 120, from.Y - 60}}

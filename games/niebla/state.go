@@ -14,25 +14,27 @@ import (
 // State is the whole game as one value. Actions (actions.go) are the
 // only thing that changes it.
 type State struct {
-	Seed      int64              // the region's seed: its relief, cover and deposits (worldgen.go)
-	Ticks     int64              // game ticks, 60 to the second
-	NextID    int64              // the ID the next robot, building, pile or pipe gets
-	Robots    map[int64]Robot    // the colony, by ID
-	Buildings map[int64]Building // the colony's structures, by ID
-	Stock     Stock              // what the core's stores hold
-	Drain     map[string]float64 // what remains in each deposit patch, by key
-	Jobs      []Job              // build jobs, oldest first
-	Piles     map[int64]Pile     // loose items on the ground, by ID
-	Pipes     map[int64]Pipe     // oil pipes, laid or being laid, by ID
-	Fog       Fog                // the region's weather: the cycles and the swell
-	Enemies   map[int64]Enemy    // the rivals' vehicles, by ID (sim_enemies.go)
-	Parties   map[int64]Party    // the rivals' visits under way, by ID
-	Raids     Raids              // the rivals' clock: the visits that were, the next one
-	Marks     map[int64]Mark     // what the scouts painted on the ground, by ID
-	Reports   []Report           // the news the rivals made, oldest first
-	Rolls     uint64             // random numbers drawn so far: the state's own PRNG
-	Squads    map[int64]Squad    // the squads' orders, by their war factory's ID
-	Shots     map[int64]Shot     // bullets and shells in the air, by ID (sim_shots.go)
+	Seed       int64              // the region's seed: its relief, cover and deposits (worldgen.go)
+	Ticks      int64              // game ticks, 60 to the second
+	NextID     int64              // the ID the next robot, building, pile or pipe gets
+	Robots     map[int64]Robot    // the colony, by ID
+	Buildings  map[int64]Building // the colony's structures, by ID
+	Stock      Stock              // what the core's stores hold
+	Drain      map[string]float64 // what remains in each deposit patch, by key
+	Jobs       []Job              // build jobs, oldest first
+	Piles      map[int64]Pile     // loose items on the ground, by ID
+	Pipes      map[int64]Pipe     // oil pipes, laid or being laid, by ID
+	Fog        Fog                // the region's weather: the cycles and the swell
+	Enemies    map[int64]Enemy    // the rivals' vehicles, by ID (sim_enemies.go)
+	Parties    map[int64]Party    // the rivals' visits under way, by ID
+	Raids      Raids              // the rivals' clock: the visits that were, the next one
+	Marks      map[int64]Mark     // what the scouts painted on the ground, by ID
+	Reports    []Report           // the news the rivals made, oldest first
+	Rolls      uint64             // random numbers drawn so far: the state's own PRNG
+	Deliveries int64              // loads the robots have brought home, the first of which brings the first schematics in
+	Squads     map[int64]Squad    // the squads' orders, by their war factory's ID
+	Shots      map[int64]Shot     // bullets and shells in the air, by ID (sim_shots.go)
+	Tech       map[string]bool    // the schematics that arrived: drop ID -> opened (sim_tech.go)
 }
 
 // Fog is the region's weather, where the fog's breath has got to. The

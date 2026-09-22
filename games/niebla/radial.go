@@ -85,50 +85,59 @@ func radialHit(x, y, mx, my float32) bool {
 type radialGroupItem struct {
 	group buildGroup
 	x, y  float32
-	ready bool // any of its blueprints may rise on this cell
 }
 
 // radialLeafItem is one blueprint on the second ring.
 type radialLeafItem struct {
-	kind  BuildingKind
-	x, y  float32
-	ready bool // the colony may raise this kind on this cell
+	kind BuildingKind
+	x, y float32
 }
 
 // radialReady reports whether a blueprint may be raised on the menu's
-// cell right now.
+// cell right now. The menu offers nothing else: what the schematics,
+// the ground, the fog or the stores refuse is not on the rings at all,
+// so every option a click could land on is one that would really rise.
 func radialReady(s *playScene, kind BuildingKind) bool {
-	return canPlace(s.state, kind, s.radialCol, s.radialRow) &&
+	return kindUnlocked(s.state, kind) &&
+		canPlace(s.state, kind, s.radialCol, s.radialRow) &&
 		canAfford(s.state, kind)
 }
 
-// radialGroupLayout lays the first ring out around the menu's cell.
+// radialGroupLayout lays the first ring out around the menu's cell:
+// every group that holds a blueprint the colony could raise here.
 func radialGroupLayout(s *playScene) []radialGroupItem {
 	center := radialCenter(s)
-	items := make([]radialGroupItem, 0, len(buildGroups))
-	for i, group := range buildGroups {
-		x, y := radialSpot(len(buildGroups), i, center.X, center.Y)
-		ready := false
+	groups := make([]buildGroup, 0, len(buildGroups))
+	for _, group := range buildGroups {
 		for _, kind := range groupMembers[group] {
 			if radialReady(s, kind) {
-				ready = true
+				groups = append(groups, group)
 				break
 			}
 		}
-		items = append(items, radialGroupItem{group, x, y, ready})
+	}
+	items := make([]radialGroupItem, 0, len(groups))
+	for i, group := range groups {
+		x, y := radialSpot(len(groups), i, center.X, center.Y)
+		items = append(items, radialGroupItem{group, x, y})
 	}
 	return items
 }
 
-// radialLeafLayout lays the picked group's blueprints out around the
-// menu's cell.
+// radialLeafLayout lays the picked group's raiseable blueprints out
+// around the menu's cell.
 func radialLeafLayout(s *playScene) []radialLeafItem {
-	kinds := groupMembers[s.radialGroup]
 	center := radialCenter(s)
+	kinds := make([]BuildingKind, 0, len(groupMembers[s.radialGroup]))
+	for _, kind := range groupMembers[s.radialGroup] {
+		if radialReady(s, kind) {
+			kinds = append(kinds, kind)
+		}
+	}
 	items := make([]radialLeafItem, 0, len(kinds))
 	for i, kind := range kinds {
 		x, y := radialSpot(len(kinds), i, center.X, center.Y)
-		items = append(items, radialLeafItem{kind, x, y, radialReady(s, kind)})
+		items = append(items, radialLeafItem{kind, x, y})
 	}
 	return items
 }
@@ -158,9 +167,8 @@ func radialLeafHover(
 }
 
 // pickRadial acts on a click while the menu stands open. A group opens
-// its ring - opening a folder is not an action that can fail, so a dim
-// group opens too and shows why it is dim. A ready blueprint is marked
-// on the cell, a dim one is left alone and the menu stays, and a click
+// its ring - the ring holds only what the colony could raise, so any
+// group on it opens. A blueprint is marked on the cell, and a click
 // anywhere else puts the menu away.
 func (s *playScene) pickRadial(mx, my float32) {
 	if s.radialLevel == 0 {
@@ -178,12 +186,10 @@ func (s *playScene) pickRadial(mx, my float32) {
 		s.closeRadial()
 		return
 	}
-	if item.ready {
-		Apply(s.state, MarkBuilding{
-			Kind: item.kind, Col: s.radialCol, Row: s.radialRow,
-		})
-		s.closeRadial()
-	}
+	Apply(s.state, MarkBuilding{
+		Kind: item.kind, Col: s.radialCol, Row: s.radialRow,
+	})
+	s.closeRadial()
 }
 
 // openRadial opens the build menu on a cell, on its first ring.
@@ -210,10 +216,11 @@ func (s *playScene) backRadial() {
 
 // drawRadial paints the open menu: a marker on the cell's center and one
 // circle per option of the ring that stands open, ringed in its color
-// and labeled under it, the option under the pointer lit and the ones
-// the colony can't raise dimmed. A blueprint's circle carries its body
-// in miniature; a group's carries its mark, and the group picked stands
-// on the cell so the player knows which ring they are in.
+// and labeled under it, the option under the pointer lit. Every option
+// on the rings is one the colony could raise; nothing else is offered.
+// A blueprint's circle carries its body in miniature; a group's carries
+// its mark, and the group picked stands on the cell so the player knows
+// which ring they are in.
 func drawRadial(s *playScene, screen *golib.Screen, mx, my float32) {
 	center := radialCenter(s)
 	if s.radialLevel == 0 {
@@ -236,9 +243,6 @@ func drawRadialGroups(
 	hovered, over := radialGroupHover(items, mx, my)
 	for _, item := range items {
 		ink := groupColor(item.group)
-		if !item.ready {
-			ink = golib.WithOpacity(ink, 0.3)
-		}
 		lit := over && item.group == hovered.group
 		fill, edge, label := panelColor, ink, ink
 		if lit {
@@ -266,10 +270,7 @@ func drawRadialLeaves(
 	for _, item := range items {
 		info := catalogInfo(buildingType(item.kind))
 		ink := info.Color
-		if !item.ready {
-			ink = golib.WithOpacity(info.Color, 0.3)
-		}
-		lit := item.ready && over && item.kind == hovered.kind
+		lit := over && item.kind == hovered.kind
 		fill, edge, label := panelColor, ink, ink
 		if lit {
 			fill = mid(panelColor, info.Color)

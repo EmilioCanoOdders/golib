@@ -26,6 +26,7 @@ func groundInTheFog() (int, int) {
 func TestMarkingPaysAndRaisesTheBuilding(t *testing.T) {
 	s := newGame()
 	seedStock(s)
+	arriveAll(s)
 	col, row := groundNearCore()
 	Apply(s, MarkBuilding{Kind: BuildingFactory, Col: col, Row: row})
 	lilac, oil := buildingCost(BuildingFactory)
@@ -56,6 +57,7 @@ func TestMarkingPaysAndRaisesTheBuilding(t *testing.T) {
 func TestCellsFitSeveralBuildingsToATile(t *testing.T) {
 	s := newGame()
 	seedStock(s)
+	arriveAll(s)
 	// Two buildings on one tile: neighbour cells, both marked.
 	Apply(s, MarkBuilding{Kind: BuildingFactory, Col: 104, Row: 96})
 	Apply(s, MarkBuilding{Kind: BuildingSilo, Col: 105, Row: 96})
@@ -84,6 +86,7 @@ func TestCellsFitSeveralBuildingsToATile(t *testing.T) {
 func TestBuildingsCantStandInTheFog(t *testing.T) {
 	s := newGame()
 	seedStock(s)
+	arriveAll(s)
 	col, row := groundInTheFog()
 	Apply(s, MarkBuilding{Kind: BuildingCharger, Col: col, Row: row})
 	if len(s.Jobs) != 0 {
@@ -97,6 +100,50 @@ func TestBuildingsCantStandInTheFog(t *testing.T) {
 	Apply(s, MarkBuilding{Kind: BuildingProtector, Col: col, Row: row})
 	if len(s.Jobs) != 1 {
 		t.Fatal("the fog refused the protector")
+	}
+}
+
+// A deposit's body is organic: where its ore draws nothing, the cell is
+// ground like any other and takes a building; where it draws, the ore
+// keeps the ground and only the pump stands there.
+func TestABuildingStandsWhereADepositsOreDoesntCover(t *testing.T) {
+	s := newGame()
+	seedStock(s)
+	arriveAll(s)
+	const cellsPerTile = unitsPerTile / buildingCell
+	bare, found := [2]int{}, false
+	for tile := range land.depositIndex {
+		if tile[0] == 0 && tile[1] == 0 {
+			continue
+		}
+		for row := tile[1] * cellsPerTile; row < (tile[1]+1)*cellsPerTile && !found; row++ {
+			for col := tile[0] * cellsPerTile; col < (tile[0]+1)*cellsPerTile; col++ {
+				x, y := cellCenterUnits(col, row)
+				if oreAt(col, row) == 0 && land.flatCell(col, row) &&
+					inSafeZone(s, x, y) {
+					bare, found = [2]int{col, row}, true
+					break
+				}
+			}
+		}
+		if found {
+			break
+		}
+	}
+	if !found {
+		t.Fatal("no deposit tile inside the bubble has a flat cell its ore doesn't cover")
+	}
+	if !canPlace(s, BuildingSilo, bare[0], bare[1]) {
+		t.Fatalf("the bare cell %d, %d of a deposit's tile refuses a silo",
+			bare[0], bare[1])
+	}
+	d := safePool(t)
+	pc, pr := pumpCell(d)
+	if oreAt(pc, pr) == 0 {
+		t.Fatal("the pool's heart holds no ore")
+	}
+	if canPlace(s, BuildingSilo, pc, pr) {
+		t.Error("the pool's heart took a silo")
 	}
 }
 

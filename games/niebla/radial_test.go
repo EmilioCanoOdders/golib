@@ -107,6 +107,7 @@ func TestRadialHit(t *testing.T) {
 // menu the player can lose a pick in: the layout's shape is the guard.
 func TestRadialRingLaysOutEveryOption(t *testing.T) {
 	s := newPlayScene(newGame())
+	arriveAll(s.state)
 	s.openRadial(104, 96)
 	groups := radialGroupLayout(s)
 	if len(groups) != len(buildGroups) {
@@ -149,5 +150,51 @@ func TestRadialGoesBackARingAndThenCloses(t *testing.T) {
 	s.backRadial()
 	if s.radial {
 		t.Error("a right click on the first ring left the menu open")
+	}
+}
+
+// The menu only offers what the colony could really raise: a fresh
+// colony's rings are empty, infrastructure alone shows one group, an
+// empty store empties the rings, and the military ring holds only the
+// guard post once a party drives in.
+func TestTheRadialOnlyOffersWhatArrived(t *testing.T) {
+	s := newPlayScene(newGame())
+	s.openRadial(104, 96)
+	if groups := radialGroupLayout(s); len(groups) != 0 {
+		t.Fatalf("a fresh colony's menu offers %d groups, want none", len(groups))
+	}
+	Apply(s.state, DevNextTech{})
+	runTicks(s.state, 1)
+	groups := radialGroupLayout(s)
+	if len(groups) != 1 || groups[0].group != groupLogistics {
+		t.Fatalf("infrastructure alone shows %d groups, want logistics only",
+			len(groups))
+	}
+	s.radialGroup, s.radialLevel = groupLogistics, 1
+	if leaves := radialLeafLayout(s); len(leaves) != len(groupMembers[groupLogistics]) {
+		t.Fatalf("the logistics ring offers %d options, want all %d",
+			len(leaves), len(groupMembers[groupLogistics]))
+	}
+	// What the stores can't pay for is not offered either.
+	lilac := s.state.Stock.Lilac
+	s.state.Stock.Lilac = 0
+	if groups := radialGroupLayout(s); len(groups) != 0 {
+		t.Fatalf("an empty store still offers %d groups, want none", len(groups))
+	}
+	s.state.Stock.Lilac = lilac
+	// The guard post comes with the scout's mark on the ground, alone.
+	s.state.Marks[1] = Mark{ID: 1, X: 100, Y: 100}
+	runTicks(s.state, 1)
+	if !kindUnlocked(s.state, BuildingGuard) {
+		t.Fatal("the guard post never answered the mark")
+	}
+	groups = radialGroupLayout(s)
+	if len(groups) != 2 {
+		t.Fatalf("infrastructure and the guard show %d groups, want 2", len(groups))
+	}
+	s.radialGroup, s.radialLevel = groupMilitary, 1
+	leaves := radialLeafLayout(s)
+	if len(leaves) != 1 || leaves[0].kind != BuildingGuard {
+		t.Fatalf("the military ring offers %v, want the guard post alone", leaves)
 	}
 }

@@ -30,6 +30,7 @@ const (
 	devHurryButton = 5 // a camped party stops waiting; it sits under the visit's
 	devFastButton  = 6 // the game at devFastTicks a frame; under new world's
 	devBaseButton  = 7 // the rivals' next visit, now and to stay; under reset world's
+	devTechButton  = 8 // the next schematics of the ladder, now
 
 	devFastTicks = 8 // ticks of simulation per update while fast forward is on
 )
@@ -139,6 +140,10 @@ func (d *devTools) update(s *playScene, input *golib.Input) bool {
 		d.fast = !d.fast
 		return true
 	}
+	if devButtonBounds(devTechButton).Contains(mx, my) {
+		Apply(s.state, DevNextTech{})
+		return true
+	}
 	if d.placing {
 		world := s.camera.ToWorld(mx, my)
 		x, y := unitsAtWorld(float64(world.X), float64(world.Y))
@@ -159,6 +164,7 @@ func (d *devTools) resetWorld(s *playScene, seed int64) {
 	s.closeRadial()
 	s.laying = pipeLaying{}
 	s.ordering = 0
+	s.techCallout = ""
 	s.expanded = map[string]bool{}
 	s.mites = newMiteField()
 	s.fx = newFxField()
@@ -192,6 +198,7 @@ func (d *devTools) draw(s *playScene, screen *golib.Screen) {
 		devHurryButton: "rivals: stop waiting",
 		devBaseButton:  "rivals: a base",
 		devFastButton:  fmt.Sprintf("fast forward x%d", devFastTicks),
+		devTechButton:  "next schematics",
 	}
 	lit := []bool{
 		devSwellButton: s.state.Fog.Held,
@@ -202,6 +209,7 @@ func (d *devTools) draw(s *playScene, screen *golib.Screen) {
 		devHurryButton: false,
 		devBaseButton:  settled(s.state),
 		devFastButton:  d.fast,
+		devTechButton:  false,
 	}
 	for i, label := range labels {
 		rect := devButtonBounds(i)

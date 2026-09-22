@@ -78,6 +78,7 @@ func writeEconomyRun(
 ) {
 	t.Helper()
 	s := newGameOn(seed)
+	arriveAll(s) // the planner builds the whole ladder from the start
 	p := newEconomyPlanner(plan)
 	for minute := 0; minute <= minutes; minute++ {
 		if err := w.Write(economyRow(s, plan.name, seed, minute)); err != nil {

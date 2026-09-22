@@ -158,6 +158,12 @@ func depositAt(col, row int) (Deposit, bool) {
 	return land.deposits[i], true
 }
 
+// oreAt returns how much ore a cell was generated with: 0 where the
+// deposit's body holds none, which is also where nothing draws.
+func oreAt(col, row int) float32 {
+	return land.ore[[2]int{col, row}]
+}
+
 // depositKey names a deposit's remaining amount inside State.Drain.
 func depositKey(d Deposit) string {
 	return drainKey(cellTile(d.HeartCol, d.HeartRow))

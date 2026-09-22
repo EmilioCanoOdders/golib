@@ -83,6 +83,7 @@ type Region struct {
 	deposits     []Deposit
 	bodies       [][]OreCell // each deposit's cells
 	depositIndex map[[2]int]int
+	ore          map[[2]int]float32 // the cells that hold ore, and how much
 }
 
 // rng is splitmix64: the generator's own numbers, so a seed gives the
@@ -141,7 +142,7 @@ func fbm(salt uint64, x, y float64, octaves int) float64 {
 }
 
 func generateRegion(seed int64) *Region {
-	g := &Region{Seed: seed, depositIndex: map[[2]int]int{}}
+	g := &Region{Seed: seed, depositIndex: map[[2]int]int{}, ore: map[[2]int]float32{}}
 	r := &rng{s: uint64(seed)*0x2545f4914f6cdd1d + 0x1234567}
 	for row := range g.tiles {
 		for col := range g.tiles[row] {
@@ -427,6 +428,9 @@ func (g *Region) placeDeposit(r *rng, plan depositPlan) {
 		d.Full = math.Round(rich*density/10) * 10
 		g.deposits = append(g.deposits, d)
 		g.bodies = append(g.bodies, body)
+		for _, c := range body {
+			g.ore[[2]int{c.Col, c.Row}] = c.Rich
+		}
 		return
 	}
 }

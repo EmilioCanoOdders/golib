@@ -74,13 +74,17 @@ func (a RecallRobot) apply(s *State) {
 // MarkBuilding marks a cell for a building: the blueprint's cost is paid
 // from the stores at once, and the job joins the queue for the robots to
 // raise. It does nothing on a cell that can't take the kind (see
-// canPlace) or when the stores can't pay.
+// canPlace), when the stores can't pay, or while the kind's schematics
+// haven't arrived (see kindUnlocked).
 type MarkBuilding struct {
 	Kind     BuildingKind
 	Col, Row int // the cell, the tile grid's last subdivision
 }
 
 func (a MarkBuilding) apply(s *State) {
+	if !kindUnlocked(s, a.Kind) {
+		return
+	}
 	if !canPlace(s, a.Kind, a.Col, a.Row) {
 		return
 	}
@@ -205,7 +209,8 @@ func (a CancelJob) apply(s *State) {
 // LayPipe marks a pipe from a pump or a tank to a tank, through the
 // bends the player clicked: its sections are paid in lilac at once, and
 // the robots lay it a section each. It does nothing when the ends
-// can't take a pipe (see canLayPipe) or when the stores can't pay.
+// can't take a pipe (see canLayPipe), when the stores can't pay, or
+// before the frontier kit has arrived with the pipes (see dropArrived).
 type LayPipe struct {
 	From  int64       // the pump's or the tank's entity ID; 0 is the core
 	To    int64       // the tank's entity ID; 0 is the core
@@ -213,6 +218,9 @@ type LayPipe struct {
 }
 
 func (a LayPipe) apply(s *State) {
+	if !dropArrived(s, techFrontierID) {
+		return
+	}
 	sections, ok := canLayPipe(s, a.From, a.To, a.Bends)
 	if !ok || s.Stock.Lilac < pipeCost(sections) {
 		return
@@ -238,6 +246,20 @@ func (a LayPipe) apply(s *State) {
 // there.
 type RemovePipe struct {
 	Pipe int64 // the pipe's entity ID
+}
+
+// AckTech opens the schematics a drop brought in: the badge over the
+// core goes away and the next in line, if any, takes its place. It does
+// nothing for schematics that never arrived.
+type AckTech struct {
+	ID string // the drop's name (sim_tech.go)
+}
+
+func (a AckTech) apply(s *State) {
+	if _, arrived := s.Tech[a.ID]; !arrived {
+		return
+	}
+	s.Tech[a.ID] = true
 }
 
 func (a RemovePipe) apply(s *State) {
@@ -336,4 +358,22 @@ func (a DevSpawnRobot) apply(s *State) {
 		return
 	}
 	s.spawnRobot(RobotBuilt, a.X, a.Y)
+}
+
+// DevNextTech makes the next drop of the ladder arrive at once, whether
+// or not its clock or its visit has come. It does nothing once every
+// drop is in.
+type DevNextTech struct{}
+
+func (DevNextTech) apply(s *State) {
+	if s.Tech == nil {
+		s.Tech = map[string]bool{}
+	}
+	for i := range techLadder {
+		id := techLadder[i].id
+		if _, ok := s.Tech[id]; !ok {
+			s.Tech[id] = false
+			return
+		}
+	}
 }

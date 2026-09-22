@@ -54,7 +54,9 @@ const (
 const pipeButtonWidth = 58 // a pipe row's remove button: its note needs the room
 
 // tooltipRow is one line the panel draws: the header, a card's title, an
-// expanded card's detail, or a button.
+// expanded card's detail, or a button. A button is only on the panel
+// when the colony could really press it - what the stores, the
+// schematics or the room refuse is not offered.
 type tooltipRow struct {
 	thing   Thing  // the card the row belongs to; empty on the header
 	detail  Detail // on a detail row
@@ -63,7 +65,6 @@ type tooltipRow struct {
 	open    bool    // the card is expanded
 	summary string  // the title's headline, right-aligned
 	button  string  // the label on a button row, "" otherwise
-	dim     bool    // the button can't be pressed now: the stores can't pay
 	note    string  // markup written beside the button
 	ref     int64   // what the button acts on, when it isn't the card's thing: a pipe
 	bx, by  float32 // the button's rectangle on the screen
@@ -143,12 +144,12 @@ func tooltipLayout(
 		}
 		if thing.Type == TypeWarFactory {
 			if b, ok := s.Buildings[thing.Ref]; ok {
-				if b.Work <= 0 && squadRoom(s, b) {
+				if b.Work <= 0 && squadRoom(s, b) &&
+					s.Stock.Lilac >= trooperCostLilac &&
+					oilTotal(s) >= trooperCostOil {
 					t.rows = append(t.rows, tooltipRow{
 						thing:  thing,
 						button: buttonTrooper,
-						dim: s.Stock.Lilac < trooperCostLilac ||
-							oilTotal(s) < trooperCostOil,
 					})
 				}
 				if len(squadMembers(s, b.ID)) > 0 {
@@ -167,7 +168,7 @@ func tooltipLayout(
 					note: pipeNote(s, p, end), ref: p.ID,
 				})
 			}
-			if freePorts(s, end) > 0 {
+			if freePorts(s, end) > 0 && dropArrived(s, techFrontierID) {
 				t.rows = append(t.rows, tooltipRow{
 					thing: thing, button: buttonLayPipe,
 					note: fmt.Sprintf("[dim]%d of %d ports free[/]",
@@ -187,12 +188,12 @@ func tooltipLayout(
 		}
 		t.rows = append(t.rows, tooltipRow{thing: thing, button: label})
 		if d, ok := depositAt(tcol, trow); ok && thing.Type == TypeOil {
-			if pc, pr := pumpCell(d); canPlace(s, BuildingPump, pc, pr) {
+			if pc, pr := pumpCell(d); canPlace(s, BuildingPump, pc, pr) &&
+				kindUnlocked(s, BuildingPump) && canAfford(s, BuildingPump) {
 				lilac, oil := buildingCost(BuildingPump)
 				t.rows = append(t.rows, tooltipRow{
 					thing:  thing,
 					button: buttonBuildPump,
-					dim:    !canAfford(s, BuildingPump),
 					note:   "[dim]" + costWords(lilac, oil) + "[/]",
 				})
 			}
@@ -322,14 +323,14 @@ func (t tooltip) buttonAt(x, y float32) (Thing, string, bool) {
 }
 
 // buttonRowAt returns the row of the button that holds the screen point,
-// or nil: a dimmed button holds nothing.
+// or nil.
 func (t tooltip) buttonRowAt(x, y float32) *tooltipRow {
 	if x < t.x || x > t.x+t.w {
 		return nil
 	}
 	for i := range t.rows {
 		r := &t.rows[i]
-		if r.button == "" || r.dim {
+		if r.button == "" {
 			continue
 		}
 		if x >= r.bx && x <= r.bx+r.bw && y >= r.by && y <= r.by+r.bh {
@@ -405,10 +406,7 @@ func drawTooltip(screen *golib.Screen, t tooltip, mx, my float32) {
 		case r.button != "":
 			fill, ink := buttonColor, panelTextColor
 			rect := golib.Rectangle{X: r.bx, Y: r.by, Width: r.bw, Height: r.bh}
-			switch {
-			case r.dim:
-				ink = panelDimColor
-			case rect.Contains(mx, my):
+			if rect.Contains(mx, my) {
 				fill = buttonHoverColor
 			}
 			screen.DrawRectangle(rect, fill)

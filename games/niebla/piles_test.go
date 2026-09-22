@@ -140,6 +140,7 @@ func TestDemolishingASiloSpillsWhatItsTankHeld(t *testing.T) {
 func TestCancellingASiteDropsItsCost(t *testing.T) {
 	s := newGame()
 	seedStock(s)
+	arriveAll(s)
 	col, row := groundNearCore()
 	Apply(s, MarkBuilding{Kind: BuildingProtector, Col: col, Row: row})
 	Apply(s, CancelJob{Col: col, Row: row})
@@ -234,6 +235,7 @@ func TestPilesSurviveASaveAndOldSavesTakeThem(t *testing.T) {
 func TestCardsCarryTheirTrashCan(t *testing.T) {
 	s := newGame()
 	seedStock(s)
+	arriveAll(s)
 	camera := golib.NewCamera(screenWidth, screenHeight)
 	col, row := groundNearCore()
 	b := raised(t, s, BuildingSilo, col, row)

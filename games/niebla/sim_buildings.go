@@ -150,25 +150,38 @@ func buildingsOnTile(s *State, tcol, trow int) []Building {
 	return found
 }
 
-// canPlace reports whether a kind may be marked on a cell: buildable
-// ground, no building there yet, and — the fog's law — inside a safe
-// bubble, which the protector alone is built to stand outside of. A pump
-// is the one kind that stands on oil instead: on a pool with oil left in
-// it and no pump yet.
+// buildableGround reports whether a cell's ground takes a building that
+// stands on ground: bare ground, or a pool's or vein's cell its ore
+// doesn't cover - a deposit's body is organic, and where nothing draws,
+// the ground is ground like any other. The pump stands on oil instead.
+func buildableGround(col, row int) bool {
+	tcol, trow := cellTile(col, row)
+	tile := tileAt(tcol, trow)
+	if tile == kindGround {
+		return true
+	}
+	return (tile == kindOil || tile == kindLilac) && oreAt(col, row) == 0
+}
+
+// canPlace reports whether a kind may be marked on a cell: ground that
+// takes it - the pump is the one kind that stands on oil instead, on a
+// pool with oil left in it and no pump yet - a flat cell, nothing else
+// on it, and a bubble over it, which the protector alone is built to
+// stand outside of.
 func canPlace(s *State, kind BuildingKind, col, row int) bool {
 	if col < 0 || row < 0 || col >= regionCellCols || row >= regionCellRows {
 		return false
 	}
 	tcol, trow := cellTile(col, row)
-	ground := byte(kindGround)
-	if kind == BuildingPump {
-		ground = kindOil
-	}
-	if tileAt(tcol, trow) != ground || !land.flatCell(col, row) {
+	if !land.flatCell(col, row) {
 		return false
 	}
-	if kind == BuildingPump &&
-		(patchPumped(s, tcol, trow) || remainingAt(s, tcol, trow) <= 0) {
+	if kind == BuildingPump {
+		if tileAt(tcol, trow) != kindOil ||
+			patchPumped(s, tcol, trow) || remainingAt(s, tcol, trow) <= 0 {
+			return false
+		}
+	} else if !buildableGround(col, row) {
 		return false
 	}
 	if _, occupied := buildingAt(s, col, row); occupied {

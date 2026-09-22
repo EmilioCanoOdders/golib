@@ -37,6 +37,7 @@ const (
 // in ID order, so the outcome never depends on map iteration. A built robot empty of oil outside every bubble is
 // digested by the fog and leaves the colony.
 func stepSim(s *State) {
+	stepTech(s)
 	stepFog(s)
 	stepFactories(s)
 	stepPipes(s)
@@ -452,6 +453,9 @@ func (s *State) deposit(r *Robot) {
 		return
 	}
 	put := math.Min(r.Carry, math.Max(0, room))
+	if put > 0 {
+		s.Deliveries++
+	}
 	switch r.Cargo {
 	case TypeOil:
 		s.addOil(haulTank(s, *r), put)

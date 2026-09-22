@@ -82,11 +82,11 @@ also grows a base its next level at once, and `rivals: a base`, under
 | `menu.go` | The title screen: the game's name, the player's number, Play and Quit; the `menuButton` hit-testing both scenes' menus use |
 | `identity.go` | Who is playing: the machine's ID (registry value, platform UUID or `/etc/machine-id`), hashed with the game's salt into `player`, the number the menu shows and a later server hands tokens out by |
 | `store.go` | The local database (SQLite): players, saves and the machine table; `saveBase`/`resumeState`, the scenes' door into it; the DB path, `:memory:` under `golib shot` |
-| `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); the camera, the selection, the open cards, the pointer's modes (`laying` a pipe, `ordering` a squad) and the looks-only fields (`mites`, `fx`) live here, never serialized; the HUD's line with the rivals' doings (`threatWords`) and the news plate; a picked guard post's or artillery piece's reach; Esc saves and returns to the menu, autosave every `autosaveTicks` |
+| `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); the camera, the selection, the open cards, the pointer's modes (`laying` a pipe, `ordering` a squad), the schematics' click and open callout (`techCallout`) and the looks-only fields (`mites`, `fx`) live here, never serialized; the HUD's line with the rivals' doings (`threatWords`) and the `schematics at the core` call; a picked guard post's or artillery piece's reach; Esc saves and returns to the menu, autosave every `autosaveTicks` |
 | `radial.go` | The build menu: the two rings a click on empty ground opens - the build groups (industry, military, logistics), then the group's blueprints - laid out around the cell every frame, and `backRadial`/`closeRadial`/`openRadial` for the scene |
 | `glyphs.go` | The marks the build menu wears: a group's own glyph, and a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both |
-| `state.go` | The simulation's state: robots (core, built or combat), buildings with their tanks, reloads and damage, stock, what remains of each deposit, build jobs, piles, pipes, the fog, and the war's tables (`Enemies`, `Parties`, `Raids`, `Marks`, `Reports`, `Squads`, `Shots`, the PRNG's `Rolls`); `newGame`, which deals the starting region |
-| `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, and the dev tools' `DevHoldSwell`, `DevSpawnRobot`, `DevResetWorld`, `DevNextVisit` and `DevHurryRivals`; `OrderSquad` for the squads) and `Apply`, the only door into the state |
+| `state.go` | The simulation's state: robots (core, built or combat), buildings with their tanks, reloads and damage, stock, what remains of each deposit, build jobs, piles, pipes, the fog, and the war's tables (`Enemies`, `Parties`, `Raids`, `Marks`, `Reports`, `Squads`, `Shots`, the PRNG's `Rolls`) plus the schematics' `Tech`; `newGame`, which deals the starting region |
+| `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech` for the schematics' badge, and the dev tools' `DevHoldSwell`, `DevSpawnRobot`, `DevResetWorld`, `DevNextVisit`, `DevHurryRivals` and `DevNextTech`; `OrderSquad` for the squads) and `Apply`, the only door into the state |
 | `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, oldest build job then the oldest damaged building then a section of pipe, pick up loose items, own post, a trooper's squad, rest by the core —, the claim on a section of pipe (`stepLayPipe`) and the idle ranks (`parkSlot`, `idleRank`) |
 | `sim_piles.go` | Demolition and loose items: `canDemolish`, the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, storage caps, refuel spots, and the two factories' works (`robotWorks`: what each builds, for how much, how long) |
@@ -94,6 +94,7 @@ also grows a base its next level at once, and `rivals: a base`, under
 | `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus` |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
 | `sim_enemies.go` | The rivals' law and tuning: `Enemy`, `Party`, `Raids`, `Mark` and `Report`; the clock that sends a visit (`stepRaids`, `spawnVisit`), a party's stages (`stepParty`: approach, camp, raid, leave), the siphoning (`raid`), the fog's due on a vehicle with no repulsor over it (`stepExposure`), the wrecks' loot (`killEnemy`), the guard posts (`stepGuards`) and the state's own PRNG (`State.roll`) |
+| `sim_tech.go` | The schematics: the ladder of drops that brings the buildings in little by little, each with its trigger (the first delivery home, the rivals drinking at the tanks or their mark on the ground, the clock, a settled base) - `techLadder`, `stepTech`, `kindUnlocked`, `dropArrived`, `techPending`; arrival is derived from the state, only "opened" is kept (`State.Tech`, an old save wakes with what it earned) |
 | `sim_squads.go` | The squads' law and tuning: troopers (`RobotCombat`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), the war factory's room (`squadRoom`), and the rivals shooting back (`stepEnemyGuns`) |
 | `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right that list them - a tank icon, the unit count, the key below - and take a click (`drawSquadStrip`, `drawTankIcon`, `squadBoxRect`, `squadBoxAt`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the marks that pick a squad where it stands (`squadMarkAt`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
 | `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), who they hurt, the buildings' health and the robots' mending, what the colony sees (`seen`) and its artillery (`stepArtillery`) |
@@ -110,7 +111,8 @@ also grows a base its next level at once, and `rivals: a base`, under
 | `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons (a war factory's `build trooper` and `give order` among them) and the integrity line of a damaged building; the cell's outline (`cellDiamond`) |
 | `mites.go` | The fog's wear, for looks only: mites of darkness orbiting whatever stands in the mist, by its volume, trailing walkers and closing in on what stands still; view, never state |
 | `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, the blobs of oil by the state's tick) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
-| `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset world, new world, the rivals' next visit —; view only, acting through the `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
+| `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset world, new world, the rivals' next visit, next schematics —; view only, acting through the `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
+| `tech.go` | The schematics on the screen: the badge over the core - breathing halos around the drop's mark - while an unopened drop waits, the callout its click opens (`techWords`, `techWrap`), and the words (`techWords`) and ink (`techInk`) of each drop; view, never state |
 | `draw.go` | The region painter: the core's monolith, buildings with their damage bars, robots and troopers, the bubbles' rings, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `markup_test.go` | Markup parser and tooltip layout/button tests |
@@ -123,6 +125,7 @@ also grows a base its next level at once, and `rivals: a base`, under
 | `fog_test.go` | The fog driven directly: cycles, the first swell on schedule, the pressed line, the bubble's margin, the pushed band's drag, the swell's burn, the HUD's forecast |
 | `identity_test.go` | The identity derived from a machine ID: stable, distinct, and the parsers of what `reg query`, `ioreg` and the machine-id files say |
 | `store_test.go` | The database driven directly: an identity kept across runs, the fallback one too, the token column waiting empty, a base saved and loaded back whole, a second save replacing the first, one player's save invisible to another, the DB path's rules |
+| `tech_test.go` | The schematics driven directly: the clock and visit triggers fire on time and not before, `MarkBuilding` and `LayPipe` refuse what hasn't arrived, the badge opens by `AckTech` and a stale ack does nothing, an old save wakes with what it earned and owes no clicks, `DevNextTech` brings the ladder in order, the ledger survives a round trip, the cards' dimmed buttons |
 
 ## Architecture
 
@@ -170,7 +173,18 @@ pipes](#pumps-and-pipes)) (`BuildingKind` in `state.go`, rules and tuning in
 oil, the **charger** refills a built robot's tank from the stores, the
 **silo** and the **warehouse** add oil and lilac storage room, and the
 **shadow protector** holds a small bubble of safe ground of its own.
-Marking is building, and it takes three clicks: a click on a free cell
+Marking is building, and building is earned: the blueprints arrive as
+**remote schematics** (`sim_tech.go`, the ladder; `tech.go`, the badge
+and the callout). A drop lights a pulsing **badge over the core** while
+it waits — the HUD adds `schematics at the core` —, its click opens a
+callout that says what came in, and the blueprints join the menu; the
+first drop comes with the first haul a robot delivers home, and the
+guard post when the scout's drawing is inevitable - a rival drinking
+at the tanks, or the mark already sprayed. The menu offers only
+what a click would really raise - what the schematics, the ground, the
+fog or the stores refuse is not on the rings, and before the first
+drop the menu doesn't open at all. Marking itself takes
+three clicks: a click on a free cell
 of ground opens the **radial build menu** (`radial.go`) right on that
 cell — the options lay out around the cell's projected center every
 frame, so the menu follows the view —, a click on a **group** opens its
@@ -180,9 +194,10 @@ blueprint pays its cost from the stores and marks it on that very cell.
 A right click goes back a ring, and closes the menu from the first. Each
 option wears an icon: a group its own mark (`glyphs.go`), a blueprint
 the very body the region draws (`drawBuilding`) in miniature, so one
-graphic serves both. Options read their own validity (`canPlace` plus
-`canAfford`): the ones the ground, the fog or the stores refuse sit
-dimmed and ignore clicks. The job joins the queue;
+graphic serves both. Options read their own validity (`radialReady`:
+`kindUnlocked` plus `canPlace` plus `canAfford`) and only the valid ones
+sit on the rings — the menu never offers what a click wouldn't raise.
+The job joins the queue;
 the robots raise the oldest job first, standing on the cell's edge
 (spread by ID) where the rising body can't swallow them, and the site
 shows the part already built in solid colors inside a **wireframe** of
@@ -216,7 +231,10 @@ instead of ground: on a pool with oil left and no pump yet
 (`patchPumped`), inside a bubble. It isn't in the radial menu - a click on
 a pool inspects it - so the pool's card carries `build pump`, which marks
 it on `pumpCell`, the patch's middle; `sameGround` makes `thingsAt` show
-a pool's pump and site on every cell of the pool.
+a pool's pump and site on every cell of the pool. Both the pump's button
+and `lay pipe` stay off the cards until they would work - their
+schematics arrived and the stores can pay (`kindUnlocked`, and
+`LayPipe`'s frontier-kit guard).
 
 A **pipe** (`State.Pipes`, by ID) carries oil one way, `From` a pump or
 a tank `To` a tank, through the player's `Bends`, in units. `canJoin` is
