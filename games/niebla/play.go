@@ -60,9 +60,11 @@ type playScene struct {
 	pickedRow    int
 	expanded     map[string]bool // which cards stand open, by thing ID
 	armed        string          // the card whose trash can was pressed once, by thing ID
-	radial       bool            // the build menu stands open on a cell
-	radialCol    int             // the cell the menu opened on
+	radial       bool       // the build menu stands open on a cell
+	radialCol    int        // the cell the menu opened on
 	radialRow    int
+	radialLevel  int        // the ring open: 0 the groups, 1 their blueprints
+	radialGroup  buildGroup // the group the second ring shows
 	laying       pipeLaying // the pipe the pointer is drawing, if any
 	ordering     int64      // the war factory whose squad the pointer is ordering; 0 is none
 	hoverCellCol int        // the cell under the pointer, the cursor
@@ -165,7 +167,7 @@ func (s *playScene) updateSquadKeys(input *golib.Input) {
 				s.ordering = 0
 			} else {
 				s.ordering = slots[i]
-				s.radial = false
+				s.closeRadial()
 			}
 			return
 		}
@@ -192,7 +194,7 @@ func (s *playScene) updateSquadBoxes(input *golib.Input) bool {
 			s.ordering = 0
 		} else {
 			s.ordering = slots[i]
-			s.radial = false
+			s.closeRadial()
 		}
 		return true
 	}
@@ -319,8 +321,8 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 	}
 	if rightClick {
 		s.picked = false
-		s.radial = false
 		s.armed = ""
+		s.backRadial()
 	}
 
 	if input.MousePressed(golib.MouseLeft) && !clickTaken {
@@ -361,23 +363,13 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 		// arms the ordering pointer instead of picking the cell.
 		if home, ok := s.squadMarkAt(mx, my); ok {
 			s.ordering = home
-			s.radial = false
+			s.closeRadial()
 			return
 		}
 		if s.radial {
-			// A pick raises the blueprint right on the menu's cell; a
-			// click anywhere else puts the menu away.
-			if item, hit := radialHover(radialLayout(s), mx, my); hit && item.ready {
-				Apply(s.state, MarkBuilding{
-					Kind: item.kind, Col: s.radialCol, Row: s.radialRow,
-				})
-				s.radial = false
-			} else if !hit {
-				s.radial = false
-			}
+			s.pickRadial(mx, my)
 		} else if s.buildableCell(s.hoverCellCol, s.hoverCellRow) {
-			s.radial = true
-			s.radialCol, s.radialRow = s.hoverCellCol, s.hoverCellRow
+			s.openRadial(s.hoverCellCol, s.hoverCellRow)
 			s.picked = false
 		} else {
 			s.picked = s.hoverCell

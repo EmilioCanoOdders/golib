@@ -14,6 +14,16 @@ From the GoLib repository root:
 ./golib shot niebla 120 --input "Enter@1"   # reach the region: Play is Enter
 ```
 
+The economy probe plays headless opening plans over seeds 0, 1 and 2 for an
+hour, sampling the real state every game minute. It writes only when given a
+path, so normal tests never leave a report:
+
+```text
+NIEBLA_ECONOMY_REPORT=../../build/niebla/economy.csv \
+  ./golib go -C games/niebla test \
+  -run TestWriteEconomyReport -v
+```
+
 A shot starts on the menu; `Enter@1` presses Play (or click it: `Mouse@5:640,390
 MouseLeft@6`). Inside the region:
 
@@ -73,7 +83,8 @@ also grows a base its next level at once, and `rivals: a base`, under
 | `identity.go` | Who is playing: the machine's ID (registry value, platform UUID or `/etc/machine-id`), hashed with the game's salt into `player`, the number the menu shows and a later server hands tokens out by |
 | `store.go` | The local database (SQLite): players, saves and the machine table; `saveBase`/`resumeState`, the scenes' door into it; the DB path, `:memory:` under `golib shot` |
 | `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); the camera, the selection, the open cards, the pointer's modes (`laying` a pipe, `ordering` a squad) and the looks-only fields (`mites`, `fx`) live here, never serialized; the HUD's line with the rivals' doings (`threatWords`) and the news plate; a picked guard post's or artillery piece's reach; Esc saves and returns to the menu, autosave every `autosaveTicks` |
-| `radial.go` | The build menu: the radial of blueprints a click on empty ground opens |
+| `radial.go` | The build menu: the two rings a click on empty ground opens - the build groups (industry, military, logistics), then the group's blueprints - laid out around the cell every frame, and `backRadial`/`closeRadial`/`openRadial` for the scene |
+| `glyphs.go` | The marks the build menu wears: a group's own glyph, and a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both |
 | `state.go` | The simulation's state: robots (core, built or combat), buildings with their tanks, reloads and damage, stock, what remains of each deposit, build jobs, piles, pipes, the fog, and the war's tables (`Enemies`, `Parties`, `Raids`, `Marks`, `Reports`, `Squads`, `Shots`, the PRNG's `Rolls`); `newGame`, which deals the starting region |
 | `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, and the dev tools' `DevHoldSwell`, `DevSpawnRobot`, `DevResetWorld`, `DevNextVisit` and `DevHurryRivals`; `OrderSquad` for the squads) and `Apply`, the only door into the state |
 | `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, oldest build job then the oldest damaged building then a section of pipe, pick up loose items, own post, a trooper's squad, rest by the core —, the claim on a section of pipe (`stepLayPipe`) and the idle ranks (`parkSlot`, `idleRank`) |
@@ -104,6 +115,7 @@ also grows a base its next level at once, and `rivals: a base`, under
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `markup_test.go` | Markup parser and tooltip layout/button tests |
 | `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
+| `economy_test.go` | The deterministic economy probe: safe harvesting, worker growth and a protected oil outpost over three seeds, sampled each minute into an opt-in CSV report |
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
 | `pipes_test.go` | Pumps and pipes driven directly: a pump stands on a pool and a pool takes one, a pipe is paid by the section and laid by the robots, who claim a section each - the nearest free one - and stand by it until it is laid, a half-laid pipe from an old save keeps its work, a laid pipe carries the pool into its tank and stops at a full one or a dry pool, oil has a place and pipes move it between tanks (shares, ports, payments, a demolished tank's oil), robots carry oil to a tank with room and refill where there is oil, what `LayPipe` refuses, a pipe leaves with its ends and its cost falls as a pile, the curve passes through its bends, pipes survive a save, the pool's cards carry the pump and its pipe |
 | `mites_test.go` | The mites driven with no window: counted by volume and only in the fog, tight on what stands still and trailing a walker, fading over what is gone, the falloff's layers |
@@ -152,19 +164,25 @@ building's `Col, Row` in the state are cell coordinates; `cellAtWorld`
 undoes the projection onto the cell grid the way `tileAtWorld` does onto
 tiles.
 
-Five blueprints in the radial menu, and the pump off it (see [Pumps and
+Eight blueprints in the radial menu, and the pump off it (see [Pumps and
 pipes](#pumps-and-pipes)) (`BuildingKind` in `state.go`, rules and tuning in
 `sim_buildings.go`): the **robot factory** builds robots from lilac and
 oil, the **charger** refills a built robot's tank from the stores, the
 **silo** and the **warehouse** add oil and lilac storage room, and the
 **shadow protector** holds a small bubble of safe ground of its own.
-Marking is building, and it takes two clicks: a click on a free cell of
-ground opens the **radial build menu** (`radial.go`) right on that cell —
-the options lay out around the cell's projected center every frame, so
-the menu follows the view — and picking a blueprint pays its cost from
-the stores and marks it on that very cell. Options read their own
-validity (`canPlace` plus `canAfford`): the ones the ground, the fog or
-the stores refuse sit dimmed and ignore clicks. The job joins the queue;
+Marking is building, and it takes three clicks: a click on a free cell
+of ground opens the **radial build menu** (`radial.go`) right on that
+cell — the options lay out around the cell's projected center every
+frame, so the menu follows the view —, a click on a **group** opens its
+ring (industry: factory and war factory; military: guard post, artillery
+and protector; logistics: charger, silo and warehouse) and a click on a
+blueprint pays its cost from the stores and marks it on that very cell.
+A right click goes back a ring, and closes the menu from the first. Each
+option wears an icon: a group its own mark (`glyphs.go`), a blueprint
+the very body the region draws (`drawBuilding`) in miniature, so one
+graphic serves both. Options read their own validity (`canPlace` plus
+`canAfford`): the ones the ground, the fog or the stores refuse sit
+dimmed and ignore clicks. The job joins the queue;
 the robots raise the oldest job first, standing on the cell's edge
 (spread by ID) where the rising body can't swallow them, and the site
 shows the part already built in solid colors inside a **wireframe** of
@@ -659,5 +677,13 @@ base saved and loaded back whole, a second save replacing the first,
 one player's save invisible to another, and the DB path's rules
 (`:memory:` under `golib shot`, the settings folder otherwise, a
 missing one is an error).
+`economy_test.go` is an opt-in probe, not a test that asserts a current
+balance. With `NIEBLA_ECONOMY_REPORT` it runs each opening plan for one hour
+of simulation on seeds 0, 1 and 2, and writes a CSV row each game minute:
+oil, lilac, extracted resources, workers, infrastructure, swells, visits and
+enemies. It drives the same `Apply` actions a player can use, so a change to a
+rate or an opening policy is measured through the actual simulation rather
+than a second, approximate model. `DESIGN.md` records the baseline and the
+milestones each run must compare.
 Visual checks are shots with scripted clicks; see the
 command above.

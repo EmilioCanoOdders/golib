@@ -119,7 +119,8 @@ func drawBuildings(s *State, screen *golib.Screen, zoom float32) {
 		gx, gy := projectBuilding(b)
 		across, height := buildingSize(b.Kind)
 		k := buildingIcon(across, height, zoom)
-		drawBuilding(screen, b, gx, gy, across*k, height*k)
+		fx, fy := gunFacing(gx, gy)
+		drawBuilding(screen, b.Kind, gx, gy, across*k, height*k, fx, fy)
 		if part, color, holds := buildingFill(s, b); holds {
 			// Down the middle of the body's left face.
 			x := gx - across*k*unitW/4
@@ -213,8 +214,9 @@ func drawJobs(s *State, screen *golib.Screen, zoom float32) {
 		// The built part, from the ground up.
 		done := golib.Clamp(1-float32(job.Left)/float32(buildingWorkTicks), 0, 1)
 		if done > 0 {
-			drawBuilding(screen, Building{Kind: job.Kind}, gx, gy,
-				across, height*done)
+			fx, fy := gunFacing(gx, gy)
+			drawBuilding(screen, job.Kind, gx, gy,
+				across, height*done, fx, fy)
 		}
 		// The scaffold: the whole body, in wireframe.
 		hw := across * unitW / 2
@@ -274,12 +276,30 @@ func buildingSize(kind BuildingKind) (across, height float32) {
 	return 20, 10
 }
 
+// gunFacing returns the unit vector a gun points along out in the region:
+// away from the core, which is where the rivals come from.
+func gunFacing(gx, gy float32) (fx, fy float32) {
+	cx, cy := projectCore()
+	dx, dy := gx-cx, gy-cy
+	gap := float32(math.Hypot(float64(dx), float64(dy)))
+	if gap <= 0 {
+		return 0, -1
+	}
+	return dx / gap, dy / gap
+}
+
+// drawBuilding paints a kind's body standing on the ground point gx, gy,
+// across units on a side and height units tall. fx, fy is the unit vector
+// its gun points along, for the kinds that carry one. This is the only
+// place a building's look lives: the world calls it at the world's scale
+// and the build menu in miniature, so a change to one is a change to
+// both.
 func drawBuilding(
 	screen *golib.Screen,
-	b Building,
-	gx, gy, across, height float32,
+	kind BuildingKind,
+	gx, gy, across, height, fx, fy float32,
 ) {
-	switch b.Kind {
+	switch kind {
 	case BuildingFactory:
 		isoBox(screen, gx, gy, across, height,
 			factoryColor, mid(factoryColor, factoryDark), factoryDark)
@@ -325,14 +345,9 @@ func drawBuilding(
 			warFactoryColor, mid(warFactoryColor, warFactoryDark), warFactoryDark)
 		isoBox(screen, gx, gy-height*0.35*unitH, across*0.4, height*0.4,
 			guardColor, mid(guardColor, guardDark), guardDark)
-		cx, cy := projectCore()
-		dx, dy := gx-cx, gy-cy
-		if gap := float32(math.Hypot(float64(dx), float64(dy))); gap > 0 {
-			dx, dy = dx/gap, dy/gap
-		}
 		reach := across * unitW * 0.9
-		screen.DrawLine(gx, gy-height*0.8*unitH, gx+dx*reach,
-			gy+dy*reach-height*1.9*unitH, across*unitW*0.09, guardDark)
+		screen.DrawLine(gx, gy-height*0.8*unitH, gx+fx*reach,
+			gy+fy*reach-height*1.9*unitH, across*unitW*0.09, guardDark)
 	case BuildingWarFactory:
 		// A low hangar, a watch tower at its corner and the guard's lamp.
 		isoBox(screen, gx, gy, across, height*0.7,
