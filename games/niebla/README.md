@@ -129,7 +129,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `sim_cities.go` | Rival cities: serializable production, deterministic building order, finite local oil/mineral reserves, city arrival and old-save migration, city-produced sorties and mobile artillery |
 | `sim_tech.go` | The schematics: the ladder of drops that brings the buildings in little by little, each with its trigger (first delivery, the scout's theft, clocks, the first raid, a city factory) - `techLadder`, `stepTech`, `kindUnlocked`, `dropArrived`, `techPending`; arrival is derived from the state, only "opened" is kept (`State.Tech`, an old save wakes with what it earned) |
 | `sim_squads.go` | The squads' law and tuning: troopers (`RobotCombat`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), the war factory's room (`squadRoom`), and the rivals shooting back (`stepEnemyGuns`) |
-| `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right that list them - a tank icon, the unit count, the key below - and take a click (`drawSquadStrip`, `drawTankIcon`, `squadBoxRect`, `squadBoxAt`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the marks that pick a squad where it stands (`squadMarkAt`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
+| `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right with a trooper icon, unit count and key (`drawSquadStrip`, `drawTrooperIcon`, `squadBoxRect`, `squadBoxAt`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the marks that pick a squad where it stands (`squadMarkAt`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
 | `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), who they hurt, the buildings' health and the robots' mending, what the colony sees (`seen`) and its artillery (`stepArtillery`) |
 | `shots.go` | Shots on the screen and their light, for looks only: bullets as streaks, shells on their arc over a shadow, pools of light added over the ground and what stands on it (`lightPool`), guns' flashes, and bursts of sparks that cool from yellow to red, embers and smoke; the field (`fxField`) learns of fired and landed shots by comparing the state's with the ones it saw last; view, never state |
 | `enemies.go` | The rivals on the screen: the scouts' marks on the ground, directional vehicle hulls and details under their repulsors' pockets over the fog, the guard posts' shots, and the words the player is told (`threatWords` for the HUD, `reportWords` and `drawReport` for the news) |
@@ -149,7 +149,8 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `guides.go` | Screen-edge arrows for an offscreen rival report or pending schematics, with layout kept clear of the HUD and the two guides separated when they point the same way; view, never state |
 | `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and crystal pings, gunfire and shell impacts, and interface clicks; world emitters fade with their distance in meters to the camera's ground center, whose altitude rises with zoom-out. Individual shell whistles track their own positions through the descending half of flight. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |
 | `tools/soundgen/` | The maker of the wind, oil and mineral ambience loops: stdlib Go renders the noise beds as WAV for conversion to OGG, and the mineral ring as a seamless WAV with irregular pitch drift of at most one semitone; run it only when a loop changes |
-| `draw.go` | The region painter: the core's monolith, buildings with their damage bars, directional robot and trooper hulls, the bubbles' rings, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
+| `draw.go` | The region painter: the core's monolith, buildings with their damage bars, the bubbles' rings, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
+| `units.go` | The colony's three directional chassis (`drawUnitModel`): narrow core scout, teal factory carrier with a tank and rails, broad trooper with tracks and turret; `drawRobots` places them in the world, and `drawTrooperModel` also paints the squad strip's screen-space icon at its own size |
 | `orientation.go` | The screen-space eight-way facing derived from an isometric movement vector, and the point/polygon transforms used by directional units |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `guides_test.go` | Offscreen arrow placement and direction, hiding for visible targets, current-report timing, pending schematics and spacing; can write the optional visual fixture with `NIEBLA_GUIDE_SHOT_STATE` |
@@ -763,6 +764,16 @@ writes a region with two war factories and their squads in the shape
 ```text
 NIEBLA_SHOT_STATE=../../build/niebla/squads.json ./golib go -C games/niebla test -run TestWriteShotSquadState
 ./golib shot niebla 50 --save build/niebla/squads.json --input "Enter@1 One@40 Mouse@45:900,420 MouseLeft@46"
+```
+
+`TestWriteShotUnitState` puts one of each colony chassis by the core
+for visual checks at close zoom (and writes only when requested):
+
+```text
+NIEBLA_UNIT_SHOT_STATE=../../build/niebla/units.json \
+  ./golib go -C games/niebla test -run TestWriteShotUnitState
+./golib shot niebla 60 --save build/niebla/units.json \
+  --input "Enter@1 Mouse@2:640,357 MouseWheel@3:5"
 ```
 
 `identity_test.go` pins the identity: stable for a machine, distinct

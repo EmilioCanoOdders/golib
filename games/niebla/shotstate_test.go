@@ -41,3 +41,22 @@ func TestWriteShotSquadState(t *testing.T) {
 		t.Fatalf("writing %s: %v", path, err)
 	}
 }
+
+func TestWriteShotUnitState(t *testing.T) {
+	path := os.Getenv("NIEBLA_UNIT_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_UNIT_SHOT_STATE to write the units' shot state")
+	}
+	s := newGame()
+	noRivals(s)
+	x, y := parkCenter()
+	s.spawnRobot(RobotBuilt, x+20, y+12)
+	s.spawnRobot(RobotCombat, x+40, y+24)
+	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}

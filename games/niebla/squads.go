@@ -177,7 +177,7 @@ func drawSquadStrip(s *playScene, screen *golib.Screen) {
 		if count == 0 && !armed {
 			body, dark, ink = panelDimColor, golib.WithOpacity(panelDimColor, 0.5), panelDimColor
 		}
-		drawTankIcon(screen, rect.X+4, rect.Y+8, body, dark)
+		drawTrooperIcon(screen, rect.X+4, rect.Y+8, body, dark)
 		words := fmt.Sprintf("%d", count)
 		screen.DrawText(words, rect.X+squadBoxWidth-8-screen.TextWidth(words, textSize, uiText),
 			rect.Y+8, textSize, ink, uiText)
@@ -212,19 +212,10 @@ func squadBoxAt(mx, my float32) (int, bool) {
 	return 0, false
 }
 
-// drawTankIcon paints a little tank, side on, pointing right: barrel,
-// turret, hull and its tracks with their wheels, in the colors it is
-// given.
-func drawTankIcon(screen *golib.Screen, x, y float32, body, dark golib.Color) {
-	screen.DrawRectangle(golib.Rectangle{X: x + 14, Y: y + 1, Width: 8, Height: 2}, body)
-	screen.DrawRectangle(golib.Rectangle{X: x + 8, Y: y, Width: 7, Height: 4}, body)
-	screen.DrawRectangle(golib.Rectangle{X: x + 2, Y: y + 4, Width: 19, Height: 5},
-		mid(body, dark))
-	screen.DrawRectangle(golib.Rectangle{X: x, Y: y + 9, Width: 22, Height: 5}, dark)
-	wheel := mid(dark, golib.Color{R: 12, G: 14, B: 18, A: 255})
-	for i := 0; i < 4; i++ {
-		screen.DrawCircle(x+4+float32(i)*5, y+11.5, 1.6, wheel)
-	}
+func drawTrooperIcon(screen *golib.Screen, x, y float32, body, dark golib.Color) {
+	center := golib.Vector2{X: x + 11, Y: y + 8}
+	drawTrooperModel(screen, center, 7.4, facingUpRight, 1,
+		body, dark, body)
 }
 
 // squadWords says a squad in a few words: how many it is and what it is

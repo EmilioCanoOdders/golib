@@ -199,6 +199,16 @@ For whoever works on the game, not for the player: in the region, hold Control a
 ## Art
 The screen is 2K/2 (1280x720) with `Config.PixelArt`, so a 2K monitor scales it by two whole, sharp numbers; 2K/4 (640x360) is the step when pixel-art sprites arrive. Three monitor filters run in order (`shaders/glow.fs`, `shaders/crt.fs`, `shaders/soft.fs`, adapted from games/asteroids and turned down): a glow that only the brightest things clear (the fog itself outshines the oil, so the threshold is 0.8 there), a whisper of a tube screen (faint scanlines, light vignette, no flicker) and a small tent blur that rounds pixels' corners. F2 turns them all off. Isometric look from a manual projection in `Draw` (`screenX = (x-y)*tileW/2`, `screenY = (x+y)*tileH/2`), with painters-order drawing by depth. Note: Tiled maps cannot be isometric in GoLib (orthogonal only), so the region is drawn from sprites and shapes, not `DrawMap`; if Tiled is used, it is only as a layout editor whose data the game re-projects. First version: simple shapes and a small palette (cold ground, lilac veins, amber oil, pale fog); sprites later, tiny robots over larger tiles. Robots and rival vehicles have eight screen-facing directions: movement is projected onto the screen and rounded to the nearest 45 degrees. Their saved facing stays put when they stop; older saves default to right. Polygon hulls, front lamps, rear cargo and combat barrels make direction readable without sprites.
 
+The three colony chassis have distinct silhouettes at close range and in
+screen-space icons: core workers are narrow, white scouts with two warm rear
+lights; factory workers are teal cargo carriers with side rails and a visible
+oil tank; war-factory troopers are broad green armored hulls with a turret,
+tracks and a projecting barrel. Cargo and refueling lights add information
+without defining the model. `units.go` draws these bodies at the world's
+size or directly at an icon's size, so a future card portrait will not
+enlarge the three-pixel dot seen at the farthest zoom. The squad strip uses
+the trooper's own body. The simulation and saved state do not change.
+
 ## Sounds
 Audio correction (2026-09-23): the listener is the camera's ground center
 in meters, lifted as the zoom wheel pulls out (up to 2100 m). Every world

@@ -20,16 +20,6 @@ func dotRadius(units, zoom, minPx float32) float32 {
 	return r
 }
 
-var robotHullShape = []golib.Vector2{
-	{X: 1.2},
-	{X: 0.72, Y: -0.72},
-	{X: -0.56, Y: -0.72},
-	{X: -1, Y: -0.36},
-	{X: -1, Y: 0.36},
-	{X: -0.56, Y: 0.72},
-	{X: 0.72, Y: 0.72},
-}
-
 // drawRegion paints the still region and the robots on it: the ground
 // inside the fog line, the core's monolith and its bubble, and the fog
 // standing beyond the line. It reads the state and changes nothing.
@@ -522,70 +512,6 @@ func scaledDiamond(cx, cy, scale float32) []golib.Vector2 {
 		{X: cx + w, Y: cy},
 		{X: cx, Y: cy + h},
 		{X: cx - w, Y: cy},
-	}
-}
-
-// drawRobots paints small directional rovers. Their stored facing keeps
-// the nose visible while they stop to load, refuel or wait.
-func drawRobots(s *State, screen *golib.Screen, zoom float32) {
-	type spot struct {
-		id int64
-		p  golib.Vector2
-	}
-	spots := make([]spot, 0, len(s.Robots))
-	for _, id := range sortedRobotIDs(s) {
-		r := s.Robots[id]
-		x, y := project(float32(r.X), float32(r.Y))
-		spots = append(spots, spot{id, golib.Vector2{X: x, Y: y}})
-	}
-	sort.Slice(spots, func(i, j int) bool { return spots[i].p.Y < spots[j].p.Y })
-	for _, sp := range spots {
-		r := s.Robots[sp.id]
-		p := sp.p
-		R := dotRadius(3, zoom, 3) // the body's radius, in projected pixels
-		screen.DrawCircle(p.X, p.Y+R*0.5, R*1.1, robotShadowColor)
-		body := robotColor
-		if r.Kind == RobotCombat {
-			body = guardColor
-		}
-		center := p
-		hull := facingPoints(center, R, r.Facing, robotHullShape)
-		screen.DrawPolygon(hull, robotDarkColor)
-		deck := facingPoints(center, R*0.7, r.Facing, robotHullShape)
-		screen.DrawPolygon(deck, body)
-		screen.DrawPolygonOutline(deck, 0.7/zoom, robotDarkColor)
-		if r.Kind == RobotCombat {
-			gunBase := facingPoint(center, 0.58, 0, R, r.Facing)
-			gunTip := facingPoint(center, 1.45, 0, R, r.Facing)
-			screen.DrawLine(gunBase.X, gunBase.Y, gunTip.X, gunTip.Y,
-				1.2/zoom, guardDark)
-		}
-		if r.Carry > 0 {
-			cargo := lilacColor
-			if r.Cargo == TypeOil {
-				cargo = oilColor
-			}
-			pack := facingPoint(center, -0.7, 0, R, r.Facing)
-			screen.DrawCircle(pack.X, pack.Y, R*0.38, cargo)
-		}
-		// The nose light marks the model and blinks while it refuels.
-		eye := coreGlowColor
-		if r.tanked() {
-			eye = chargerColor
-			if chargeStatus(s, r) == "refueling" && s.Ticks/20%2 == 0 {
-				eye = robotDarkColor
-			}
-		}
-		lamp := facingPoint(center, 0.91, 0, R, r.Facing)
-		screen.DrawCircle(lamp.X, lamp.Y, R*0.25, eye)
-		if r.Kind == RobotCombat && r.Health < trooperHealth {
-			bar := golib.Rectangle{
-				X: p.X - R, Y: p.Y + R*1.5, Width: 2 * R, Height: 2 / zoom,
-			}
-			screen.DrawRectangle(bar, fillBarColor)
-			bar.Width *= float32(math.Max(0, r.Health) / trooperHealth)
-			screen.DrawRectangle(bar, guardColor)
-		}
 	}
 }
 
