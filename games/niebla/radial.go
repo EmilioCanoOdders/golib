@@ -37,9 +37,11 @@ var buildGroups = []buildGroup{
 // blueprints sit around the cell. The pump is not here: it rises from an
 // oil pool's card, never from the menu.
 var groupMembers = map[buildGroup][]BuildingKind{
-	groupIndustry:  {BuildingFactory, BuildingWarFactory},
-	groupMilitary:  {BuildingGuard, BuildingArtillery, BuildingProtector},
-	groupLogistics: {BuildingCharger, BuildingSilo, BuildingWarehouse},
+	groupIndustry: {BuildingFactory, BuildingWarFactory},
+	groupMilitary: {BuildingGuard, BuildingArtillery},
+	groupLogistics: {
+		BuildingCharger, BuildingSilo, BuildingWarehouse, BuildingProtector,
+	},
 }
 
 // groupColor is the ink a group's ring and glyph read in.

@@ -232,8 +232,8 @@ three clicks: a click on a free cell
 of ground opens the **radial build menu** (`radial.go`) right on that
 cell — the options lay out around the cell's projected center every
 frame, so the menu follows the view —, a click on a **group** opens its
-ring (industry: factory and war factory; military: guard post, artillery
-and protector; logistics: charger, silo and warehouse) and a click on a
+ring (industry: factory and war factory; military: guard post and artillery;
+logistics: charger, silo, warehouse and protector) and a click on a
 blueprint pays its cost from the stores and marks it on that very cell.
 A right click goes back a ring, and closes the menu from the first. Each
 option wears an icon: a group its own mark (`glyphs.go`), a blueprint

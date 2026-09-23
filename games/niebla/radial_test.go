@@ -171,9 +171,9 @@ func TestTheRadialOnlyOffersWhatArrived(t *testing.T) {
 			len(groups))
 	}
 	s.radialGroup, s.radialLevel = groupLogistics, 1
-	if leaves := radialLeafLayout(s); len(leaves) != len(groupMembers[groupLogistics]) {
-		t.Fatalf("the logistics ring offers %d options, want all %d",
-			len(leaves), len(groupMembers[groupLogistics]))
+	if leaves := radialLeafLayout(s); len(leaves) != 3 {
+		t.Fatalf("infrastructure offers %d logistics options, want 3",
+			len(leaves))
 	}
 	// What the stores can't pay for is not offered either.
 	lilac := s.state.Stock.Lilac
@@ -197,4 +197,21 @@ func TestTheRadialOnlyOffersWhatArrived(t *testing.T) {
 	if len(leaves) != 1 || leaves[0].kind != BuildingGuard {
 		t.Fatalf("the military ring offers %v, want the guard post alone", leaves)
 	}
+}
+
+func TestProtectorBelongsToTheLogisticsRing(t *testing.T) {
+	s := newPlayScene(newGame())
+	seedStock(s.state)
+	arriveAll(s.state)
+	s.openRadial(groundNearCore())
+	s.radialGroup = groupLogistics
+	s.radialLevel = 1
+
+	leaves := radialLeafLayout(s)
+	for _, item := range leaves {
+		if item.kind == BuildingProtector {
+			return
+		}
+	}
+	t.Fatal("the logistics ring does not offer the protector")
 }
