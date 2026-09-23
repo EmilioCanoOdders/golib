@@ -227,9 +227,13 @@ callout that says what came in, and the blueprints join the menu; the
 first drop comes with the first haul a robot delivers home, and the
 guard post when the scout's drawing is inevitable - a rival drinking
 at the tanks, or the mark already sprayed. The menu offers only
-what a click would really raise - what the schematics, the ground, the
-fog or the stores refuse is not on the rings, and before the first
-drop the menu doesn't open at all. Marking itself takes
+what the cell could really take - what the schematics, the ground or
+the fog refuse is not on the rings, and before the first drop the menu
+doesn't open at all. The stores don't take options off: a blueprint
+they can't pay stands washed out to gray (its group with it while
+nothing in it could be paid), refuses the click, and the tip beside it
+names and prices it, a red box around each resource that falls short
+(`radialTipOf`, drawn by `drawRadialTip`). Marking itself takes
 three clicks: a click on a free cell
 of ground opens the **radial build menu** (`radial.go`) right on that
 cell — the options lay out around the cell's projected center every
@@ -240,9 +244,9 @@ blueprint pays its cost from the stores and marks it on that very cell.
 A right click goes back a ring, and closes the menu from the first. Each
 option wears an icon: a group its own mark (`glyphs.go`), a blueprint
 the very body the region draws (`drawBuilding`) in miniature, so one
-graphic serves both. Options read their own validity (`radialReady`:
-`kindUnlocked` plus `canPlace` plus `canAfford`) and only the valid ones
-sit on the rings — the menu never offers what a click wouldn't raise.
+graphic serves both. Options read their own place on the rings
+(`radialOffered`: `kindUnlocked` plus `canPlace`); whether the stores
+could pay shows as the wash and in the tip.
 The job joins the queue;
 the robots raise protector jobs before other jobs, oldest first within
 each group, standing on the cell's edge

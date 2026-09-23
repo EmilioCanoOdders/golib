@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"strings"
 
 	"golib"
 )
@@ -16,6 +17,12 @@ import (
 // The menu is two rings deep. The first offers the build groups, the
 // second the blueprints of the group picked; a right click goes back a
 // ring and closes the menu from the first.
+//
+// The rings hold what could rise on the cell: what the schematics, the
+// ground or the fog refuse is not on them. The stores are the one
+// referee that takes nothing off the rings: a blueprint they can't pay
+// stands washed out to gray, refuses the click, and the tip beside it
+// names it, prices it and boxes in red each resource that falls short.
 
 // buildGroup names a family of blueprints the menu groups together.
 type buildGroup string
@@ -59,8 +66,9 @@ func groupColor(group buildGroup) golib.Color {
 
 // Radial tuning, in screen pixels.
 const (
-	radialRadius = 62 // from the cell's center to an option's center
-	radialItemR  = 15 // an option circle's radius
+	radialRadius = 62   // from the cell's center to an option's center
+	radialItemR  = 15   // an option circle's radius
+	washedVeil   = 0.55 // the panel's dark lying over a washed option's icon
 )
 
 // radialCenter is where the menu's cell lands on the screen.
@@ -85,34 +93,37 @@ func radialHit(x, y, mx, my float32) bool {
 
 // radialGroupItem is one group on the first ring.
 type radialGroupItem struct {
-	group buildGroup
-	x, y  float32
+	group  buildGroup
+	afford bool // some blueprint it holds could be paid right now
+	x, y   float32
 }
 
 // radialLeafItem is one blueprint on the second ring.
 type radialLeafItem struct {
-	kind BuildingKind
-	x, y float32
+	kind   BuildingKind
+	afford bool // the stores could pay it right now
+	x, y   float32
 }
 
-// radialReady reports whether a blueprint may be raised on the menu's
-// cell right now. The menu offers nothing else: what the schematics,
-// the ground, the fog or the stores refuse is not on the rings at all,
-// so every option a click could land on is one that would really rise.
-func radialReady(s *playScene, kind BuildingKind) bool {
+// radialOffered reports whether a blueprint belongs on the menu's rings
+// at all: its schematics have arrived and the cell could take it. The
+// stores don't answer here - what they can't pay stands washed out (see
+// radialLeafItem.afford), so the player sees the building exists and
+// what it costs instead of reading its absence as a missing drop.
+func radialOffered(s *playScene, kind BuildingKind) bool {
 	return kindUnlocked(s.state, kind) &&
-		canPlace(s.state, kind, s.radialCol, s.radialRow) &&
-		canAfford(s.state, kind)
+		canPlace(s.state, kind, s.radialCol, s.radialRow)
 }
 
 // radialGroupLayout lays the first ring out around the menu's cell:
-// every group that holds a blueprint the colony could raise here.
+// every group that holds a blueprint the colony could raise here. The
+// group reads washed out while nothing in it could be paid.
 func radialGroupLayout(s *playScene) []radialGroupItem {
 	center := radialCenter(s)
 	groups := make([]buildGroup, 0, len(buildGroups))
 	for _, group := range buildGroups {
 		for _, kind := range groupMembers[group] {
-			if radialReady(s, kind) {
+			if radialOffered(s, kind) {
 				groups = append(groups, group)
 				break
 			}
@@ -121,25 +132,44 @@ func radialGroupLayout(s *playScene) []radialGroupItem {
 	items := make([]radialGroupItem, 0, len(groups))
 	for i, group := range groups {
 		x, y := radialSpot(len(groups), i, center.X, center.Y)
-		items = append(items, radialGroupItem{group, x, y})
+		items = append(items, radialGroupItem{
+			group:  group,
+			afford: groupAfford(s, group),
+			x:      x, y: y,
+		})
 	}
 	return items
 }
 
-// radialLeafLayout lays the picked group's raiseable blueprints out
-// around the menu's cell.
+// groupAfford reports whether any blueprint of the group could be paid
+// on the menu's cell right now.
+func groupAfford(s *playScene, group buildGroup) bool {
+	for _, kind := range groupMembers[group] {
+		if radialOffered(s, kind) && canAfford(s.state, kind) {
+			return true
+		}
+	}
+	return false
+}
+
+// radialLeafLayout lays the picked group's blueprints out around the
+// menu's cell, each carrying whether the stores could pay it.
 func radialLeafLayout(s *playScene) []radialLeafItem {
 	center := radialCenter(s)
 	kinds := make([]BuildingKind, 0, len(groupMembers[s.radialGroup]))
 	for _, kind := range groupMembers[s.radialGroup] {
-		if radialReady(s, kind) {
+		if radialOffered(s, kind) {
 			kinds = append(kinds, kind)
 		}
 	}
 	items := make([]radialLeafItem, 0, len(kinds))
 	for i, kind := range kinds {
 		x, y := radialSpot(len(kinds), i, center.X, center.Y)
-		items = append(items, radialLeafItem{kind, x, y})
+		items = append(items, radialLeafItem{
+			kind:   kind,
+			afford: canAfford(s.state, kind),
+			x:      x, y: y,
+		})
 	}
 	return items
 }
@@ -169,9 +199,10 @@ func radialLeafHover(
 }
 
 // pickRadial acts on a click while the menu stands open. A group opens
-// its ring - the ring holds only what the colony could raise, so any
-// group on it opens. A blueprint is marked on the cell, and a click
-// anywhere else puts the menu away.
+// its ring - the ring holds everything the cell could take, washed out
+// or not, so any group on it opens. A blueprint is marked on the cell,
+// unless the stores can't pay it: then the click refuses, a dull click,
+// and the menu stands. A click anywhere else puts the menu away.
 func (s *playScene) pickRadial(mx, my float32) {
 	if s.radialLevel == 0 {
 		item, hit := radialGroupHover(radialGroupLayout(s), mx, my)
@@ -187,6 +218,10 @@ func (s *playScene) pickRadial(mx, my float32) {
 	item, hit := radialLeafHover(radialLeafLayout(s), mx, my)
 	if !hit {
 		s.closeRadial()
+		return
+	}
+	if !item.afford {
+		s.au.ui(0.6)
 		return
 	}
 	Apply(s.state, MarkBuilding{
@@ -222,10 +257,11 @@ func (s *playScene) backRadial() {
 // drawRadial paints the open menu: a marker on the cell's center and one
 // circle per option of the ring that stands open, ringed in its color
 // and labeled under it, the option under the pointer lit. Every option
-// on the rings is one the colony could raise; nothing else is offered.
-// A blueprint's circle carries its body in miniature; a group's carries
-// its mark, and the group picked stands on the cell so the player knows
-// which ring they are in.
+// on the rings is one the cell could take; what the stores can't pay
+// stands washed out. A blueprint's circle carries its body in miniature;
+// a group's carries its mark, and the group picked stands on the cell so
+// the player knows which ring they are in. The blueprint under the
+// pointer carries its tip.
 func drawRadial(s *playScene, screen *golib.Screen, mx, my float32) {
 	center := radialCenter(s)
 	if s.radialLevel == 0 {
@@ -238,6 +274,12 @@ func drawRadial(s *playScene, screen *golib.Screen, mx, my float32) {
 	drawRadialLeaves(s, screen, center, mx, my)
 }
 
+// washed turns an ink into the gray of an option the stores can't pay:
+// still the option's own color at heart, but reading as out of reach.
+func washed(c golib.Color) golib.Color {
+	return mid(mid(c, panelDimColor), panelDimColor)
+}
+
 func drawRadialGroups(
 	s *playScene,
 	screen *golib.Screen,
@@ -248,11 +290,16 @@ func drawRadialGroups(
 	hovered, over := radialGroupHover(items, mx, my)
 	for _, item := range items {
 		ink := groupColor(item.group)
+		if !item.afford {
+			ink = washed(ink)
+		}
 		lit := over && item.group == hovered.group
 		fill, edge, label := panelColor, ink, ink
 		if lit {
-			fill = mid(panelColor, groupColor(item.group))
-			edge, label = panelTextColor, panelTextColor
+			fill = mid(panelColor, ink)
+			if item.afford {
+				edge, label = panelTextColor, panelTextColor
+			}
 		}
 		screen.DrawCircle(item.x, item.y, radialItemR, fill)
 		screen.DrawCircleOutline(item.x, item.y, radialItemR, 1.5, edge)
@@ -275,17 +322,152 @@ func drawRadialLeaves(
 	for _, item := range items {
 		info := catalogInfo(buildingType(item.kind))
 		ink := info.Color
+		if !item.afford {
+			ink = washed(ink)
+		}
 		lit := over && item.kind == hovered.kind
 		fill, edge, label := panelColor, ink, ink
 		if lit {
-			fill = mid(panelColor, info.Color)
-			edge, label = panelTextColor, panelTextColor
+			fill = mid(panelColor, ink)
+			if item.afford {
+				edge, label = panelTextColor, panelTextColor
+			}
 		}
 		screen.DrawCircle(item.x, item.y, radialItemR, fill)
-		screen.DrawCircleOutline(item.x, item.y, radialItemR, 1.5, edge)
 		drawBlueprintIcon(screen, item.kind, item.x, item.y, radialItemR*1.5)
+		// A veil of the panel's own dark draws the miniature body's
+		// colors down with the rest: the option reads gray, not lit.
+		if !item.afford {
+			screen.DrawCircle(item.x, item.y, radialItemR,
+				golib.WithOpacity(panelColor, washedVeil))
+		}
+		screen.DrawCircleOutline(item.x, item.y, radialItemR, 1.5, edge)
 		screen.DrawText(string(item.kind), item.x, item.y+radialItemR+5,
 			13, label,
 			golib.TextOptions{Font: uiFont, Align: golib.AlignCenter})
+	}
+	if over {
+		drawRadialTip(screen, hovered, radialTipOf(s.state, hovered.kind))
+	}
+}
+
+// costPart is one resource a blueprint asks for, as the tip writes it.
+type costPart struct {
+	name    string // "lilac" or "oil", for the tip's short line
+	words   string // the amount with its unit, e.g. "180 kg"
+	color   golib.Color
+	missing bool // the stores fall short of it
+}
+
+// radialTip is what hovering a blueprint on the ring says: its name and
+// its cost, each part marked when the stores fall short of it.
+type radialTip struct {
+	name  string
+	color golib.Color
+	parts []costPart
+}
+
+// shorts names what the stores lack, or "" while they pay everything.
+func (t radialTip) shorts() string {
+	var names []string
+	for _, part := range t.parts {
+		if part.missing {
+			names = append(names, part.name)
+		}
+	}
+	if names == nil {
+		return ""
+	}
+	return "short of " + strings.Join(names, " + ")
+}
+
+// radialTipOf gathers a blueprint's tip. Pure: the draw measures and
+// places the words on the screen.
+func radialTipOf(s *State, kind BuildingKind) radialTip {
+	info := catalogInfo(buildingType(kind))
+	tip := radialTip{name: info.Name, color: info.Color}
+	lilac, oil := buildingCost(kind)
+	tip.parts = append(tip.parts, costPart{
+		name:    "lilac",
+		words:   si(lilac, "kg"),
+		color:   lilacColor,
+		missing: s.Stock.Lilac < lilac,
+	})
+	if oil > 0 {
+		tip.parts = append(tip.parts, costPart{
+			name:    "oil",
+			words:   si(oil, "L"),
+			color:   oilColor,
+			missing: oilTotal(s) < oil,
+		})
+	}
+	return tip
+}
+
+// drawRadialTip paints the tip beside the option under the pointer: a
+// small plate naming the blueprint and pricing it, a red box around each
+// resource's value that the stores fall short of, and a line saying so.
+// It hangs to the option's right, and flips to its left near the screen's
+// right edge.
+func drawRadialTip(screen *golib.Screen, item radialLeafItem, tip radialTip) {
+	const (
+		pad    = 10 // air inside the plate
+		row    = 17 // line height
+		size   = 12 // text size
+		slack  = 2  // air between a box and the value it frames
+		offset = 10 // from the option's rim to the plate
+	)
+	const label = "costs "
+	nameW := screen.TextWidth(tip.name, size, uiText)
+	labelW := screen.TextWidth(label, size, uiText)
+	plusW := screen.TextWidth(" + ", size, uiText)
+	partsW := float32(0)
+	for i, part := range tip.parts {
+		if i > 0 {
+			partsW += plusW
+		}
+		partsW += screen.TextWidth(part.words, size, uiText)
+	}
+	w := nameW
+	if w < labelW+partsW {
+		w = labelW + partsW
+	}
+	w += 2 * pad
+	h := float32(2*row + 2*pad)
+	if tip.shorts() != "" {
+		h += row
+	}
+	x := item.x + radialItemR + offset
+	if x+w > screenWidth-tooltipMargin {
+		x = item.x - radialItemR - offset - w
+	}
+	x = clampf(x, tooltipMargin, screenWidth-tooltipMargin-w)
+	y := clampf(item.y-h/2, tooltipMargin, screenHeight-tooltipMargin-h)
+	plate := golib.Rectangle{X: x, Y: y, Width: w, Height: h}
+	screen.DrawRectangle(plate, panelColor)
+	screen.DrawRectangleOutline(plate, 1, panelEdgeColor)
+	screen.DrawText(tip.name, x+pad, y+pad, size, tip.color, uiText)
+	drawMarkup(screen, "[dim]"+label+"[/]", x+pad, y+pad+row, size,
+		panelTextColor)
+	cx := x + pad + labelW + 4
+	cy := y + pad + row
+	for i, part := range tip.parts {
+		if i > 0 {
+			screen.DrawText(" + ", cx, cy, size, panelDimColor, uiText)
+			cx += plusW
+		}
+		words := screen.TextWidth(part.words, size, uiText)
+		screen.DrawText(part.words, cx, cy, size, part.color, uiText)
+		if part.missing {
+			screen.DrawRectangleOutline(golib.Rectangle{
+				X: cx - slack, Y: cy - slack,
+				Width: words + 2*slack, Height: size + 2*slack,
+			}, 1, dangerColor)
+		}
+		cx += words
+	}
+	if tip.shorts() != "" {
+		drawMarkup(screen, "[danger]"+tip.shorts()+"[/]",
+			x+pad, y+pad+2*row, size, panelTextColor)
 	}
 }

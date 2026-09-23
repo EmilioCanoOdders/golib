@@ -324,8 +324,9 @@ func (s *playScene) dragCamera(input *golib.Input) {
 }
 
 // updateRadial puts a menu away whose ring went empty while it stood
-// open: the stores ran dry or a robot walked onto the cell, and an
-// empty ring is no menu.
+// open: a robot walked onto the cell, or a job or pile took it, and an
+// empty ring is no menu. The stores don't empty a ring - what they
+// can't pay stands washed out - so only the ground's answer closes it.
 func (s *playScene) updateRadial() {
 	if !s.radial {
 		return

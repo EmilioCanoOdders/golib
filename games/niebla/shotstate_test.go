@@ -60,3 +60,35 @@ func TestWriteShotUnitState(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestWriteShotRadialState writes the states the build menu's shots
+// start from: NIEBLA_RADIAL_SHOT_STATE for the washed ring (the stores
+// can pay nothing) and NIEBLA_RADIAL_FULL_SHOT_STATE for the paid one.
+// Skipped otherwise, the way tests write nothing.
+func TestWriteShotRadialState(t *testing.T) {
+	washed := os.Getenv("NIEBLA_RADIAL_SHOT_STATE")
+	full := os.Getenv("NIEBLA_RADIAL_FULL_SHOT_STATE")
+	if washed == "" && full == "" {
+		t.Skip("set NIEBLA_RADIAL_SHOT_STATE / NIEBLA_RADIAL_FULL_SHOT_STATE" +
+			" to write the build menu's shot states")
+	}
+	write := func(path string, stock Stock) {
+		s := newGame()
+		noRivals(s)
+		arriveAll(s)
+		s.Stock = stock
+		data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if washed != "" {
+		write(washed, Stock{Oil: 300, Lilac: 40})
+	}
+	if full != "" {
+		write(full, Stock{Oil: 600, Lilac: 1200})
+	}
+}

@@ -153,10 +153,10 @@ func TestRadialGoesBackARingAndThenCloses(t *testing.T) {
 	}
 }
 
-// The menu only offers what the colony could really raise: a fresh
-// colony's rings are empty, infrastructure alone shows one group, an
-// empty store empties the rings, and the military ring holds only the
-// guard post once a party drives in.
+// The menu only offers what the cell could take: a fresh colony's rings
+// are empty, infrastructure alone shows one group, and the military ring
+// holds only the guard post once a party drives in. The stores are not
+// part of the offer: what they can't pay stands on its ring washed out.
 func TestTheRadialOnlyOffersWhatArrived(t *testing.T) {
 	s := newPlayScene(newGame())
 	s.openRadial(104, 96)
@@ -175,11 +175,21 @@ func TestTheRadialOnlyOffersWhatArrived(t *testing.T) {
 		t.Fatalf("infrastructure offers %d logistics options, want 3",
 			len(leaves))
 	}
-	// What the stores can't pay for is not offered either.
+	// What the stores can't pay stays on the rings, washed out.
 	lilac := s.state.Stock.Lilac
 	s.state.Stock.Lilac = 0
-	if groups := radialGroupLayout(s); len(groups) != 0 {
-		t.Fatalf("an empty store still offers %d groups, want none", len(groups))
+	groups = radialGroupLayout(s)
+	if len(groups) != 1 || groups[0].group != groupLogistics || groups[0].afford {
+		t.Fatalf("an empty store left %v, want logistics washed out", groups)
+	}
+	leaves := radialLeafLayout(s)
+	if len(leaves) != 3 {
+		t.Fatalf("an empty store left %d logistics options, want 3", len(leaves))
+	}
+	for _, leaf := range leaves {
+		if leaf.afford {
+			t.Errorf("%s reads as affordable over an empty store", leaf.kind)
+		}
 	}
 	s.state.Stock.Lilac = lilac
 	// The guard post comes with the scout's mark on the ground, alone.
@@ -193,9 +203,74 @@ func TestTheRadialOnlyOffersWhatArrived(t *testing.T) {
 		t.Fatalf("infrastructure and the guard show %d groups, want 2", len(groups))
 	}
 	s.radialGroup, s.radialLevel = groupMilitary, 1
-	leaves := radialLeafLayout(s)
+	leaves = radialLeafLayout(s)
 	if len(leaves) != 1 || leaves[0].kind != BuildingGuard {
 		t.Fatalf("the military ring offers %v, want the guard post alone", leaves)
+	}
+	if !leaves[0].afford {
+		t.Error("the guard post reads as unaffordable over full stores")
+	}
+}
+
+// A washed blueprint is on the ring to be seen, not to be raised: its
+// click refuses and the menu stands, and the same click over stores
+// that can pay raises it.
+func TestAWashedBlueprintRefusesTheClick(t *testing.T) {
+	s := newPlayScene(newGame())
+	seedStock(s.state)
+	arriveAll(s.state)
+	s.openRadial(groundNearCore())
+	s.radialGroup, s.radialLevel = groupLogistics, 1
+	s.state.Stock.Lilac = 0
+	leaves := radialLeafLayout(s)
+	if len(leaves) != len(groupMembers[groupLogistics]) {
+		t.Fatal("an empty store emptied the logistics ring")
+	}
+	s.pickRadial(leaves[0].x, leaves[0].y)
+	if len(s.state.Jobs) != 0 {
+		t.Error("a click on a washed blueprint raised it")
+	}
+	if !s.radial || s.radialLevel != 1 {
+		t.Error("the refused click closed the menu")
+	}
+	s.state.Stock.Lilac = 1200
+	s.pickRadial(leaves[0].x, leaves[0].y)
+	if len(s.state.Jobs) != 1 {
+		t.Error("the same click over a full store raised nothing")
+	}
+}
+
+// The tip prices a blueprint and marks what the stores fall short of.
+func TestTheRadialTipMarksWhatFallsShort(t *testing.T) {
+	s := newGame()
+	seedStock(s)
+	tip := radialTipOf(s, BuildingProtector)
+	if len(tip.parts) != 2 {
+		t.Fatalf("the protector's tip has %d parts, want lilac and oil",
+			len(tip.parts))
+	}
+	for _, part := range tip.parts {
+		if part.missing {
+			t.Errorf("the tip calls %s short over full stores", part.name)
+		}
+	}
+	if tip.shorts() != "" {
+		t.Errorf("the tip says %q over full stores, want nothing", tip.shorts())
+	}
+	s.Stock.Lilac = 100
+	tip = radialTipOf(s, BuildingProtector)
+	if !tip.parts[0].missing {
+		t.Error("the tip doesn't call lilac short")
+	}
+	if tip.parts[1].missing {
+		t.Error("the tip calls oil short")
+	}
+	if tip.shorts() != "short of lilac" {
+		t.Errorf("the tip says %q, want %q", tip.shorts(), "short of lilac")
+	}
+	tip = radialTipOf(s, BuildingSilo)
+	if len(tip.parts) != 1 || tip.parts[0].name != "lilac" {
+		t.Errorf("the silo's tip has %d parts, want lilac alone", len(tip.parts))
 	}
 }
 
