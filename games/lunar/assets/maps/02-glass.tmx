@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="100" height="50" tilewidth="32" tileheight="32" infinite="0" nextlayerid="3" nextobjectid="8">
+ <objectgroup id="1" name="terrain" color="#638ba0">
+  <object id="1" name="surface" x="0" y="0"><polyline points="0,1070 150,970 340,1100 490,947 650,1070 785,1074 850,1064 1006,1064 1066,1092 1186,932 1316,1034 1635,1188 1700,1178 1856,1178 1916,1206 2036,1046 2166,1148 2595,1105 2660,1095 2816,1095 2876,1123 3100,1040 3200,1070"/></object>
+ </objectgroup>
+ <objectgroup id="2" name="navigation" color="#65e6d1">
+  <object id="2" name="pad-0" x="850" y="1064" width="156" height="12"/>
+  <object id="3" name="spawn-0" x="718" y="594"><point/></object>
+  <object id="4" name="pad-1" x="1700" y="1178" width="156" height="12"/>
+  <object id="5" name="spawn-1" x="1503" y="658"><point/></object>
+  <object id="6" name="pad-2" x="2660" y="1095" width="156" height="12"/>
+  <object id="7" name="spawn-2" x="2398" y="525"><point/></object>
+ </objectgroup>
+</map>
+
