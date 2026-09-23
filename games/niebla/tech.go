@@ -19,11 +19,12 @@ const (
 	techBadgeGap   = 8.0  // air between the badge and the monolith's top
 	techPulseTicks = 90   // one breath of the glow: 1.5 s
 
-	techCalloutW    = 280.0 // the callout plate's width
-	techCalloutPad  = 12.0  //
-	techCalloutRow  = 17.0  // a wrapped line's height
-	techCalloutHead = 22.0  // the title's line height
-	techCalloutSize = 13.0  // the body's text size
+	techCalloutW           = 280.0 // the callout plate's width
+	techCalloutPad         = 12.0  //
+	techCalloutRow         = 17.0  // a wrapped line's height
+	techCalloutHead        = 22.0  // the title's line height
+	techCalloutSize        = 13.0  // the body's text size
+	techCalloutMaxBodyRows = 4 // rows reserved in the dismissal hitbox
 )
 
 // techBreath is the pulse the glow rides, 0 to 1, from the state's tick
@@ -163,15 +164,36 @@ func techWrap(screen *golib.Screen, text string, width float32) []string {
 	return lines
 }
 
+func techCalloutRect(s *playScene, height float32) golib.Rectangle {
+	bx, by := techBadgeAt(s)
+	x := bx + techBadgeR + 10
+	if x+techCalloutW > screenWidth-8 {
+		x = bx - techBadgeR - 10 - techCalloutW
+	}
+	x = clampf(x, 8, screenWidth-8-techCalloutW)
+	y := clampf(by-height/2, 8, screenHeight-8-height)
+	return golib.Rectangle{X: x, Y: y, Width: techCalloutW, Height: height}
+}
+
+func techCalloutBounds(s *playScene) golib.Rectangle {
+	height := techCalloutPad*2 + techCalloutHead +
+		float32(techCalloutMaxBodyRows+1)*techCalloutRow
+	return techCalloutRect(s, height)
+}
+
+func (s *playScene) dismissTechCallout(mx, my float32) bool {
+	s.techCallout = ""
+	return techCalloutBounds(s).Contains(mx, my)
+}
+
 // drawTechCallout paints the open drop's teaching, anchored to the
-// badge and kept on the screen. It stays until the next click, which
-// updateTech swallows.
+// badge and kept on the screen. Clicking it closes the callout; a click
+// elsewhere closes it and acts on the region.
 func drawTechCallout(s *playScene, screen *golib.Screen) {
 	if s.techCallout == "" {
 		return
 	}
 	title, body, list := techWords(s.techCallout)
-	bx, by := techBadgeAt(s)
 	inner := float32(techCalloutW - 2*techCalloutPad)
 	lines := techWrap(screen, body, inner)
 	h := techCalloutPad + techCalloutHead +
@@ -179,16 +201,10 @@ func drawTechCallout(s *playScene, screen *golib.Screen) {
 	if list != "" {
 		h += techCalloutRow
 	}
-	x, y := bx+techBadgeR+10, by-h/2
-	if x+techCalloutW > screenWidth-8 {
-		x = bx - techBadgeR - 10 - techCalloutW
-	}
-	x = clampf(x, 8, screenWidth-8-techCalloutW)
-	y = clampf(y, 8, screenHeight-8-h)
-	plate := golib.Rectangle{X: x, Y: y, Width: techCalloutW, Height: h}
+	plate := techCalloutRect(s, h)
 	screen.DrawRectangle(plate, panelColor)
 	screen.DrawRectangleOutline(plate, 1.5, techInk(s.techCallout))
-	tx, ty := x+techCalloutPad, y+techCalloutPad
+	tx, ty := plate.X+techCalloutPad, plate.Y+techCalloutPad
 	screen.DrawText(title, tx, ty, titleSize, panelTextColor, uiTextBold)
 	ty += techCalloutHead
 	for _, line := range lines {

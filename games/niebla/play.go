@@ -186,18 +186,15 @@ func (s *playScene) updateSquadKeys(input *golib.Input) {
 }
 
 // updateTech takes a click on the schematics badge over the core, which
-// opens the oldest unopened drop, and any click while a callout stands,
-// which closes it. Both swallow the click, so the region under never
-// hears of it; the badge wins over an open build menu, which stands
-// down while the callout is read.
+// opens the oldest unopened drop. A click on its callout closes it; a
+// click elsewhere closes it and carries on into the region.
 func (s *playScene) updateTech(input *golib.Input) bool {
 	if !input.MousePressed(golib.MouseLeft) {
 		return false
 	}
 	mx, my := input.MousePosition()
 	if s.techCallout != "" {
-		s.techCallout = ""
-		return true
+		return s.dismissTechCallout(mx, my)
 	}
 	if id := techPending(s.state); id != "" && s.techBadgeHolds(mx, my) {
 		Apply(s.state, AckTech{ID: id})

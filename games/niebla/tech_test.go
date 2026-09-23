@@ -201,6 +201,28 @@ func TestTheBadgeOpensAndAStaleAckDoesNothing(t *testing.T) {
 	}
 }
 
+func TestDismissingTechCalloutPassesOutsideClicksThrough(t *testing.T) {
+	s := newPlayScene(newGame())
+	s.techCallout = techArtilleryID
+	box := techCalloutBounds(s)
+	inside := box.Center()
+	if !s.dismissTechCallout(inside.X, inside.Y) {
+		t.Fatal("a click on the callout was not consumed")
+	}
+	if s.techCallout != "" {
+		t.Fatal("a click on the callout did not close it")
+	}
+
+	s.techCallout = techArtilleryID
+	outsideX := box.X + box.Width + 1
+	if s.dismissTechCallout(outsideX, inside.Y) {
+		t.Fatal("a click outside the callout was consumed")
+	}
+	if s.techCallout != "" {
+		t.Fatal("a click outside the callout did not close it")
+	}
+}
+
 func TestASaveFromBeforeTheSchematicsOpensWhatItEarned(t *testing.T) {
 	s := newGame()
 	s.Deliveries = 3
