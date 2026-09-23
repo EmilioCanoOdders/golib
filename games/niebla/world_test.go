@@ -240,6 +240,36 @@ func TestBuildJobsComeFirst(t *testing.T) {
 	}
 }
 
+func TestRobotsBuildProtectorsBeforeOlderJobs(t *testing.T) {
+	s := newGame()
+	siloCol, siloRow := groundNearCore()
+	protectorCol, protectorRow := siloCol+1, siloRow
+	s.Jobs = []Job{
+		{Kind: BuildingSilo, Col: siloCol, Row: siloRow, Left: 20},
+		{Kind: BuildingProtector, Col: protectorCol, Row: protectorRow, Left: 1},
+	}
+
+	r := s.Robots[1]
+	x, y := cellCenterUnits(protectorCol, protectorRow)
+	angle := float64(r.ID) * goldenAngle
+	r.X = x + math.Cos(angle)*11
+	r.Y = y + math.Sin(angle)*11
+	s.Robots[r.ID] = r
+	delete(s.Robots, 2)
+
+	Apply(s, Tick{})
+
+	protector, built := buildingAt(s, protectorCol, protectorRow)
+	if !built || protector.Kind != BuildingProtector {
+		t.Fatal("the robot worked on the older silo instead of the protector")
+	}
+	if len(s.Jobs) != 1 || s.Jobs[0].Kind != BuildingSilo ||
+		s.Jobs[0].Left != 20 {
+		t.Errorf("the older silo job changed while the protector was built: %v",
+			s.Jobs)
+	}
+}
+
 func TestTheSimulationReplaysTheSame(t *testing.T) {
 	play := func() *State {
 		s := newGame()

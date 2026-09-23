@@ -364,7 +364,7 @@ func robotCaption(s *State, r Robot) string {
 		}
 		return "loading " + postWord(r)
 	case taskBuild:
-		if _, hasJob := oldestJob(s); hasJob {
+		if _, _, hasJob := priorityJob(s); hasJob {
 			return "building"
 		}
 		if _, damaged := damagedBuilding(s); damaged {

@@ -50,6 +50,10 @@ The player never builds by hand. Marking is building, and building is earned: th
 
 Robots are simple workers with priorities, not pathfinders of genius: the player solves the layout, the robots solve the walking.
 
+When a protector site is waiting, robots build it before any other
+construction. Protectors keep their marked order, as do the remaining
+jobs.
+
 ## Demolition and loose items
 What is built can be unbuilt, and nothing is lost but the walking. (What a rival shell brings down goes the same way with half the refund: see [The rivals](#the-rivals).)
 
@@ -176,7 +180,7 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - One generated region, a pure function of `State.Seed` (`worldgen.go`): a gentle relief with great plains, ground cover in zones, oil pools and lilac veins that thin out toward their rims, fog everywhere else. Buildings ask for a flat cell.
 - The core starts with two robots, free of charge: one can watch the oil, the other the lilac. Robots built later will cost oil each cycle.
 - Sending is by card: expand an oil or lilac card and press send robot; the nearest free robot takes the whole vein as its post (all busy, the nearest one is retasked). A vein is one thing however many tiles it spans: one card, one robot, one amount. Recall gives it back.
-- A robot's day has its priority built in: bring home what it carries, mind its tank, finish loading, raise the oldest build job, mend the oldest damaged building, lay pipe, clear piles, work its own post, rest by the core. A trooper's day is its tank and its squad's order. Idle robots go home: they line up in ranks before the core's broad face, five to a rank, and close the ranks up when one leaves; past ten the rest stand inside the first ones and a label says how many are idle. A post that runs dry releases its robot. Clearing piles of loose items sits between raising jobs and working the post, and every load ends its walk at the nearest store of its kind (warehouse or core for lilac, silo or core for oil).
+- A robot's day has its priority built in: bring home what it carries, mind its tank, finish loading, raise protectors before other build jobs (oldest first within each group), mend the oldest damaged building, lay pipe, clear piles, work its own post, rest by the core. A trooper's day is its tank and its squad's order. Idle robots go home: they line up in ranks before the core's broad face, five to a rank, and close the ranks up when one leaves; past ten the rest stand inside the first ones and a label says how many are idle. A post that runs dry releases its robot. Clearing piles of loose items sits between raising jobs and working the post, and every load ends its walk at the nearest store of its kind (warehouse or core for lilac, silo or core for oil).
 - Any building but the core can be demolished from its card, and a site cancelled. Its tasks die with it, and its whole cost, plus what the stores lose the roof for, falls on its cell as one pile of loose items that the robots haul back to the stores. A protector can't go while its current bubble is the only one over another building.
 - Rivals come for the oil, one moving party at a time: a scout four minutes in, which siphons 25 L and leaves its mark, then an introductory raid from the scout's bearing. Thirty cycles after the raid leaves, a crawler arrives and establishes a city that builds a repulsor, extractors and a war factory. The factory sends raiders first without artillery, then mobile artillery. Cities do not attack by themselves; their mobile forces do. Structures can be destroyed, wrecks drop loot, and the colony's artillery shells visible rival targets for lilac and oil (see [The rivals](#the-rivals)).
 - A war factory builds troopers, up to six, and they are its squad: one click orders it to guard a spot or to attack a rival party, a chosen vehicle first. Troopers do no work, shoot out of their own tanks, and a guard post's fire is answered: the rivals shoot troopers and guard posts, and nothing else, and a post they bring down falls into a pile like any building.
@@ -317,6 +321,9 @@ The prototype is done when these five have landed, on top of the debts under [La
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-23: robots now raise marked protectors before other
+  construction jobs, while keeping the order in which jobs of each kind
+  were marked. Pinned by `TestRobotsBuildProtectorsBeforeOlderJobs`.
 - 2026-09-23: the shadow protector moved from the military group to
   logistics: it expands and maintains safe ground rather than fighting.
   Pinned by `TestProtectorBelongsToTheLogisticsRing`.

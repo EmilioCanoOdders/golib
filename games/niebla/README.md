@@ -119,7 +119,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `glyphs.go` | The marks the build menu wears: a group's own glyph, and a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both |
 | `state.go` | The simulation's state and save-schema version: robots (core, built or combat) with their saved screen-facing octant, buildings with their tanks, reloads and damage, stock, what remains of each deposit, build jobs, piles, pipes, the fog, and the rivals' tables (`Enemies`, `Parties`, `Cities`, `Raids`, `Marks`, `Reports`, `Squads`, `Shots`, the PRNG's `Rolls`) plus the schematics' `Tech`; `newGame`, which deals the starting region |
 | `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
-| `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, oldest build job then the oldest damaged building then a section of pipe, pick up loose items, own post, a trooper's squad, rest by the core —, movement's saved facing octant, the claim on a section of pipe (`stepLayPipe`) and the idle ranks (`parkSlot`, `idleRank`) |
+| `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, protector jobs before other build jobs, then the oldest damaged building and a section of pipe, pick up loose items, own post, a trooper's squad, rest by the core —, movement's saved facing octant, the claim on a section of pipe (`stepLayPipe`) and the idle ranks (`parkSlot`, `idleRank`) |
 | `sim_piles.go` | Demolition, unit wrecks and loose items: `canDemolish`, the 25% unit recovery (`dropRobotWreck`), the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, protector upkeep and radius fade, storage caps, refuel spots, and the two factories' works (`robotWorks`: what each builds, for how much, how long) |
 | `sim_oil.go` | Oil's spendable tanks and dedicated protector reserves: `oilTotal`, `oilCap`, `payOil`, all physical tank capacity, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
@@ -184,7 +184,8 @@ robot-sized form:
   total and deterministic, so a seed plus an action log replays a game.
 - The robots carry no plan: `stepRobot` (`sim_robots.go`) derives each
   tick what one does from `robotDay`, a list of tasks in priority order
-  (carry home, mind the tank, finish loading, oldest build job, pick up
+  (carry home, mind the tank, finish loading, protector jobs before other
+  build jobs, pick up
   loose items, own post, idle by the core): the first task that claims
   the robot owns its tick, and the robot's caption reads the same list
   (`Robot.taskNow`). A per-robot task list, when it comes, is a filter
@@ -242,7 +243,8 @@ graphic serves both. Options read their own validity (`radialReady`:
 `kindUnlocked` plus `canPlace` plus `canAfford`) and only the valid ones
 sit on the rings — the menu never offers what a click wouldn't raise.
 The job joins the queue;
-the robots raise the oldest job first, standing on the cell's edge
+the robots raise protector jobs before other jobs, oldest first within
+each group, standing on the cell's edge
 (spread by ID) where the rising body can't swallow them, and the site
 shows the part already built in solid colors inside a **wireframe** of
 the whole body, with the work's progress bar under the cell, drawn over
@@ -696,7 +698,8 @@ simulation with no window: the starting robots, the idle ranks by the
 core and how they close up, a haul's conservation
 (store + patch remaining = patch full), the patch law (one robot per
 vein, sends on its other tiles change nothing), who takes a post,
-build-job priority, recall, dry patches, replay determinism and the JSON
+build-job and protector-job priority, recall, dry patches, replay
+determinism and the JSON
 round trip. `buildings_test.go` does the same for the buildings slice: a
 marking pays and its building rises, the fog refuses ground but not a
 protector, one tile fits several buildings on its cells, a cell with a

@@ -86,7 +86,7 @@ const (
 	taskHaul    = "haul"    // bring home what it carries
 	taskRefuel  = "refuel"  // mind its tank
 	taskLoad    = "load"    // finish loading, at its post or at a pile
-	taskBuild   = "build"   // raise the oldest build job, then lay its section of pipe
+	taskBuild   = "build"   // build sites, mend buildings, lay pipe
 	taskCollect = "collect" // pick up loose items
 	taskPost    = "post"    // work its own post
 	taskSquad   = "squad"   // troopers: follow the squad's order
@@ -96,11 +96,11 @@ const (
 // robotDay is the robot's day, in priority order: the first line that
 // claims the robot owns its tick. It brings home what it carries, minds
 // its tank — a built robot low on oil walks to the nearest charger or
-// the core —, finishes loading, raises the oldest build job, picks up
-// what lies on the ground before digging more, works its own post, and
-// with nothing of all that idles by the core. A robot arriving home
-// therefore builds first and returns to its own task after, exactly as
-// the design asks.
+// the core —, finishes loading, raises protector jobs before other
+// build jobs, picks up what lies on the ground before digging more,
+// works its own post, and with nothing of all that idles by the core.
+// A robot arriving home builds first and returns to its own task after,
+// exactly as the design asks.
 var robotDay []robotTask
 
 // Idling asks what the other robots are at, which reads the day back:
@@ -196,7 +196,7 @@ func (r *Robot) building(s *State) bool {
 	if r.Kind == RobotCombat {
 		return false
 	}
-	if _, hasJob := oldestJob(s); hasJob {
+	if _, _, hasJob := priorityJob(s); hasJob {
 		return true
 	}
 	if _, damaged := damagedBuilding(s); damaged {
@@ -212,7 +212,7 @@ func (r *Robot) building(s *State) bool {
 // Builders stand on their cell's edge, spread by ID, so the rising body
 // doesn't swallow them. With no site left to raise, they lay pipe.
 func (r *Robot) stepBuild(s *State) {
-	job, hasJob := oldestJob(s)
+	job, index, hasJob := priorityJob(s)
 	if b, damaged := damagedBuilding(s); !hasJob && damaged {
 		r.Pipe, r.Section = 0, 0
 		cx, cy := cellCenterUnits(b.Col, b.Row)
@@ -230,7 +230,7 @@ func (r *Robot) stepBuild(s *State) {
 	cx, cy := cellCenterUnits(job.Col, job.Row)
 	angle := float64(r.ID) * goldenAngle
 	if r.walkTowards(s, cx+math.Cos(angle)*11, cy+math.Sin(angle)*11) {
-		s.workJob()
+		s.workJob(index)
 	}
 }
 
@@ -478,19 +478,21 @@ func (s *State) deposit(r *Robot) {
 	}
 }
 
-// workJob puts a tick of work into the oldest job; done, the building
+// workJob puts a tick of work into the selected job; done, the building
 // the job asked for rises from the ground.
-func (s *State) workJob() {
-	if len(s.Jobs) == 0 {
+func (s *State) workJob(index int) {
+	if index < 0 || index >= len(s.Jobs) {
 		return
 	}
-	s.Jobs[0].Left--
-	if s.Jobs[0].Left <= 0 {
-		job := s.Jobs[0]
-		s.Jobs = s.Jobs[1:]
-		if job.Kind != "" {
-			s.raise(job.Kind, job.Col, job.Row)
-		}
+	job := s.Jobs[index]
+	job.Left--
+	if job.Left > 0 {
+		s.Jobs[index] = job
+		return
+	}
+	s.Jobs = append(s.Jobs[:index:index], s.Jobs[index+1:]...)
+	if job.Kind != "" {
+		s.raise(job.Kind, job.Col, job.Row)
 	}
 }
 
@@ -512,12 +514,18 @@ func parkCenter() (x, y float64) {
 	return cx + parkFromCore + lines*parkSpacing/2, cy
 }
 
-// oldestJob returns the build job that has waited longest.
-func oldestJob(s *State) (Job, bool) {
+// priorityJob returns the oldest protector job, or otherwise the oldest
+// build job, along with its place in the queue.
+func priorityJob(s *State) (Job, int, bool) {
 	if len(s.Jobs) == 0 {
-		return Job{}, false
+		return Job{}, 0, false
 	}
-	return s.Jobs[0], true
+	for i, job := range s.Jobs {
+		if job.Kind == BuildingProtector {
+			return job, i, true
+		}
+	}
+	return s.Jobs[0], 0, true
 }
 
 // remainingAt returns what is left in the deposit patch a tile belongs
