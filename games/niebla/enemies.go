@@ -198,42 +198,103 @@ func drawHealthBar(
 	screen.DrawRectangle(bar, color)
 }
 
-// drawVehicle paints one rival vehicle on its ground point: the crawler
-// a long hull under its repulsor's lamp, the raider a tanker whose drum
-// shows once there is oil in it, the scout a small hull with a lamp.
+// drawVehicle paints a rival rover pointing along its last movement.
 func drawVehicle(screen *golib.Screen, e Enemy, gx, gy, zoom float32) {
 	var across float32
+	var minPx float32
+	var length, width float32
+	var hullColor golib.Color
 	switch e.Kind {
 	case EnemyArtillery:
-		k := vehicleIcon(16, zoom, 8)
-		across = 16 * k
-		isoSlab(screen, gx, gy, 16*k, 10*k, 6*k,
-			enemyDark, mid(enemyDark, enemyColor), enemyColor)
-		screen.DrawLine(gx, gy-7*k*unitH,
-			gx+10*k*unitW, gy-10*k*unitH, 2/zoom, enemyLampColor)
+		across, minPx = 16, 8
+		length, width, hullColor = 1.3, 1.15, mid(enemyColor, enemyDark)
 	case EnemyCrawler:
-		k := vehicleIcon(16, zoom, 9)
-		across = 16 * k
-		isoSlab(screen, gx, gy, 16*k, 9*k, 6*k,
-			enemyColor, mid(enemyColor, enemyDark), enemyDark)
-		screen.DrawCircle(gx, gy-8*k*unitH, 3*k*unitW, enemyLampColor)
+		across, minPx = 16, 9
+		length, width, hullColor = 1.15, 1.35, enemyColor
 	case EnemyScout:
-		k := vehicleIcon(6, zoom, 5)
-		across = 6 * k
-		isoBox(screen, gx, gy, 6*k, 3.5*k,
-			enemyColor, mid(enemyColor, enemyDark), enemyDark)
-		screen.DrawCircle(gx, gy-5*k*unitH, 1.6*k*unitW, enemyLampColor)
+		across, minPx = 6, 5
+		length, width, hullColor = 0.95, 1.05, enemyColor
 	default:
-		k := vehicleIcon(8, zoom, 5)
-		across = 8 * k
-		isoBox(screen, gx, gy, 8*k, 4*k,
-			enemyColor, mid(enemyColor, enemyDark), enemyDark)
-		if e.Oil > 0 {
-			screen.DrawCircle(gx, gy-5*k*unitH, 2.4*k*unitW, oilColor)
+		across, minPx = 8, 5
+		length, width, hullColor = 1.1, 1.2, enemyColor
+	}
+	k := vehicleIcon(across, zoom, minPx)
+	size := across * unitW * k * 0.4
+	center := golib.Vector2{X: gx, Y: gy}
+	hullShape := vehicleHull(length, width)
+	hull := facingPoints(center, size, e.Facing, hullShape)
+	screen.DrawPolygon(hull, enemyDark)
+	deck := facingPoints(center, size*0.74, e.Facing, hullShape)
+	screen.DrawPolygon(deck, hullColor)
+	screen.DrawPolygonOutline(deck, 0.75/zoom, enemyDark)
+	if size*zoom >= 5 && e.Kind != EnemyScout {
+		drawVehicleTracks(screen, center, size, e.Facing, zoom)
+	}
+	if e.Kind == EnemyArtillery {
+		drawVehicleGun(screen, center, size, e.Facing, zoom)
+	} else {
+		lamp := facingPoint(center, 0.82, 0, size, e.Facing)
+		lampSize := size * 0.2
+		if e.Kind == EnemyScout {
+			lampSize = size * 0.24
 		}
+		screen.DrawCircle(lamp.X, lamp.Y, lampSize, enemyLampColor)
+	}
+	if e.Kind == EnemyRaider && e.Oil > 0 {
+		drum := facingPoint(center, -0.48, 0, size, e.Facing)
+		screen.DrawCircle(drum.X, drum.Y, size*0.24, oilColor)
 	}
 	drawHealthBar(screen, gx, gy, across, zoom, e.Health,
 		enemySpecOf(e.Kind).health, dangerColor)
+}
+
+func vehicleHull(length, width float32) []golib.Vector2 {
+	return []golib.Vector2{
+		{X: length},
+		{X: length * 0.58, Y: -width * 0.5},
+		{X: -length * 0.58, Y: -width * 0.5},
+		{X: -length, Y: -width * 0.28},
+		{X: -length, Y: width * 0.28},
+		{X: -length * 0.58, Y: width * 0.5},
+		{X: length * 0.58, Y: width * 0.5},
+	}
+}
+
+func drawVehicleTracks(
+	screen *golib.Screen,
+	center golib.Vector2,
+	size float32,
+	facing uint8,
+	zoom float32,
+) {
+	for _, side := range []float32{-0.48, 0.48} {
+		back := facingPoint(center, -0.72, side, size, facing)
+		front := facingPoint(center, 0.52, side, size, facing)
+		screen.DrawLine(back.X, back.Y, front.X, front.Y,
+			1.1/zoom, enemyDark)
+	}
+}
+
+func drawVehicleGun(
+	screen *golib.Screen,
+	center golib.Vector2,
+	size float32,
+	facing uint8,
+	zoom float32,
+) {
+	base := facingPoint(center, 0.05, 0, size, facing)
+	tip := facingPoint(center, 1.55, 0, size, facing)
+	thickness := 1.5 / zoom
+	if thickness < size*0.12 {
+		thickness = size * 0.12
+	}
+	screen.DrawLine(base.X, base.Y, tip.X, tip.Y, thickness, enemyDark)
+	muzzle := facingPoint(center, 1.55, 0, size, facing)
+	muzzleSize := 0.6 / zoom
+	if muzzleSize < size*0.12 {
+		muzzleSize = size * 0.12
+	}
+	screen.DrawCircle(muzzle.X, muzzle.Y, muzzleSize, enemyLampColor)
 }
 
 // compassWord names the way from the core to a spot as the screen shows

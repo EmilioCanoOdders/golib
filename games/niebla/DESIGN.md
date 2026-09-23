@@ -180,7 +180,7 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - No win condition in the MVP; the region is the tutorial for the arc.
 
 ## Art
-The screen is 2K/2 (1280x720) with `Config.PixelArt`, so a 2K monitor scales it by two whole, sharp numbers; 2K/4 (640x360) is the step when pixel-art sprites arrive. Three monitor filters run in order (`shaders/glow.fs`, `shaders/crt.fs`, `shaders/soft.fs`, adapted from games/asteroids and turned down): a glow that only the brightest things clear (the fog itself outshines the oil, so the threshold is 0.8 there), a whisper of a tube screen (faint scanlines, light vignette, no flicker) and a small tent blur that rounds pixels' corners. F2 turns them all off. Isometric look from a manual projection in `Draw` (`screenX = (x-y)*tileW/2`, `screenY = (x+y)*tileH/2`), with painters-order drawing by depth. Note: Tiled maps cannot be isometric in GoLib (orthogonal only), so the region is drawn from sprites and shapes, not `DrawMap`; if Tiled is used, it is only as a layout editor whose data the game re-projects. First version: simple shapes and a small palette (cold ground, lilac veins, amber oil, pale fog); sprites later, tiny robots over larger tiles.
+The screen is 2K/2 (1280x720) with `Config.PixelArt`, so a 2K monitor scales it by two whole, sharp numbers; 2K/4 (640x360) is the step when pixel-art sprites arrive. Three monitor filters run in order (`shaders/glow.fs`, `shaders/crt.fs`, `shaders/soft.fs`, adapted from games/asteroids and turned down): a glow that only the brightest things clear (the fog itself outshines the oil, so the threshold is 0.8 there), a whisper of a tube screen (faint scanlines, light vignette, no flicker) and a small tent blur that rounds pixels' corners. F2 turns them all off. Isometric look from a manual projection in `Draw` (`screenX = (x-y)*tileW/2`, `screenY = (x+y)*tileH/2`), with painters-order drawing by depth. Note: Tiled maps cannot be isometric in GoLib (orthogonal only), so the region is drawn from sprites and shapes, not `DrawMap`; if Tiled is used, it is only as a layout editor whose data the game re-projects. First version: simple shapes and a small palette (cold ground, lilac veins, amber oil, pale fog); sprites later, tiny robots over larger tiles. Robots and rival vehicles have eight screen-facing directions: movement is projected onto the screen and rounded to the nearest 45 degrees. Their saved facing stays put when they stop; older saves default to right. Polygon hulls, front lamps, rear cargo and combat barrels make direction readable without sprites.
 
 ## Sounds
 Audio correction (2026-09-23): the listener is the camera's ground center
@@ -290,6 +290,11 @@ The prototype is done when these five have landed, on top of the debts under [La
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-23: robots and mobile rival vehicles now turn to one of eight
+  screen-facing directions as they move, then keep that facing while
+  stopped. Their polygon hulls, nose lamps, rear cargo and combat details
+  turn with them. Old saves default to facing right; orientation tests and
+  screenshots check movement, persistence and the silhouettes.
 - 2026-09-23: lost colony robots now leave 25% of their build cost and
   carried resources in a wreck, whether the fog digests them or enemy fire
   brings a trooper down. Pinned by the worker and trooper wreck tests.

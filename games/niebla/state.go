@@ -83,6 +83,7 @@ type Robot struct {
 	ID        int64
 	Kind      RobotKind // core or built
 	X, Y      float64   // position, in units (1 u = 1 m)
+	Facing    uint8     // screen-facing octant; zero points right
 	Tank      float64   // liters of oil left; core robots carry none
 	PostCol   int       // the tile of the patch it was sent to; -1 when free
 	PostRow   int       //

@@ -401,11 +401,18 @@ func (r *Robot) walkTowards(s *State, x, y float64) bool {
 	dx, dy := x-r.X, y-r.Y
 	d := math.Hypot(dx, dy)
 	if d <= step {
+		if d > 0 {
+			r.Facing = facingFromMovement(dx, dy)
+		}
 		r.X, r.Y = x, y
 		return true
 	}
-	r.X += dx / d * step
-	r.Y += dy / d * step
+	moveX, moveY := dx/d*step, dy/d*step
+	r.X += moveX
+	r.Y += moveY
+	if moveX != 0 || moveY != 0 {
+		r.Facing = facingFromMovement(moveX, moveY)
+	}
 	return false
 }
 

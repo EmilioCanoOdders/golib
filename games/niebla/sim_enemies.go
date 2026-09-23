@@ -101,6 +101,7 @@ type Enemy struct {
 	Kind   EnemyKind
 	Party  int64
 	X, Y   float64 // units
+	Facing uint8   // screen-facing octant; zero points right
 	Health float64
 	Oil    float64 // liters it stole
 	Fogged int64   // ticks it has stood in the fog with no repulsor over it
@@ -516,6 +517,7 @@ func (s *State) driveParty(members []Enemy, x, y float64) bool {
 	}
 	arrived := false
 	for i, e := range members {
+		oldX, oldY := e.X, e.Y
 		dx, dy := formationOffset(i)
 		tx, ty := x+dx-e.X, y+dy-e.Y
 		if d := math.Hypot(tx, ty); d <= step {
@@ -524,6 +526,9 @@ func (s *State) driveParty(members []Enemy, x, y float64) bool {
 		} else {
 			e.X += tx / d * step
 			e.Y += ty / d * step
+		}
+		if e.X != oldX || e.Y != oldY {
+			e.Facing = facingFromMovement(e.X-oldX, e.Y-oldY)
 		}
 		s.Enemies[e.ID] = e
 	}
