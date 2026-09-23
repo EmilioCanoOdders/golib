@@ -130,6 +130,12 @@ The oil patch remains one selectable resource across its cells. Its pump
 and any pump site appear only on the pump's cell; clicking the visible
 pump body selects that cell, whose panel shows only the pump.
 
+When the latest rival report is still on its plate but its location is
+outside the view, a small red arrow at the screen edge points toward it.
+Unopened schematics do the same for the core, in the drop's color, until
+the badge is opened. Both guides disappear as soon as their target is on
+screen; they never move the camera or take input.
+
 - **Pause:** the frozen region under a message. The fog does not advance while paused.
 - **Colony lost** (later): when the core is somehow unreachable, or the player quits the region.
 
@@ -243,6 +249,10 @@ Pinned as code lands, all at the top of the sim files with units in the name: `f
 
 In `sim_tech.go`: `techFrontierTicks` 5:30 and `techIndustryTicks` 7:00 (the valley's two clock teeth, pinned between the scout's leaving and the first raid's camp; the other teeth answer the first delivery home and the first party driving in), and the view's `techBadgeR` 22 px, `techPulseTicks` 90 (one breath of the glow, from the state's tick) and `techCalloutW` 280 px.
 
+In `guides.go`, offscreen arrows sit `guideEdgeInset` 28 px from the
+side edges, 78 px below the top and 52 px above the bottom, clear of the
+HUD and the bottom help line.
+
 Protector fuel, in `sim_buildings.go`: `protectorOilCap` 200 L,
 `protectorCostOil` 40 L of initial charge, `protectorOilPerSecond` 0.25 L/s
 and `protectorRadiusFadeBelow` 5%. These are provisional economy dials.
@@ -307,6 +317,9 @@ The prototype is done when these five have landed, on top of the debts under [La
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-23: edge arrows now point toward the location named by the
+  current rival report and toward the core while schematics wait offscreen.
+  They disappear when their target enters view and are purely indicative.
 - 2026-09-23: an open schematics callout no longer eats a click elsewhere
   in the region. Clicking the callout still dismisses it; clicking empty
   ground dismisses it and opens the build menu. Pinned by

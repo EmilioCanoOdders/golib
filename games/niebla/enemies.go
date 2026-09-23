@@ -406,11 +406,8 @@ func reportWords(r Report) string {
 // drawReport shows the latest report for a while, on a plate under the
 // HUD, in the middle of the screen.
 func drawReport(s *State, screen *golib.Screen) {
-	if len(s.Reports) == 0 {
-		return
-	}
-	r := s.Reports[len(s.Reports)-1]
-	if s.Ticks-r.Tick > reportShowTicks {
+	r, visible := currentReport(s)
+	if !visible {
 		return
 	}
 	words := reportWords(r)
@@ -426,4 +423,12 @@ func drawReport(s *State, screen *golib.Screen) {
 	screen.DrawRectangle(plate, panelColor)
 	screen.DrawRectangleOutline(plate, 1, dangerColor)
 	drawMarkup(screen, words, x, y, 13, panelTextColor)
+}
+
+func currentReport(s *State) (Report, bool) {
+	if len(s.Reports) == 0 {
+		return Report{}, false
+	}
+	r := s.Reports[len(s.Reports)-1]
+	return r, s.Ticks-r.Tick <= reportShowTicks
 }

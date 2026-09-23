@@ -617,6 +617,7 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	if s.radial {
 		drawRadial(s, screen, s.mouse.X, s.mouse.Y)
 	}
+	drawEdgeGuides(s, screen)
 }
 
 // hudLine is the strip of stores and hands under the game's name, each

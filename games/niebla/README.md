@@ -37,6 +37,15 @@ NIEBLA_PROTECTOR_SHOT_STATE=../../build/niebla/protector.json \
 
 The test prints the protector cell's click position for the current layout.
 
+To inspect the offscreen guides for a rival report and pending schematics:
+
+```text
+NIEBLA_GUIDE_SHOT_STATE=../../build/niebla/guides.json \
+  ./golib go -C games/niebla test -run TestWriteGuideShotState
+./golib shot niebla 240 --save build/niebla/guides.json \
+  --input "Enter@1 Mouse@2:640,360 MouseWheel@3:4 D@10-240"
+```
+
 A shot starts on the menu; `Enter@1` presses Play (or click it: `Mouse@5:640,390
 MouseLeft@6`). Inside the region:
 
@@ -137,11 +146,13 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, the blobs of oil by the state's tick) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
 | `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset/new world, next arrival, create city, finish one city building, finish/send a battalion, fast-forward and next schematics —; view only, acting through `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
 | `tech.go` | The schematics on the screen: the badge over the core - breathing halos around the drop's mark - while an unopened drop waits, the callout its click opens (`techWords`, `techWrap`), and the words (`techWords`) and ink (`techInk`) of each drop; view, never state |
+| `guides.go` | Screen-edge arrows for an offscreen rival report or pending schematics, with layout kept clear of the HUD and the two guides separated when they point the same way; view, never state |
 | `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and crystal pings, gunfire and shell impacts, and interface clicks; world emitters fade with their distance in meters to the camera's ground center, whose altitude rises with zoom-out. Individual shell whistles track their own positions through the descending half of flight. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |
 | `tools/soundgen/` | The maker of the wind, oil and mineral ambience loops: stdlib Go renders the noise beds as WAV for conversion to OGG, and the mineral ring as a seamless WAV with irregular pitch drift of at most one semitone; run it only when a loop changes |
 | `draw.go` | The region painter: the core's monolith, buildings with their damage bars, directional robot and trooper hulls, the bubbles' rings, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
 | `orientation.go` | The screen-space eight-way facing derived from an isometric movement vector, and the point/polygon transforms used by directional units |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
+| `guides_test.go` | Offscreen arrow placement and direction, hiding for visible targets, current-report timing, pending schematics and spacing; can write the optional visual fixture with `NIEBLA_GUIDE_SHOT_STATE` |
 | `markup_test.go` | Markup parser and tooltip layout/button tests |
 | `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
 | `economy_test.go` | The deterministic economy probe: safe harvesting, worker growth and a protected oil outpost over three seeds, sampled each minute into an opt-in CSV report with protector fuel separated from spendable oil |
