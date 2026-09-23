@@ -52,7 +52,7 @@ func TestWriteEconomyReport(t *testing.T) {
 
 	w := csv.NewWriter(file)
 	if err := w.Write([]string{
-		"plan", "seed", "minute", "oil", "lilac", "oil_mined",
+		"plan", "seed", "minute", "oil", "protector_oil", "lilac", "oil_mined",
 		"lilac_mined", "workers", "troopers", "buildings", "protectors",
 		"pumps", "pipes", "guards", "swells", "visits", "enemies",
 	}); err != nil {
@@ -172,11 +172,21 @@ func (p economyPlanner) expandOil(s *State) {
 	if !p.mark(s, BuildingPump, pumpCol, pumpRow) {
 		return
 	}
-	pump, raised := buildingAt(s, pumpCol, pumpRow)
-	if !raised || len(pipesOf(s, pump.ID)) > 0 {
+	protector, raised := buildingAt(s, col, row)
+	if !raised {
 		return
 	}
-	Apply(s, LayPipe{From: pump.ID, To: coreTank})
+	pump, raised := buildingAt(s, pumpCol, pumpRow)
+	if !raised {
+		return
+	}
+	if canJoin(s, pump.ID, protector.ID) {
+		Apply(s, LayPipe{From: pump.ID, To: protector.ID})
+		return
+	}
+	if canJoin(s, protector.ID, coreTank) {
+		Apply(s, LayPipe{From: protector.ID, To: coreTank})
+	}
 }
 
 // mark asks for a building until it is raised. Its true answer means the
@@ -248,6 +258,7 @@ func economyRow(s *State, plan string, seed int64, minute int) []string {
 		strconv.FormatInt(seed, 10),
 		strconv.Itoa(minute),
 		quantity(oilTotal(s)),
+		quantity(protectorOilTotal(s)),
 		quantity(s.Stock.Lilac),
 		quantity(oilMined),
 		quantity(lilacMined),

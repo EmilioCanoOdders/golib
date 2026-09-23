@@ -147,6 +147,9 @@ func thingsAt(s *State, col, row int) []Thing {
 			thing.Amount = math.Round(b.Oil)
 		case BuildingCharger:
 			thing.Caption = si(math.Round(b.Oil), "L")
+		case BuildingProtector:
+			thing.Amount = protectorRadiusTiles(b) *
+				unitsPerTile * unitMeters
 		}
 		things = append(things, thing)
 	}

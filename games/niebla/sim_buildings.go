@@ -10,15 +10,15 @@ import (
 // tile, so it reads as an icon when the view is far out.
 const (
 	// Raising a building, paid from the stores the moment it is marked.
-	// Every building asks lilac; those that plug into the oil grid also
-	// ask a little oil.
+	// Every building asks lilac; those that need an initial oil supply
+	// also ask for it here.
 	factoryCostLilac   = 200.0 // kg
 	chargerCostLilac   = 120.0 // kg
 	chargerCostOil     = 40.0  // L
 	siloCostLilac      = 100.0 // kg
 	warehouseCostLilac = 100.0 // kg
 	protectorCostLilac = 180.0 // kg
-	protectorCostOil   = 40.0  // L
+	protectorCostOil   = 40.0  // L: the protector's initial charge
 	pumpCostLilac      = 150.0 // kg
 
 	buildingWorkTicks = 600 // ticks of robot work to raise any building: 10 s
@@ -43,9 +43,12 @@ const (
 	robotLowTankAt      = 0.25  // tank fraction that sends it to refuel
 	chargerRefillPerSec = 20.0  // L/s drawn from the stores
 
-	// The shadow protector's bubble: a small disc of safe ground, like
-	// the core's but without the pole's upkeep.
-	protectorBubbleTiles = 2.0 // tiles
+	// Protector fuel and its bubble. The initial charge is part of the
+	// blueprint's oil cost; capacity and upkeep are provisional dials.
+	protectorBubbleTiles     = 2.0   // tiles at full charge
+	protectorOilCap          = 200.0 // L in one protector
+	protectorOilPerSecond    = 0.25  // L/s; a provisional upkeep dial
+	protectorRadiusFadeBelow = 0.05  // tank fraction where radius starts fading
 )
 
 // fogSpeedFactor is how much of a robot's speed is left deep in the fog:
@@ -219,11 +222,59 @@ func shelteredWithout(s *State, x, y float64, gone int64) bool {
 			continue
 		}
 		bx, by := cellCenterUnits(b.Col, b.Row)
-		if math.Hypot(x-bx, y-by) <= protectorBubbleTiles*unitsPerTile {
+		radius := protectorRadiusTiles(b) * unitsPerTile
+		if radius > 0 && math.Hypot(x-bx, y-by) <= radius {
 			return true
 		}
 	}
 	return false
+}
+
+func protectorRadiusTiles(b Building) float64 {
+	fadeOil := protectorOilCap * protectorRadiusFadeBelow
+	if b.Oil >= fadeOil {
+		return protectorBubbleTiles
+	}
+	if b.Oil <= 0 {
+		return 0
+	}
+	return protectorBubbleTiles * b.Oil / fadeOil
+}
+
+func protectorState(b Building) string {
+	switch {
+	case b.Oil <= 0:
+		return "offline"
+	case b.Oil < protectorOilCap*protectorRadiusFadeBelow:
+		return "radius fading"
+	default:
+		return "protecting"
+	}
+}
+
+func stepProtectors(s *State) {
+	if protectorOilPerSecond <= 0 {
+		return
+	}
+	for _, id := range sortedBuildingIDs(s) {
+		b := s.Buildings[id]
+		if b.Kind != BuildingProtector || b.Oil <= 0 {
+			continue
+		}
+		b.Oil = math.Max(0, b.Oil-protectorOilPerSecond/60)
+		s.Buildings[id] = b
+	}
+}
+
+func protectorOilTotal(s *State) float64 {
+	total := 0.0
+	for _, id := range sortedBuildingIDs(s) {
+		b := s.Buildings[id]
+		if b.Kind == BuildingProtector {
+			total += b.Oil
+		}
+	}
+	return total
 }
 
 // fogAt returns how much fog sits on a world point, from 0 to 1: none

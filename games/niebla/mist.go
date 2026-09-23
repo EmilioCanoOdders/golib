@@ -35,7 +35,9 @@ func clearDiscs(s *State) []disc {
 	for _, id := range sortedBuildingIDs(s) {
 		if b := s.Buildings[id]; b.Kind == BuildingProtector {
 			x, y := cellCenterUnits(b.Col, b.Row)
-			discs = append(discs, lifted(x, y, protectorBubbleTiles*unitsPerTile))
+			if radius := protectorRadiusTiles(b); radius > 0 {
+				discs = append(discs, lifted(x, y, radius*unitsPerTile))
+			}
 		}
 	}
 	for _, id := range sortedEnemyIDs(s) {
@@ -59,7 +61,7 @@ func drawFogCover(s *State, screen *golib.Screen, zoom float32, view golib.Recta
 	for k := 1; k <= mistLayers; k++ {
 		// Each layer brings the fog from (k-1)/n to k/n of the way to whole.
 		before := float64(k-1) / mistLayers
-		opacity := (1.0/mistLayers)/(1-before)
+		opacity := (1.0 / mistLayers) / (1 - before)
 		reach := (start + fogFadeTiles*float64(k)/mistLayers) * unitsPerTile
 		drawMist(screen, zoom, view,
 			append(holes[:len(holes):len(holes)], disc{cx, cy, reach}),

@@ -171,7 +171,7 @@ func (s *playScene) pointerUnits() (x, y float64) {
 // layTargets lists the tanks the pipe in hand may end at.
 func (s *playScene) layTargets() []int64 {
 	var tanks []int64
-	for _, tank := range oilTanks(s.state) {
+	for _, tank := range allOilTanks(s.state) {
 		if canJoin(s.state, s.laying.from, tank) {
 			tanks = append(tanks, tank)
 		}

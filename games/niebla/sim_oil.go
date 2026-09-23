@@ -3,10 +3,10 @@ package main
 import "math"
 
 // Oil has a place. Lilac is one stock under many roofs, but oil sits in
-// tanks - the core's, each silo's, each charger's - and gets from one to
-// another in a robot's arms or down a pipe. The core's tank is
-// State.Stock.Oil; a building's is its own Oil. What the colony pays in
-// oil comes out of any tank, the core's first.
+// tanks - the core's, each silo's, each charger's and each protector's -
+// and gets from one to another in a robot's arms or down a pipe.
+// Protector oil is reserved for its building; other oil pays colony
+// costs, the core's first.
 const (
 	coreTank int64 = 0 // the core's tank, where a building's ID would go
 
@@ -20,6 +20,15 @@ func tankCapOf(kind BuildingKind) float64 {
 		return siloOilCap
 	case BuildingCharger:
 		return chargerOilCap
+	case BuildingProtector:
+		return protectorOilCap
+	}
+	return 0
+}
+
+func initialBuildingOil(kind BuildingKind) float64 {
+	if kind == BuildingProtector {
+		return protectorCostOil
 	}
 	return 0
 }
@@ -58,9 +67,20 @@ func (s *State) addOil(tank int64, amount float64) {
 	}
 }
 
-// oilTanks lists the colony's tanks: the core's, then the buildings'
-// that have one, in ID order.
+// oilTanks lists oil available for colony spending: the core's, then
+// stores that aren't reserved for a building's own operation.
 func oilTanks(s *State) []int64 {
+	tanks := []int64{coreTank}
+	for _, id := range sortedBuildingIDs(s) {
+		kind := s.Buildings[id].Kind
+		if tankCapOf(kind) > 0 && kind != BuildingProtector {
+			tanks = append(tanks, id)
+		}
+	}
+	return tanks
+}
+
+func allOilTanks(s *State) []int64 {
 	tanks := []int64{coreTank}
 	for _, id := range sortedBuildingIDs(s) {
 		if tankCapOf(s.Buildings[id].Kind) > 0 {
@@ -84,7 +104,7 @@ func tankSpot(s *State, tank int64) (PipePoint, bool) {
 	return PipePoint{x, y}, true
 }
 
-// oilTotal returns the oil in all the colony's tanks.
+// oilTotal returns oil available for colony spending.
 func oilTotal(s *State) float64 {
 	total := 0.0
 	for _, tank := range oilTanks(s) {
@@ -93,10 +113,26 @@ func oilTotal(s *State) float64 {
 	return total
 }
 
-// oilCap returns what all the colony's tanks hold at most.
+// oilCap returns how much oil the colony can hold for spending.
 func oilCap(s *State) float64 {
 	cap := 0.0
 	for _, tank := range oilTanks(s) {
+		cap += tankCap(s, tank)
+	}
+	return cap
+}
+
+func allOilTotal(s *State) float64 {
+	total := 0.0
+	for _, tank := range allOilTanks(s) {
+		total += tankOil(s, tank)
+	}
+	return total
+}
+
+func allOilCap(s *State) float64 {
+	cap := 0.0
+	for _, tank := range allOilTanks(s) {
 		cap += tankCap(s, tank)
 	}
 	return cap
@@ -116,8 +152,17 @@ func (s *State) payOil(amount float64) {
 // one that is ready before any that isn't; IDs break ties, the core
 // first. The core always serves, so there is always an answer.
 func nearestTank(s *State, x, y float64, serves, ready func(tank int64) bool) int64 {
+	return nearestTankAmong(s, oilTanks(s), x, y, serves, ready)
+}
+
+func nearestTankAmong(
+	s *State,
+	tanks []int64,
+	x, y float64,
+	serves, ready func(tank int64) bool,
+) int64 {
 	best, bestGap, bestReady := coreTank, math.Inf(1), false
-	for _, tank := range oilTanks(s) {
+	for _, tank := range tanks {
 		if tank != coreTank && !serves(tank) {
 			continue
 		}
@@ -134,9 +179,17 @@ func nearestTank(s *State, x, y float64, serves, ready func(tank int64) bool) in
 // haulTank returns the tank a robot carries its oil to: the nearest one
 // with room for some of it, or the nearest one when all are full.
 func haulTank(s *State, r Robot) int64 {
-	return nearestTank(s, r.X, r.Y,
+	return nearestOilTank(s, r.X, r.Y,
 		func(int64) bool { return true },
 		func(tank int64) bool { return tankRoom(s, tank) >= pileDust })
+}
+
+func nearestOilTank(
+	s *State,
+	x, y float64,
+	serves, ready func(tank int64) bool,
+) int64 {
+	return nearestTankAmong(s, allOilTanks(s), x, y, serves, ready)
 }
 
 // refuelTank returns the tank a robot refills at: the nearest charger or

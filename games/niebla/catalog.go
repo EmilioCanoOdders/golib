@@ -82,7 +82,7 @@ var catalog = map[ThingType]ThingInfo{
 				{"upkeep", "none"},
 				{"integrity", "[core]indestructible[/]"},
 				{"oil tank", tankWords(s, coreTank)},
-				{"colony oil", fmt.Sprintf("[oil]%s[/] / %s",
+				{"available oil", fmt.Sprintf("[oil]%s[/] / %s",
 					si(math.Round(oilTotal(s)), "L"), si(oilCap(s), "L"))},
 				{"lilac store", fmt.Sprintf("[lilac]%s[/]", si(s.Stock.Lilac, "kg"))},
 				{"robots", fmt.Sprintf("%d", len(s.Robots))},
@@ -177,7 +177,7 @@ var catalog = map[ThingType]ThingInfo{
 		Details: func(s *State, thing Thing) []Detail {
 			return []Detail{
 				{"tank", tankWords(s, thing.Ref)},
-				{"colony oil", fmt.Sprintf("[oil]%s[/] / %s",
+				{"available oil", fmt.Sprintf("[oil]%s[/] / %s",
 					si(math.Round(oilTotal(s)), "L"), si(oilCap(s), "L"))},
 			}
 		},
@@ -204,10 +204,20 @@ var catalog = map[ThingType]ThingInfo{
 			return "r = " + si(amount, "m")
 		},
 		Details: func(s *State, thing Thing) []Detail {
+			b, ok := s.Buildings[thing.Ref]
+			if !ok {
+				return nil
+			}
+			radius := protectorRadiusTiles(b) * unitsPerTile * unitMeters
 			return []Detail{
-				{"bubble", "r = " + si(protectorBubbleMeters(), "m")},
+				{"bubble", si(radius, "m") + " / " +
+					si(protectorBubbleMeters(), "m")},
+				{"oil tank", tankWords(s, b.ID)},
+				{"upkeep", si(protectorOilPerSecond, "L") + "/s"},
+				{"radius fades", fmt.Sprintf("below %.0f%% charge",
+					protectorRadiusFadeBelow*100)},
+				{"state", protectorState(b)},
 				{"shelters", "buildings and robots"},
-				{"upkeep", "none"},
 			}
 		},
 	},

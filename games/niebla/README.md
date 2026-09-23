@@ -15,14 +15,27 @@ From the GoLib repository root:
 ```
 
 The economy probe plays headless opening plans over seeds 0, 1 and 2 for an
-hour, sampling the real state every game minute. It writes only when given a
-path, so normal tests never leave a report:
+hour, sampling the real state every game minute. Its `oil` column is
+spendable oil; `protector_oil` tracks the dedicated fuel separately. It
+writes only when given a path, so normal tests never leave a report:
 
 ```text
 NIEBLA_ECONOMY_REPORT=../../build/niebla/economy.csv \
   ./golib go -C games/niebla test \
   -run TestWriteEconomyReport -v
 ```
+
+To inspect a half-powered protector and its card:
+
+```text
+NIEBLA_PROTECTOR_SHOT_STATE=../../build/niebla/protector.json \
+  ./golib go -C games/niebla test \
+  -run TestWriteProtectorShotState -v
+./golib shot niebla 80 --save build/niebla/protector.json \
+  --input "Enter@1 Mouse@2:760,302 MouseLeft@3"
+```
+
+The test prints the protector cell's click position for the current layout.
 
 A shot starts on the menu; `Enter@1` presses Play (or click it: `Mouse@5:640,390
 MouseLeft@6`). Inside the region:
@@ -95,12 +108,12 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); the camera, the selection, the open cards, the pointer's modes (`laying` a pipe, `ordering` a squad), the schematics' click and open callout (`techCallout`) and the looks-only fields (`mites`, `fx`) live here, never serialized; the HUD's line with the rivals' doings (`threatWords`) and the `schematics at the core` call; a picked guard post's or artillery piece's reach; Esc saves and returns to the menu, autosave every `autosaveTicks` |
 | `radial.go` | The build menu: the two rings a click on empty ground opens - the build groups (industry, military, logistics), then the group's blueprints - laid out around the cell every frame, and `backRadial`/`closeRadial`/`openRadial` for the scene |
 | `glyphs.go` | The marks the build menu wears: a group's own glyph, and a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both |
-| `state.go` | The simulation's state: robots (core, built or combat) with their saved screen-facing octant, buildings with their tanks, reloads and damage, stock, what remains of each deposit, build jobs, piles, pipes, the fog, and the rivals' tables (`Enemies`, `Parties`, `Cities`, `Raids`, `Marks`, `Reports`, `Squads`, `Shots`, the PRNG's `Rolls`) plus the schematics' `Tech`; `newGame`, which deals the starting region |
+| `state.go` | The simulation's state and save-schema version: robots (core, built or combat) with their saved screen-facing octant, buildings with their tanks, reloads and damage, stock, what remains of each deposit, build jobs, piles, pipes, the fog, and the rivals' tables (`Enemies`, `Parties`, `Cities`, `Raids`, `Marks`, `Reports`, `Squads`, `Shots`, the PRNG's `Rolls`) plus the schematics' `Tech`; `newGame`, which deals the starting region |
 | `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
 | `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, oldest build job then the oldest damaged building then a section of pipe, pick up loose items, own post, a trooper's squad, rest by the core —, movement's saved facing octant, the claim on a section of pipe (`stepLayPipe`) and the idle ranks (`parkSlot`, `idleRank`) |
 | `sim_piles.go` | Demolition, unit wrecks and loose items: `canDemolish`, the 25% unit recovery (`dropRobotWreck`), the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
-| `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, storage caps, refuel spots, and the two factories' works (`robotWorks`: what each builds, for how much, how long) |
-| `sim_oil.go` | Oil's tanks: the core's, the silos' and the chargers'; `oilTotal`, `oilCap`, `payOil`, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
+| `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, protector upkeep and radius fade, storage caps, refuel spots, and the two factories' works (`robotWorks`: what each builds, for how much, how long) |
+| `sim_oil.go` | Oil's spendable tanks and dedicated protector reserves: `oilTotal`, `oilCap`, `payOil`, all physical tank capacity, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
 | `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus` |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
 | `sim_enemies.go` | The introduction and rival movement: `Enemy` with its saved facing octant, `Party`, `Raids`, `Mark` and `Report`; scout and introductory raid, saved entry bearing, timed city arrivals, party stages, siphoning and return, fog exposure, wrecks, guard posts and the state's PRNG |
@@ -131,9 +144,10 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `markup_test.go` | Markup parser and tooltip layout/button tests |
 | `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
-| `economy_test.go` | The deterministic economy probe: safe harvesting, worker growth and a protected oil outpost over three seeds, sampled each minute into an opt-in CSV report |
+| `economy_test.go` | The deterministic economy probe: safe harvesting, worker growth and a protected oil outpost over three seeds, sampled each minute into an opt-in CSV report with protector fuel separated from spendable oil |
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
 | `pipes_test.go` | Pumps and pipes driven directly: a pump stands on a pool and a pool takes one, a pipe is paid by the section and laid by the robots, who claim a section each - the nearest free one - and stand by it until it is laid, a half-laid pipe from an old save keeps its work, a laid pipe carries the pool into its tank and stops at a full one or a dry pool, oil has a place and pipes move it between tanks (shares, ports, payments, a demolished tank's oil), robots carry oil to a tank with room and refill where there is oil, what `LayPipe` refuses, a pipe leaves with its ends and its cost falls as a pile, the curve passes through its bends, pipes survive a save, the pool's cards carry the pump and its pipe |
+| `protector_test.go` | Protector fuel: upkeep drains its dedicated tank, radius fades below the configured threshold and vanishes empty, robots and pipes refill it, the reserve stays unavailable to other costs, old saves migrate once with starting charge, and an opt-in state fixture supports visual shots |
 | `mites_test.go` | The mites driven with no window: counted by volume and only in the fog, tight on what stands still and trailing a walker, fading over what is gone, the falloff's layers |
 | `dev_test.go` | The dev actions: a held swell stays up and doesn't count, a placed robot is built, the city tool buttons have separate hit boxes, `unitsAtWorld` undoes `project` |
 | `cities_test.go` | City founding beyond artillery range, shared intro bearing, pylon-first construction, finite local economy, first sortie without artillery, second with mobile artillery, dev actions, replay and JSON persistence |
@@ -190,7 +204,8 @@ pipes](#pumps-and-pipes)) (`BuildingKind` in `state.go`, rules and tuning in
 `sim_buildings.go`): the **robot factory** builds robots from lilac and
 oil, the **charger** refills a built robot's tank from the stores, the
 **silo** and the **warehouse** add oil and lilac storage room, and the
-**shadow protector** holds a small bubble of safe ground of its own.
+**shadow protector** holds a small bubble of safe ground of its own while
+its dedicated oil tank has fuel.
 Marking is building, and building is earned: the blueprints arrive as
 **remote schematics** (`sim_tech.go`, the ladder; `tech.go`, the badge
 and the callout). A drop lights a pulsing **badge over the core** while
@@ -224,23 +239,29 @@ the fog so a site in the mist stays visible.
 
 The fog's law, in `canPlace` and `inSafeZone`: nothing but a protector
 may be marked outside a bubble, so expansion is protector first, then
-the infrastructure it shelters. The bubbles also cancel the fog's drag,
-which slows every robot to half its pace deep in the mist.
+the infrastructure it shelters. A protector is a dedicated 200 L tank
+(`protectorOilCap`), initially charged with the 40 L paid for its blueprint;
+it burns `protectorOilPerSecond` every second. Its full 400 m radius starts
+fading below `protectorRadiusFadeBelow` (5% of capacity), reaches zero when
+empty, and returns as robots or pipes refill it. Protector oil is reserved:
+`oilTotal`, costs, and rival raids exclude it. The bubbles also cancel the
+fog's drag, which slows every robot to half its pace deep in the mist.
 
 ### Oil's tanks
 
 `sim_oil.go`: oil has a place. `State.Stock.Oil` is the core's own tank
-and `Building.Oil` a silo's or a charger's (`tankCapOf`); a tank is named
-by its building's ID, the core's by `coreTank`, 0. `oilTotal` and
-`oilCap` sum them for the HUD and for `canAfford`, and `payOil` takes
-what the colony spends out of any tank, the core's first. Robots choose
-with `nearestTank`: `haulTank` is the nearest tank with room (where
-`storeSpot` walks an oil load and `deposit` pours it), `refuelTank` the
-nearest charger or core with oil (where `refuelSpot` walks and `refill`
-draws). `Demolish` drops a tank's oil in its pile. Lilac is still one
-stock under `lilacCap`. A save from before the tanks loads with all its
-oil in the core, over its cap if need be: it takes no more until it is
-used or piped away.
+and `Building.Oil` a silo's, a charger's or a protector's (`tankCapOf`);
+a tank is named by its building's ID, the core's by `coreTank`, 0.
+`oilTotal` and `oilCap` sum only oil available for spending; the
+protector's dedicated reserve is excluded from costs and raids. `payOil`
+takes oil from available tanks, the core's first. `allOilTanks` also lists
+protector tanks: robots haul to the nearest tank with room (`haulTank`,
+`storeSpot` and `deposit`), and pipes can feed or drain a protector.
+`refuelTank` still chooses the nearest charger or core with oil, where
+`refuelSpot` walks and `refill` draws. `Demolish` drops a tank's held oil
+in its pile. Lilac is still one stock under `lilacCap`. A save from before
+the tanks loads with all its oil in the core, over its cap if need be: it
+takes no more until it is used or piped away.
 
 ### Pumps and pipes
 
@@ -255,7 +276,8 @@ schematics arrived and the stores can pay (`kindUnlocked`, and
 `LayPipe`'s frontier-kit guard).
 
 A **pipe** (`State.Pipes`, by ID) carries oil one way, `From` a pump or
-a tank `To` a tank, through the player's `Bends`, in units. `canJoin` is
+a tank `To` a tank, including a protector's dedicated tank, through the
+player's `Bends`, in units. `canJoin` is
 the network's law: two different ends, a port free on each
 (`freePorts`: `pipePorts` 3, `corePipePorts` 6), no pipe between them
 already. The curve is never stored: `pipeSpine` rebuilds it from the
@@ -279,6 +301,7 @@ free, so the robots a pipe has no section for go on with their day. `stepPipes` 
 (laid, `pipeSupply` in its source, `tankRoom` at its end) moves up to
 `pipeLitersPerSecond`, the pipes of one source sharing what it gives -
 for a pump, the `pumpLitersPerSecond` it draws from `State.Drain`.
+Protector upkeep then drains each dedicated tank once per tick.
 `Demolish` calls `takePipesOf`, so a pipe never outlives an end.
 
 The laying mode is view (`pipeLaying` in the scene): it collects bends

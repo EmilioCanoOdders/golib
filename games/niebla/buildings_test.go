@@ -272,6 +272,7 @@ func TestFogDigestsARobotRunDryOutsideTheBubbles(t *testing.T) {
 	s.NextID++
 	s.Buildings[pid] = Building{
 		ID: pid, Kind: BuildingProtector, Col: 20, Row: 20,
+		Oil: protectorCostOil,
 	}
 	sid := s.NextID
 	s.NextID++
@@ -312,6 +313,7 @@ func TestTheFogSlowsWhoeverWalksIt(t *testing.T) {
 	s.NextID++
 	s.Buildings[pid] = Building{
 		ID: pid, Kind: BuildingProtector, Col: 0, Row: 0,
+		Oil: protectorCostOil,
 	}
 	sheltered := Robot{Kind: RobotCore, X: 0, Y: 0, PostCol: -1, PostRow: -1}
 	for i := 0; i < 120; i++ {

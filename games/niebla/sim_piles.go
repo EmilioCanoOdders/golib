@@ -123,10 +123,10 @@ func (s *State) spillOverflow(col, row int) {
 	s.dropPile(col, row, 0, lilac)
 }
 
-// freeRoom returns the room the stores have left for a cargo, counting
-// what the robots already carry home, so nobody loads what won't fit.
+// freeRoom returns the room in all physical stores for a cargo, counting
+// what robots already carry home, so nobody loads what won't fit.
 func freeRoom(s *State, cargo ThingType) float64 {
-	room := oilCap(s) - oilTotal(s)
+	room := allOilCap(s) - allOilTotal(s)
 	if cargo == TypeLilac {
 		room = lilacCap(s) - s.Stock.Lilac
 	}

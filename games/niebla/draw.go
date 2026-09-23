@@ -148,7 +148,7 @@ func drawBuildings(s *State, screen *golib.Screen, zoom float32) {
 // the same.
 func buildingFill(s *State, b Building) (part float32, color golib.Color, holds bool) {
 	switch b.Kind {
-	case BuildingSilo, BuildingCharger:
+	case BuildingSilo, BuildingCharger, BuildingProtector:
 		return float32(b.Oil / tankCapOf(b.Kind)), oilColor, true
 	case BuildingWarehouse:
 		return float32(s.Stock.Lilac / lilacCap(s)), lilacColor, true
@@ -475,7 +475,10 @@ func drawBubbles(s *State, screen *golib.Screen, zoom float32) {
 			continue
 		}
 		cx, cy := protectorBubbleCenter(b)
-		ellipseOutline(screen, cx, cy, protectorBubbleTiles, 2/zoom, protectorEdgeColor)
+		if radius := protectorRadiusTiles(b); radius > 0 {
+			ellipseOutline(screen, cx, cy, float32(radius), 2/zoom,
+				protectorEdgeColor)
+		}
 	}
 	cx, cy := projectCore()
 	// The outlines keep their thickness on the screen, not in the world:

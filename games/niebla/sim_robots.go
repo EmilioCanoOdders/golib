@@ -32,16 +32,17 @@ const (
 	goldenAngle = 2.399963229728653 // spreads robots around what they work at
 )
 
-// stepSim moves the world one tick forward: the weather, the
-// factories, the pipes, the rivals and the guard posts, then the robots
-// in ID order, so the outcome never depends on map iteration. A built robot
-// empty of oil outside every bubble is digested by the fog and leaves a
-// quarter of each resource in a wreck: its cost and onboard resources.
+// stepSim moves the world one tick forward: the weather, the factories,
+// pipes, protector upkeep, rivals and guard posts, then robots in ID order,
+// so the outcome never depends on map iteration. A built robot empty of oil
+// outside every bubble is digested by the fog and leaves a quarter of each
+// resource in a wreck: its cost and onboard resources.
 func stepSim(s *State) {
 	stepTech(s)
 	stepFog(s)
 	stepFactories(s)
 	stepPipes(s)
+	stepProtectors(s)
 	stepSquads(s)
 	stepEnemies(s)
 	stepGuards(s)

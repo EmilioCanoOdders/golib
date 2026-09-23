@@ -180,6 +180,7 @@ func (s *State) takeDown(b Building, refund float64) {
 	delete(s.Buildings, b.ID)
 	lilac, oil := buildingCost(b.Kind)
 	lilac *= refund
+	oil -= initialBuildingOil(b.Kind)
 	oil *= refund
 	if _, robotLilac, robotOil, _, builds := robotWorks(b.Kind); builds && b.Work > 0 {
 		lilac += robotLilac * refund

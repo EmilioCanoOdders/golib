@@ -14,6 +14,7 @@ import (
 // State is the whole game as one value. Actions (actions.go) are the
 // only thing that changes it.
 type State struct {
+	Version    int                // serialized state schema version
 	Seed       int64              // the region's seed: its relief, cover and deposits (worldgen.go)
 	Ticks      int64              // game ticks, 60 to the second
 	NextID     int64              // the ID the next robot, building, pile or pipe gets
@@ -37,6 +38,8 @@ type State struct {
 	Shots      map[int64]Shot     // bullets and shells in the air, by ID (sim_shots.go)
 	Tech       map[string]bool    // the schematics that arrived: drop ID -> opened (sim_tech.go)
 }
+
+const stateVersion = 1
 
 // Fog is the region's weather, where the fog's breath has got to. The
 // swell rises at a cycle's end and drains tick by tick; NextIn counts
@@ -132,7 +135,7 @@ type Building struct {
 	Kind     BuildingKind
 	Col, Row int // the cell it stands on
 	Work     int64
-	Oil      float64 // liters in its tank: silos and chargers (sim_oil.go)
+	Oil      float64 // liters in its tank: stores and protectors (sim_oil.go)
 	Reload   int64   // guard posts: ticks until the next shot (sim_enemies.go)
 	Aim      int64   // guard posts: the vehicle the last shot went to
 	Damage   float64 // what it has taken; at its health it falls (sim_shots.go)
@@ -184,6 +187,7 @@ func newGame() *State {
 func newGameOn(seed int64) *State {
 	useRegion(seed)
 	s := &State{
+		Version:   stateVersion,
 		Seed:      seed,
 		NextID:    1,
 		Robots:    map[int64]Robot{},
@@ -216,6 +220,7 @@ func newGameOn(seed int64) *State {
 // that are gone: the ones it doesn't know wake up full.
 func (s *State) enterRegion() {
 	useRegion(s.Seed)
+	s.migrateState()
 	if s.Drain == nil {
 		s.Drain = map[string]float64{}
 	}
@@ -225,6 +230,21 @@ func (s *State) enterRegion() {
 		}
 	}
 	s.migrateSettledCities()
+}
+
+func (s *State) migrateState() {
+	if s.Version >= stateVersion {
+		return
+	}
+	for _, id := range sortedBuildingIDs(s) {
+		b := s.Buildings[id]
+		if b.Kind != BuildingProtector || b.Oil > 0 {
+			continue
+		}
+		b.Oil = protectorCostOil
+		s.Buildings[id] = b
+	}
+	s.Version = stateVersion
 }
 
 // spawnRobot adds one robot to the colony at a spot, with the tank full
@@ -247,7 +267,10 @@ func (s *State) spawnRobot(kind RobotKind, x, y float64) int64 {
 func (s *State) raise(kind BuildingKind, col, row int) {
 	id := s.NextID
 	s.NextID++
-	s.Buildings[id] = Building{ID: id, Kind: kind, Col: col, Row: row}
+	s.Buildings[id] = Building{
+		ID: id, Kind: kind, Col: col, Row: row,
+		Oil: initialBuildingOil(kind),
+	}
 }
 
 // drainKey names a deposit tile inside State.Drain.

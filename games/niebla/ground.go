@@ -537,7 +537,8 @@ func groundShows(s *State, tcol, trow int) bool {
 			continue
 		}
 		bx, by := cellCenterUnits(b.Col, b.Row)
-		if math.Hypot(x-bx, y-by) <= (protectorBubbleTiles+0.75)*unitsPerTile {
+		if math.Hypot(x-bx, y-by) <=
+			(protectorRadiusTiles(b)+0.75)*unitsPerTile {
 			return true
 		}
 	}
