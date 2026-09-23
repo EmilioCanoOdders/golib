@@ -29,7 +29,7 @@ click and one of the oil pools' bloops.
 
 **`sounds/artillery-fire.ogg`** and **`sounds/artillery-fire-distant.ogg`**
 (a filtered, echoed derivative of the first): the colony's artillery and
-the rivals' base gun.
+the rivals' mobile artillery.
 
 | Field | Value |
 | --- | --- |

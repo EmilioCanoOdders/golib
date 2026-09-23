@@ -119,8 +119,9 @@ func stepShots(s *State) {
 }
 
 // land is a shot arriving: a bullet hurts its target if it still stands,
-// a shell hurts everybody of the other side within its blast - vehicles
-// for the colony's, troopers and buildings for the rivals'.
+// a shell hurts everybody of the other side within its blast - rival
+// vehicles or city structures for the colony's, troopers or buildings
+// for the rivals'.
 func (s *State) land(shot Shot) {
 	if shot.Kind == ShotBullet {
 		s.hurtEnemy(shot.Enemy, shot.Damage)
@@ -250,9 +251,8 @@ func seen(s *State, x, y float64) bool {
 
 // stepArtillery reloads the colony's pieces and fires the ones that are
 // ready, can pay for a shell and have a target: a rival somebody sees,
-// no nearer than the piece's minimum and no farther than its reach, a
-// base before a vehicle - a base doesn't move from under the shell - and
-// then the nearest.
+// no nearer than the piece's minimum and no farther than its reach, city
+// structures before mobile forces, and then the nearest.
 func stepArtillery(s *State) {
 	for _, id := range sortedBuildingIDs(s) {
 		b := s.Buildings[id]
@@ -282,16 +282,17 @@ func stepArtillery(s *State) {
 
 func artilleryTarget(s *State, x, y float64) (Enemy, bool) {
 	var best Enemy
-	found, bestBase, bestGap := false, false, 0.0
+	found, bestStructure, bestGap := false, false, 0.0
 	for _, id := range sortedEnemyIDs(s) {
 		e := s.Enemies[id]
 		gap := math.Hypot(e.X-x, e.Y-y)
 		if gap < artilleryMinUnits || gap > artilleryRangeUnits || !seen(s, e.X, e.Y) {
 			continue
 		}
-		base := e.Kind == EnemyBase
-		if !found || (base && !bestBase) || (base == bestBase && gap < bestGap) {
-			best, found, bestBase, bestGap = e, true, base, gap
+		structure := (e.City != 0 && e.Party == 0) || e.Kind == EnemyBase
+		if !found || (structure && !bestStructure) ||
+			(structure == bestStructure && gap < bestGap) {
+			best, found, bestStructure, bestGap = e, true, structure, gap
 		}
 	}
 	return best, found

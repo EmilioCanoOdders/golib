@@ -16,35 +16,35 @@ import (
 // made in code.
 
 const (
-	uiClickVolume  = 0.8        // a press of the interface
-	shellVolume    = 1.0        // the colony's artillery speaking
-	shellFarVolume = 0.9        // a rival base's gun
-	gunVolume      = 0.9        // small arms, the colony's and the rivals'
-	gunCooldown    = 4          // ticks between two small-arm sounds at most
-	burstVolume    = 1.0        // a shell landing
-	whistleVolume  = 0.18       // a shell coming down where the view stands
-	whistleCount   = 8          // independent incoming shells at once
-	dripVolume     = 0.6        // an oil pool's bloop
-	gurgleVolume   = 0.55       // its rarer, thicker cousin
+	uiClickVolume  = 0.8         // a press of the interface
+	shellVolume    = 1.0         // the colony's artillery speaking
+	shellFarVolume = 0.9         // a rival city's mobile artillery
+	gunVolume      = 0.9         // small arms, the colony's and the rivals'
+	gunCooldown    = 4           // ticks between two small-arm sounds at most
+	burstVolume    = 1.0         // a shell landing
+	whistleVolume  = 0.18        // a shell coming down where the view stands
+	whistleCount   = 8           // independent incoming shells at once
+	dripVolume     = 0.6         // an oil pool's bloop
+	gurgleVolume   = 0.55        // its rarer, thicker cousin
 	tinkVolume     = 0.2125 / 12 // a lilac vein's crystal ping
-	ringVolume     = 0.28       // the vein's continuous resonance
-	tinkCrowdBoost = 0.15       // how much every extra audible vein lifts a ping
-	tinkCrowdHurry = 0.5        // and how much it hurries the next one along
-	windFarVolume  = 0.18       // the wind, the whole region in view
-	windNearVolume = 0.04       // the wind, the ground in view
-	poolBedVolume  = 1.0        // the pool's buried seethe, up close
-	dripSoonest    = 120        // ticks between two drips at the least: 2 s
-	dripLatest     = 420        // and at the most: 7 s
-	gurgleSoonest  = 600        // ticks between gurgles: 10 s
-	gurgleLatest   = 1500       // 25 s
-	tinkSoonest    = 12         // ticks between two pings at the least: 0.2 s
-	tinkLatest     = 75         // and at the most: 1.25 s
-	nearZoomSpan   = 2.0        // zooms of glide from a whisper to a full world
-	nearZoomFloor  = 0.35       // the weight the world keeps at the farthest stop
-	audioReach     = 2800.0     // meters a world sound carries from the camera
-	shellReach     = 3800.0     // a cannon carries farther than small arms
-	audioHigh      = 2100.0     // receiver height in meters at the farthest zoom
-	audioFloor     = 0.02       // quieter than this and a sound doesn't start
+	ringVolume     = 0.28        // the vein's continuous resonance
+	tinkCrowdBoost = 0.15        // how much every extra audible vein lifts a ping
+	tinkCrowdHurry = 0.5         // and how much it hurries the next one along
+	windFarVolume  = 0.18        // the wind, the whole region in view
+	windNearVolume = 0.04        // the wind, the ground in view
+	poolBedVolume  = 1.0         // the pool's buried seethe, up close
+	dripSoonest    = 120         // ticks between two drips at the least: 2 s
+	dripLatest     = 420         // and at the most: 7 s
+	gurgleSoonest  = 600         // ticks between gurgles: 10 s
+	gurgleLatest   = 1500        // 25 s
+	tinkSoonest    = 12          // ticks between two pings at the least: 0.2 s
+	tinkLatest     = 75          // and at the most: 1.25 s
+	nearZoomSpan   = 2.0         // zooms of glide from a whisper to a full world
+	nearZoomFloor  = 0.35        // the weight the world keeps at the farthest stop
+	audioReach     = 2800.0      // meters a world sound carries from the camera
+	shellReach     = 3800.0      // a cannon carries farther than small arms
+	audioHigh      = 2100.0      // receiver height in meters at the farthest zoom
+	audioFloor     = 0.02        // quieter than this and a sound doesn't start
 )
 
 type audioField struct {
@@ -277,9 +277,9 @@ func (a *audioField) freeWhistle() (int, bool) {
 	return 0, false
 }
 
-// fired sounds a shot leaving its gun: the colony's artillery its cannon,
-// a rival base's the far one, any small arm a shorter report, held to one
-// every few ticks so a battle doesn't turn into a rattle.
+// fired sounds a shot leaving its gun: the colony's artillery has its own
+// report, rival mobile artillery has the distant one, and small arms are
+// throttled to one every few ticks so a battle doesn't turn into a rattle.
 func (a *audioField) fired(s *playScene, shot Shot) {
 	if shot.Kind == ShotShell {
 		sound, base := a.shell, shellVolume

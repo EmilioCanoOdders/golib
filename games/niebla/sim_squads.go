@@ -97,6 +97,12 @@ func stepSquads(s *State) {
 		if sq.Order != OrderAttack {
 			continue
 		}
+		if sq.Party == 0 {
+			if _, alive := s.Enemies[sq.Focus]; !alive {
+				delete(s.Squads, id)
+			}
+			continue
+		}
 		members := partyMembers(s, sq.Party)
 		if len(members) == 0 {
 			delete(s.Squads, id)
@@ -177,6 +183,10 @@ func (r *Robot) shoot(s *State) {
 func stepEnemyGuns(s *State) {
 	for _, id := range sortedEnemyIDs(s) {
 		e := s.Enemies[id]
+		if e.Kind == EnemyArtillery {
+			s.fireCityArtillery(e)
+			continue
+		}
 		spec := enemySpecOf(e.Kind)
 		if spec.damage <= 0 {
 			continue

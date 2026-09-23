@@ -75,7 +75,7 @@ func TestUnitsAtWorldUndoesProject(t *testing.T) {
 	}
 }
 
-func TestFastForwardSendsMoreOfTheSameTicksAndSitsUnderTheVisitButton(t *testing.T) {
+func TestFastForwardAndRivalToolsHaveDistinctButtons(t *testing.T) {
 	was := devOpen
 	defer func() { devOpen = was }()
 	d := devTools{fast: true}
@@ -88,8 +88,12 @@ func TestFastForwardSendsMoreOfTheSameTicksAndSitsUnderTheVisitButton(t *testing
 		t.Errorf("fast forward sends %d ticks an update, want %d", got, devFastTicks)
 	}
 	visit, hurry := devButtonBounds(devVisitButton), devButtonBounds(devHurryButton)
-	if hurry.X != visit.X || hurry.Y <= visit.Y+visit.Height-1 {
-		t.Errorf("the hurry button stands at %v, want it under the visit's %v", hurry, visit)
+	city, build := devButtonBounds(devCityButton), devButtonBounds(devBuildCityButton)
+	if hurry.X <= visit.X || hurry.Y != visit.Y {
+		t.Errorf("the intro hurry button %v should follow visit %v", hurry, visit)
+	}
+	if city.Y <= visit.Y || build.Y != city.Y {
+		t.Errorf("city tools should have their own row: city %v, build %v", city, build)
 	}
 }
 

@@ -5,7 +5,7 @@ package main
 // saw (DESIGN.md, "Introduction to the game"): it comes in a valley of
 // calm, just before the thing it answers makes it necessary, never in
 // the middle of a peak the player is busy with. A drop arrives when its
-// trigger says so - the clock, the rivals' visits, a base that dug in -
+// trigger says so - the clock, the rivals' visits, a city factory -
 // and waits over the core as a glowing badge until the player opens it.
 // The trigger is derived from the state, so an old save wakes up with
 // exactly what it has earned; only "opened" is written down, in
@@ -67,7 +67,14 @@ var techLadder = []techDrop{
 	{techMobileID, []BuildingKind{BuildingWarFactory},
 		func(s *State) bool { return s.Raids.Visits >= 2 }},
 	{techArtilleryID, []BuildingKind{BuildingArtillery},
-		func(s *State) bool { return settled(s) }},
+		func(s *State) bool {
+			for _, cityID := range sortedCityIDs(s) {
+				if cityHasBuilding(s, s.Cities[cityID], EnemyCityFactory) {
+					return true
+				}
+			}
+			return false
+		}},
 }
 
 // stepTech writes down what has arrived, and is the first thing the

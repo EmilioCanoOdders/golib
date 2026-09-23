@@ -53,10 +53,16 @@ const (
 	TypeWarFactory ThingType = "warfactory"
 	TypeArtillery  ThingType = "artillery"
 
-	TypeScout   ThingType = "scout" // the rivals' vehicles
-	TypeCrawler ThingType = "crawler"
-	TypeRaider  ThingType = "raider"
-	TypeBase    ThingType = "base"
+	TypeScout          ThingType = "scout" // the rivals' vehicles
+	TypeCrawler        ThingType = "crawler"
+	TypeCityCrawler    ThingType = "citycrawler"
+	TypeRaider         ThingType = "raider"
+	TypeBase           ThingType = "base"
+	TypeCityRepulsor   ThingType = "cityrepulsor"
+	TypeCityOilworks   ThingType = "cityoilworks"
+	TypeCityMine       ThingType = "citymine"
+	TypeCityFactory    ThingType = "cityfactory"
+	TypeEnemyArtillery ThingType = "enemyartillery"
 
 	TypeSite ThingType = "site" // a building still being raised
 	TypePile ThingType = "pile" // loose items on the ground
@@ -178,11 +184,15 @@ func enemiesOnCell(s *State, col, row int) []Enemy {
 // enemyThing is a rival vehicle's card, headlined by what its party is
 // at.
 func enemyThing(s *State, e Enemy) Thing {
+	caption := stageWords(s.Parties[e.Party].Stage)
+	if e.City != 0 && e.Party == 0 {
+		caption = cityBuildingCaption(s, e)
+	}
 	return Thing{
 		Type:    ThingType(e.Kind),
 		ID:      fmt.Sprintf("enemy-%d", e.ID),
 		Ref:     e.ID,
-		Caption: stageWords(s.Parties[e.Party].Stage),
+		Caption: caption,
 	}
 }
 

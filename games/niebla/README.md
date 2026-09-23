@@ -46,10 +46,10 @@ In the region, hold Control and click the game's name twice: a strip
 opens under the HUD, in two rows. The first: **hold a swell** (the fog
 presses in and stays until the button lets it go), **place robots**
 (every click on the region drops a free built robot there; a right click
-disarms), **reset world**, **new world** and **rivals: next visit**. The
-second, each button under the one it goes with: **rivals: a base** under
-reset world, **fast forward x8** under new world and **rivals: stop
-waiting** under next visit. In a scripted shot:
+disarms), **reset world**, **new world**, **rivals: next visit**,
+**rivals: stop waiting**, **fast forward x8** and **next schematics**.
+The second row: **rivals: new city**, **finish city build**,
+**finish battalion** and **send battalion**. In a scripted shot:
 
 ```text
 ./golib shot niebla 400 --input "Enter@1 Mouse@2:40,24 \
@@ -61,18 +61,28 @@ waiting** under next visit. In a scripted shot:
 `reset world` deals the region again on the seed it has and `new world`
 on another (`DevResetWorld`), saving at once; the seed stands beside
 `dev`. `Mouse@50:460,77 MouseLeft@51` presses `new world` in a shot.
-`rivals: next visit` brings the rivals' next party in at once
-(`DevNextVisit`), and stays lit while one is in the region, since they
-come one at a time. Under it, `rivals: stop waiting` ends the wait of a
-camped party, which moves in on the next tick (`DevHurryRivals`). Under
-`new world`, `fast forward x8` sends `devFastTicks` ticks an update
-instead of one (`devTools.ticksPerUpdate`) until it is pressed again:
-the same ticks, so the same game, only sooner. `Mouse@14:588,99
-MouseLeft@15` presses `rivals: stop waiting` in a shot, and
-`Mouse@14:460,99` aims at `fast forward x8`. `rivals: stop waiting`
-also grows a base its next level at once, and `rivals: a base`, under
-`reset world`, brings the next visit in to stay
-(`DevNextVisit{Settle: true}`).
+`rivals: next visit` brings the next scheduled arrival in immediately
+(`DevNextVisit`): the scout, the introductory raid or, after the
+introduction, a crawler on its way to found a city. It waits while a
+non-settled party is moving. `rivals: stop waiting` ends preparation of
+a camped party or city battalion (`DevHurryRivals`). `rivals: new city`
+establishes a city now (`DevNewCity`). The next three buttons each act
+on the oldest city: finish exactly one building
+(`DevFinishCityBuilding`), create its next complete battalion waiting at
+the city (`DevFinishCityBattalion`), or release that battalion so it
+moves on the next tick (`DevSendCityBattalion`). `fast forward x8` sends
+`devFastTicks` ticks an update instead of one until pressed again; the
+simulation advances identically, only sooner.
+
+`cities_test.go` can write a save with a complete city and its artillery
+battalion for inspecting the visuals:
+
+```text
+NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
+  ./golib go -C games/niebla test -run TestWriteCityShotState
+./golib shot niebla 80 --save build/niebla/city.json \
+  --input "Enter@1 Mouse@3:880,492 MouseWheel@4:3"
+```
 
 ## Files
 
@@ -85,16 +95,17 @@ also grows a base its next level at once, and `rivals: a base`, under
 | `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); the camera, the selection, the open cards, the pointer's modes (`laying` a pipe, `ordering` a squad), the schematics' click and open callout (`techCallout`) and the looks-only fields (`mites`, `fx`) live here, never serialized; the HUD's line with the rivals' doings (`threatWords`) and the `schematics at the core` call; a picked guard post's or artillery piece's reach; Esc saves and returns to the menu, autosave every `autosaveTicks` |
 | `radial.go` | The build menu: the two rings a click on empty ground opens - the build groups (industry, military, logistics), then the group's blueprints - laid out around the cell every frame, and `backRadial`/`closeRadial`/`openRadial` for the scene |
 | `glyphs.go` | The marks the build menu wears: a group's own glyph, and a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both |
-| `state.go` | The simulation's state: robots (core, built or combat), buildings with their tanks, reloads and damage, stock, what remains of each deposit, build jobs, piles, pipes, the fog, and the war's tables (`Enemies`, `Parties`, `Raids`, `Marks`, `Reports`, `Squads`, `Shots`, the PRNG's `Rolls`) plus the schematics' `Tech`; `newGame`, which deals the starting region |
-| `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech` for the schematics' badge, and the dev tools' `DevHoldSwell`, `DevSpawnRobot`, `DevResetWorld`, `DevNextVisit`, `DevHurryRivals` and `DevNextTech`; `OrderSquad` for the squads) and `Apply`, the only door into the state |
+| `state.go` | The simulation's state: robots (core, built or combat), buildings with their tanks, reloads and damage, stock, what remains of each deposit, build jobs, piles, pipes, the fog, and the rivals' tables (`Enemies`, `Parties`, `Cities`, `Raids`, `Marks`, `Reports`, `Squads`, `Shots`, the PRNG's `Rolls`) plus the schematics' `Tech`; `newGame`, which deals the starting region |
+| `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
 | `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, oldest build job then the oldest damaged building then a section of pipe, pick up loose items, own post, a trooper's squad, rest by the core —, the claim on a section of pipe (`stepLayPipe`) and the idle ranks (`parkSlot`, `idleRank`) |
 | `sim_piles.go` | Demolition and loose items: `canDemolish`, the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, storage caps, refuel spots, and the two factories' works (`robotWorks`: what each builds, for how much, how long) |
 | `sim_oil.go` | Oil's tanks: the core's, the silos' and the chargers'; `oilTotal`, `oilCap`, `payOil`, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
 | `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus` |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
-| `sim_enemies.go` | The rivals' law and tuning: `Enemy`, `Party`, `Raids`, `Mark` and `Report`; the clock that sends a visit (`stepRaids`, `spawnVisit`), a party's stages (`stepParty`: approach, camp, raid, leave), the siphoning (`raid`), the fog's due on a vehicle with no repulsor over it (`stepExposure`), the wrecks' loot (`killEnemy`), the guard posts (`stepGuards`) and the state's own PRNG (`State.roll`) |
-| `sim_tech.go` | The schematics: the ladder of drops that brings the buildings in little by little, each with its trigger (the first delivery home, the rivals drinking at the tanks or their mark on the ground, the clock, a settled base) - `techLadder`, `stepTech`, `kindUnlocked`, `dropArrived`, `techPending`; arrival is derived from the state, only "opened" is kept (`State.Tech`, an old save wakes with what it earned) |
+| `sim_enemies.go` | The introduction and rival movement: `Enemy`, `Party`, `Raids`, `Mark` and `Report`; scout and introductory raid, saved entry bearing, timed city arrivals, party stages, siphoning and return, fog exposure, wrecks, guard posts and the state's PRNG |
+| `sim_cities.go` | Rival cities: serializable production, deterministic building order, finite local oil/mineral reserves, city arrival and old-save migration, city-produced sorties and mobile artillery |
+| `sim_tech.go` | The schematics: the ladder of drops that brings the buildings in little by little, each with its trigger (first delivery, the scout's theft, clocks, the first raid, a city factory) - `techLadder`, `stepTech`, `kindUnlocked`, `dropArrived`, `techPending`; arrival is derived from the state, only "opened" is kept (`State.Tech`, an old save wakes with what it earned) |
 | `sim_squads.go` | The squads' law and tuning: troopers (`RobotCombat`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), the war factory's room (`squadRoom`), and the rivals shooting back (`stepEnemyGuns`) |
 | `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right that list them - a tank icon, the unit count, the key below - and take a click (`drawSquadStrip`, `drawTankIcon`, `squadBoxRect`, `squadBoxAt`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the marks that pick a squad where it stands (`squadMarkAt`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
 | `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), who they hurt, the buildings' health and the robots' mending, what the colony sees (`seen`) and its artillery (`stepArtillery`) |
@@ -111,7 +122,7 @@ also grows a base its next level at once, and `rivals: a base`, under
 | `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons (a war factory's `build trooper` and `give order` among them) and the integrity line of a damaged building; the cell's outline (`cellDiamond`) |
 | `mites.go` | The fog's wear, for looks only: mites of darkness orbiting whatever stands in the mist, by its volume, trailing walkers and closing in on what stands still; view, never state |
 | `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, the blobs of oil by the state's tick) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
-| `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset world, new world, the rivals' next visit, next schematics —; view only, acting through the `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
+| `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset/new world, next arrival, create city, finish one city building, finish/send a battalion, fast-forward and next schematics —; view only, acting through `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
 | `tech.go` | The schematics on the screen: the badge over the core - breathing halos around the drop's mark - while an unopened drop waits, the callout its click opens (`techWords`, `techWrap`), and the words (`techWords`) and ink (`techInk`) of each drop; view, never state |
 | `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and crystal pings, gunfire and shell impacts, and interface clicks; world emitters fade with their distance in meters to the camera's ground center, whose altitude rises with zoom-out. Individual shell whistles track their own positions through the descending half of flight. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |
 | `tools/soundgen/` | The maker of the wind, oil and mineral ambience loops: stdlib Go renders the noise beds as WAV for conversion to OGG, and the mineral ring as a seamless WAV with irregular pitch drift of at most one semitone; run it only when a loop changes |
@@ -123,7 +134,8 @@ also grows a base its next level at once, and `rivals: a base`, under
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
 | `pipes_test.go` | Pumps and pipes driven directly: a pump stands on a pool and a pool takes one, a pipe is paid by the section and laid by the robots, who claim a section each - the nearest free one - and stand by it until it is laid, a half-laid pipe from an old save keeps its work, a laid pipe carries the pool into its tank and stops at a full one or a dry pool, oil has a place and pipes move it between tanks (shares, ports, payments, a demolished tank's oil), robots carry oil to a tank with room and refill where there is oil, what `LayPipe` refuses, a pipe leaves with its ends and its cost falls as a pile, the curve passes through its bends, pipes survive a save, the pool's cards carry the pump and its pipe |
 | `mites_test.go` | The mites driven with no window: counted by volume and only in the fog, tight on what stands still and trailing a walker, fading over what is gone, the falloff's layers |
-| `dev_test.go` | The dev actions: a held swell stays up and doesn't count, a placed robot is built, full and free, `unitsAtWorld` undoes `project` |
+| `dev_test.go` | The dev actions: a held swell stays up and doesn't count, a placed robot is built, the city tool buttons have separate hit boxes, `unitsAtWorld` undoes `project` |
+| `cities_test.go` | City founding beyond artillery range, shared intro bearing, pylon-first construction, finite local economy, first sortie without artillery, second with mobile artillery, dev actions, replay and JSON persistence |
 | `fog_test.go` | The fog driven directly: cycles, the first swell on schedule, the pressed line, the bubble's margin, the pushed band's drag, the swell's burn, the HUD's forecast |
 | `identity_test.go` | The identity derived from a machine ID: stable, distinct, and the parsers of what `reg query`, `ioreg` and the machine-id files say |
 | `store_test.go` | The database driven directly: an identity kept across runs, the fallback one too, the token column waiting empty, a base saved and loaded back whole, a second save replacing the first, one player's save invisible to another, the DB path's rules |
@@ -135,12 +147,12 @@ DESIGN.md's four laws (one serializable state, actions in/state out, the
 game is a visualization, determinism) hold since slice 4, in a first,
 robot-sized form:
 
-- `State` (`state.go`) is the whole game: robots by ID, the stores, what
-  remains of each deposit (one key per deposit; the ground itself is
-  generated from `State.Seed` and never enters the state — deposits
-  become entities when buildings need neighbors), and the build jobs, which nothing marks yet
-  but every robot obeys. It has no pointers, channels or functions, so
-  it serializes as it is.
+- `State` (`state.go`) is the whole game: robots, buildings, stores,
+  deposits' remaining resources, jobs, weather, rival vehicles and
+  parties, rival cities and their production, reports and projectiles.
+  The ground itself is generated from `State.Seed` and never enters the
+  state. It has no pointers, channels or functions, so it serializes as it
+  is.
 - Actions (`actions.go`) are structs (`Tick`, `SendRobot`, `RecallRobot`);
   `Apply` mutates the state it is given — one owner, no copies — and is
   total and deterministic, so a seed plus an action log replays a game.
@@ -353,40 +365,52 @@ which pile a loading robot stands at, 0 at its post.
 
 ### The rivals
 
-`sim_enemies.go` is the rivals' law. The state holds their vehicles
-(`State.Enemies`, by ID: kind, party, position, health, the oil it
-stole, `Fogged`), the visits under way (`State.Parties`: stage, entry,
-camp, `Wait`, `Siphon`), their clock (`State.Raids`: `Visits` and
-`NextAt`), the scouts' marks (`State.Marks`) and the news
-(`State.Reports`, the last `reportsKept`). `stepSim` runs the war after
-the pipes and before the robots, in this order: `stepSquads`,
-`stepEnemies` (the clock, the parties, the fog's due, the rivals' guns),
-`stepGuards`, `stepArtillery` and `stepShots`.
+`sim_enemies.go` owns the scout and the introductory raid. Rival vehicles
+are in `State.Enemies`; parties carry their stage, movement targets,
+wait/siphon timers, city ID and whether an artillery unit is with them.
+`State.Raids` remembers the intro visit count, next arrival and the
+scout's first bearing. That bearing is reused by the first raid. Gameplay
+randomness uses `State.roll`, so the bearing survives saves and replay.
+After two completed intro visits, `stepRaids` schedules city crawlers
+instead of raids. A city crawler drives from the region edge to a
+settlement point 10 tiles (2 km) from the colony core, beyond the colony
+artillery's 1.5 km range. It establishes a construction rig and creates a
+`State.Cities` entry; its Nexus is built after its antimist pylon. No city
+has a passive gun. City buildings are `Enemy` entities tagged with their
+owning city ID, so existing selection, guard-post targeting, squad orders,
+artillery and damage
+resolution can address them. Their own rules and serialization live in
+`sim_cities.go`.
 
-One party on the move at a time. `stepRaids` sends the next when `Raids.NextAt`
-comes, at a bearing the state rolls (`State.roll`: splitmix64 over the
-seed and `State.Rolls`, the first gameplay randomness, so a save
-reproduces it). Visit 0 is a lone scout, whose party starts at
-`StageRaid`; every later one is a crawler and `raidersOf(visit)`
-raiders, which start at `StageApproach`, camp `campRadiusTiles` out for
-`prepareTicks(visit)` and then raid. Vehicles carry no plan: `stepParty`
-derives the tick from the party's stage. A party moves as one
-(`driveParty`: every member to its `formationOffset` around the spot,
-at the pace of the slowest), led by its oldest vehicle with a repulsor
-(`partyMembers` puts it first). A raid goes for `raidTarget`, the
-nearest tank with oil to the leader, asked again every tick, stops
-`siphonReachUnits` from it and every vehicle with room draws
-`siphonLitersPerSecond`; it ends with every tank aboard full, with no
-oil left anywhere or after `raidSiphonTicks`. A scout paints its `Mark`
-as its raid ends. A party whose leader has no repulsor runs for its
-entry. `endParty` counts the visit and starts the calm (`calmTicks`).
+Intro raid members move as one (`driveParty`), with the crawler as the
+leader and `formationOffset` for their spacing. A raid chooses the nearest
+colony tank with oil (`raidTarget`), moves to `siphonReachUnits`, draws
+`siphonLitersPerSecond` from it until full/no oil/`raidSiphonTicks`, then
+leaves for the entry point. City sorties use the same raid and return
+rules, but their entry point is the city. The first sortie has raiders
+only; the second and later ones add a mobile artillery vehicle. `stepCity`
+won't produce a second sortie while the previous party is still active.
+`movingParty` keeps one party in motion region-wide; other cities wait
+until it returns or is lost.
 
 The fog is the same law for them: `stepExposure` counts the ticks a
 vehicle stands in fog (`fogAt`, so the colony's bubbles and the clear
-ground count as clear) with no repulsor of its own party within reach
-(`repulsed`), and at `enemyFogTicks` it is digested. However a vehicle
+ground count as clear) with no repulsor of its own party or city within
+reach (`repulsed`), and at `enemyFogTicks` it is digested. City-owned
+static structures themselves are not exposure targets. However a vehicle
 dies, `killEnemy` leaves its loot and all it stole as a pile on its
 cell, which the robots haul home like any other.
+
+The city progression (`sim_cities.go`) is stored in each `City`: stage,
+construction timer, finite oil and lilac reserves, city stores, building
+IDs, next production tick and sorties completed. The arriving crawler is
+the initial rig; the city builds a pylon first, then a Nexus, oil
+extractor, lilac mine and war factory. Each construction step takes
+`cityBuildTicks`; completed structures are city-owned `Enemy` records.
+Oil and mineral extraction stop if their building is destroyed. The war
+factory can only send a battalion when it
+exists and city stores can pay. The city repulsor shelters nearby city
+units; the mobile artillery's own bubble shelters a sortie farther out.
 
 A guard post (`BuildingGuard`, in the build menu) reloads in
 `Building.Reload` and shoots the nearest vehicle within
@@ -407,24 +431,20 @@ door `Demolish` uses too, with `wreckRefund` of its cost, and
 part of their build line, after the sites and before the pipes
 (`damagedBuilding`, `mend`). The core is no building and takes nothing.
 
-The settled enemy. From `settleFromVisit` on, a visit that finds no base
-in the region has `Party.Settles`: at its camp the crawler turns into an
-`EnemyBase` - the same vehicle, the same ID, so orders, cards, guard
-posts and loot treat it as any other -, the party goes to `StageSettled`
-with `Level` 1 and counts as a visit done (`startCalm`), so the raids go
-on around it: `stepRaids` waits only for parties on the move. Every
-`baseGrowTicks` the base grows a level up to `baseMaxLevel`; from level
-2 `fireBaseGun` shells the colony's nearest building between
-`baseGunMinUnits` and `baseGunRangeUnits`, or the nearest trooper with
-none, faster at level 3. The raiders that came with it are its garrison
-and shoot troopers as ever. A base that falls reports `ReportBaseDown`,
-and its party, with no repulsor left, runs.
+The arriving crawler keeps its ID as the city's construction rig. The
+city first raises its pylon, then a Nexus. Old saves with a `StageSettled`
+base migrate in `State.enterRegion` as a completed pylon and Nexus.
+Destroying the Nexus removes the city and its static structures.
+Destroying an extractor or factory removes only that production
+capability. Remaining city forces are left to their party and fog rules.
 
 The colony's artillery (`BuildingArtillery`, `stepArtillery`) shells
-rivals between `artilleryMinUnits` and `artilleryRangeUnits` that the
-colony sees (`seen`: within `sightUnits` of a robot, a building or the
-core), a base before a vehicle and then the nearest, and pays every
-shell in lilac and oil.
+visible rivals between `artilleryMinUnits` and `artilleryRangeUnits`, a
+base or static city building before a vehicle, and pays every shell in
+lilac and oil. The mobile rival artillery (`EnemyArtillery`) uses
+`fireCityArtillery` during a sortie; it fires only at colony buildings,
+never the core. Its shots are rival shells, so existing `land` and
+`hurtBuilding` apply.
 
 Squads (`sim_squads.go`). A war factory (`BuildingWarFactory`) builds
 troopers through the same `QueueRobot` the factory answers, while
@@ -652,25 +672,22 @@ window: their count follows the body's volume and the fog on it, none
 under a bubble; they sit on a robot that stands still and trail one that
 walks; they fade over a host that left the state; and the layers they
 are drawn with stack into `miteFalloff`.
-`enemies_test.go` pins the rivals: the scout comes on its tick, takes
-its tank's worth, leaves its mark and its report and goes, and the calm
-starts; a raid comes in, camps at its radius, waits its time to the
-tick, fills every raider and leaves with the report counting it, and
-the next is bigger and quicker; a guard post shoots a scout down before
-it marks anything, pays its shots in oil, the wreck drops its loot, and
-a dry colony doesn't shoot; raiders whose crawler dies are digested on
-the fog's tick; and a raid replays the same, survives a JSON round
-trip, and a save from before the rivals wakes up to its scout.
+`enemies_test.go` pins the rivals' introduction: the scout arrives on
+time, steals, leaves its mark and goes; the raid camps, steals and
+leaves; guard-post fire spends oil and wrecks drop loot; and a crawlerless
+intro party is lost to the fog. It also pins deterministic replay, JSON
+saves and a save from before the rivals. `cities_test.go` pins the shared
+intro bearing, city buildings and finite economy, the first sortie without
+artillery and the second with it, development actions, deterministic
+replay and JSON persistence.
 `noRivals` keeps them out of a test that is about something else.
 `shots_test.go` pins the shots and what came with them: a bullet is in
-the air before it hurts; a visit that settles digs in with a base's
-health, counts as a visit done, grows its gun on the tick, and shells a
-silo 800 m away down to a pile of half its cost while the core takes
-nothing; robots mend a damaged building; the colony's artillery holds
-its fire at a base nobody sees, fires once a spotter stands within
-sight, pays its shells, hurts the base after the shell's flight and
-brings it down, after which the garrison leaves; and a shell misses who
-moved on. `squads_test.go` pins the squads: a war factory charges for a trooper,
+the air before it hurts; a settled Nexus has no passive gun; robots mend
+a damaged building; the colony's artillery holds its fire at a Nexus
+nobody sees, fires once a spotter stands within sight, pays its shells,
+hurts the Nexus after shell flight and brings it down, after which the
+garrison leaves; and a shell misses who moved on. `squads_test.go`
+pins the squads: a war factory charges for a trooper,
 rolls it out whole into its squad and stops at `squadSize`, and troopers
 touch no job, pile or post; a squad walks to the spot it is told to
 guard and mends there, and an order for anything but a war factory is

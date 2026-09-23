@@ -74,8 +74,8 @@ func vehicleIcon(across, zoom, minPx float32) float32 {
 
 // drawEnemies paints the rivals over the fog, so a party reads from far
 // out as what it is: a pocket of clear air moving through the mist. The
-// pockets go first, then the vehicles back to front, then the squads'
-// marks (squads.go).
+// pockets go first, then the structures and vehicles back to front, then
+// the squads' marks (squads.go).
 func drawEnemies(s *State, screen *golib.Screen, zoom float32) {
 	type spot struct {
 		e    Enemy
@@ -94,39 +94,88 @@ func drawEnemies(s *State, screen *golib.Screen, zoom float32) {
 	sort.SliceStable(spots, func(i, j int) bool { return spots[i].y < spots[j].y })
 	for _, sp := range spots {
 		if sp.e.Kind == EnemyBase {
-			drawBase(screen, sp.e, s.Parties[sp.e.Party].Level, sp.x, sp.y, zoom)
+			drawCityBuilding(s, screen, sp.e, sp.x, sp.y, zoom)
+			continue
+		}
+		if sp.e.City != 0 && sp.e.Party == 0 {
+			drawCityBuilding(s, screen, sp.e, sp.x, sp.y, zoom)
 			continue
 		}
 		drawVehicle(screen, sp.e, sp.x, sp.y, zoom)
 	}
+	drawCityConstruction(s, screen, zoom)
 	drawSquadMarks(s, screen, zoom)
 }
 
-// drawBase paints a dug-in crawler: a bunker with the repulsor's lamp on
-// its mast, a tent per level, and from level 2 the gun, a long barrel
-// lying toward the colony.
-func drawBase(screen *golib.Screen, e Enemy, level int64, gx, gy, zoom float32) {
-	k := vehicleIcon(30, zoom, 12)
-	isoBox(screen, gx, gy, 30*k, 9*k, enemyColor, mid(enemyColor, enemyDark), enemyDark)
-	isoBox(screen, gx, gy-9*k*unitH, 5*k, 16*k, enemyDark, enemyDark, enemyDark)
-	screen.DrawCircle(gx, gy-27*k*unitH, 4*k*unitW, enemyLampColor)
-	for tent := int64(0); tent < level; tent++ {
-		angle := float64(tent)*2.1 + 0.6
-		tx := gx + float32(math.Cos(angle))*34*k*unitW
-		ty := gy + float32(math.Sin(angle))*34*k*unitH
-		isoBox(screen, tx, ty, 10*k, 5*k, enemyColor, enemyDark, enemyDark)
-	}
-	if level >= 2 {
-		cx, cy := projectCore()
-		dx, dy := cx-gx, cy-gy
-		if gap := float32(math.Hypot(float64(dx), float64(dy))); gap > 0 {
-			dx, dy = dx/gap, dy/gap
+func drawCityConstruction(s *State, screen *golib.Screen, zoom float32) {
+	for _, id := range sortedCityIDs(s) {
+		city := s.Cities[id]
+		if city.Stage >= len(cityBuildOrder) {
+			continue
 		}
-		reach := 34 * k * unitW
-		screen.DrawLine(gx, gy-12*k*unitH, gx+dx*reach, gy+dy*reach-20*k*unitH,
-			dotRadius(1.6, zoom, 1)*2, enemyDark)
+		x, y := cityBuildingPosition(city, city.Stage)
+		gx, gy := project(float32(x), float32(y))
+		gray := golib.Color{R: 158, G: 169, B: 172, A: 255}
+		w := dotRadius(11, zoom, 5)
+		screen.DrawCircleOutline(gx, gy, w, 1/zoom, gray)
+		bar := golib.Rectangle{
+			X: gx - w, Y: gy + w + 2/zoom,
+			Width: 2 * w, Height: 2 / zoom,
+		}
+		screen.DrawRectangle(bar, scarColor)
+		progress := 1 - float32(city.Work)/cityBuildTicks
+		bar.Width *= golib.Clamp(progress, 0, 1)
+		screen.DrawRectangle(bar, gray)
 	}
-	drawHealthBar(screen, gx, gy, 30*k, zoom, e.Health, enemySpecOf(e.Kind).health, dangerColor)
+}
+
+func drawCityBuilding(
+	s *State,
+	screen *golib.Screen,
+	e Enemy,
+	gx, gy, zoom float32,
+) {
+	gray := golib.Color{R: 119, G: 132, B: 137, A: 255}
+	dark := golib.Color{R: 55, G: 65, B: 69, A: 255}
+	light := golib.Color{R: 168, G: 178, B: 180, A: 255}
+	k := buildingIcon(24, 18, zoom)
+	switch e.Kind {
+	case EnemyBase:
+		isoSlab(screen, gx, gy, 30*k, 9*k, 15*k, gray, mid(gray, dark), dark)
+		isoBox(screen, gx, gy-15*k*unitH, 6*k, 14*k, light, gray, dark)
+	case EnemyCityCrawler:
+		isoSlab(screen, gx, gy, 16*k, 9*k, 7*k, gray, mid(gray, dark), dark)
+		isoBox(screen, gx, gy-7*k*unitH, 5*k, 13*k, light, gray, dark)
+	case EnemyCityRepulsor:
+		isoBox(screen, gx, gy, 10*k, 24*k, gray, mid(gray, dark), dark)
+		screen.DrawCircle(gx, gy-26*k*unitH, 4*k*unitW, light)
+	case EnemyCityOilworks:
+		isoBox(screen, gx, gy, 20*k, 12*k, gray, mid(gray, dark), dark)
+		isoBox(screen, gx, gy-12*k*unitH, 5*k, 16*k, light, gray, dark)
+		for bead := 0; bead < 3; bead++ {
+			phase := math.Mod(float64(s.Ticks%90)/90+float64(bead)/3, 1)
+			fade := float32(math.Sin(math.Pi * phase))
+			y := gy - (30+float32(phase)*18)*k*unitH
+			color := golib.WithOpacity(oilColor, fade*0.34)
+			screen.DrawCircle(gx+float32(bead-1)*4*k*unitW,
+				y, 2*k*unitW, color)
+		}
+	case EnemyCityMine:
+		isoBox(screen, gx, gy, 23*k, 10*k, gray, mid(gray, dark), dark)
+		screen.DrawLine(gx-7*k*unitW, gy-8*k*unitH,
+			gx+7*k*unitW, gy-8*k*unitH, 2/zoom, light)
+		for crystal := float32(-1); crystal <= 1; crystal++ {
+			x := gx + crystal*6*k*unitW
+			screen.DrawLine(x, gy-11*k*unitH,
+				x+2*k*unitW, gy-15*k*unitH, 2/zoom, lilacColor)
+		}
+	case EnemyCityFactory:
+		isoBox(screen, gx, gy, 26*k, 14*k, gray, mid(gray, dark), dark)
+		isoBox(screen, gx+5*k*unitW, gy-14*k*unitH,
+			7*k, 18*k, gray, dark, dark)
+	}
+	drawHealthBar(screen, gx, gy, 24*k, zoom,
+		e.Health, enemySpecOf(e.Kind).health, dangerColor)
 }
 
 // drawHealthBar paints what is left of something hurt under its foot;
@@ -155,6 +204,13 @@ func drawHealthBar(
 func drawVehicle(screen *golib.Screen, e Enemy, gx, gy, zoom float32) {
 	var across float32
 	switch e.Kind {
+	case EnemyArtillery:
+		k := vehicleIcon(16, zoom, 8)
+		across = 16 * k
+		isoSlab(screen, gx, gy, 16*k, 10*k, 6*k,
+			enemyDark, mid(enemyDark, enemyColor), enemyColor)
+		screen.DrawLine(gx, gy-7*k*unitH,
+			gx+10*k*unitW, gy-10*k*unitH, 2/zoom, enemyLampColor)
 	case EnemyCrawler:
 		k := vehicleIcon(16, zoom, 9)
 		across = 16 * k
@@ -218,14 +274,24 @@ func threatWords(s *State) string {
 			}
 			return "raid under way, " + where
 		case StageSettled:
-			// A base is news once; a party on the move is what the line is for.
-			if len(s.Parties) > 1 {
-				continue
-			}
-			return fmt.Sprintf("rival base %s, level %d", where, p.Level)
+			continue
 		default:
 			return "rivals leaving, " + where
 		}
+	}
+	for _, id := range sortedCityIDs(s) {
+		city := s.Cities[id]
+		where := compassWord(city.X, city.Y)
+		if city.Stage < len(cityBuildOrder) {
+			return fmt.Sprintf("rival city %s, building %s",
+				where, cityBuildingName(cityBuildOrder[city.Stage]))
+		}
+		left := city.NextSortie - s.Ticks
+		if left < 0 {
+			left = 0
+		}
+		return fmt.Sprintf("rival city %s, next force in %d:%02d",
+			where, left/3600, left/60%60)
 	}
 	return ""
 }
@@ -236,8 +302,8 @@ func reportWords(r Report) string {
 	switch r.Kind {
 	case ReportScout:
 		return fmt.Sprintf("A scout siphoned [oil]%s[/] off your tanks and left its mark. "+
-			"They know you are here: [danger]next time they come to stay[/]. "+
-			"A guard post would have stopped it.", si(math.Round(r.Oil), "L"))
+			"They know you are here. A guard post would stop the next visit.",
+			si(math.Round(r.Oil), "L"))
 	case ReportCamp:
 		return fmt.Sprintf("[danger]Raiders have camped to the %s.[/] "+
 			"They are getting ready: so should you.", where)
@@ -247,21 +313,29 @@ func reportWords(r Report) string {
 		if r.Oil < 1 {
 			return "The rivals left empty-handed."
 		}
-		return fmt.Sprintf("The raiders got away with [oil]%s[/]. They will be back, and more.",
+		return fmt.Sprintf("The raiders got away with [oil]%s[/].",
 			si(math.Round(r.Oil), "L"))
 	case ReportDestroyed:
 		return "The rivals are gone to the last vehicle. What they carried lies where they fell."
 	case ReportSettled:
-		return fmt.Sprintf("[danger]The rivals have dug in to the %s: a base.[/] "+
-			"It will grow a gun. Squads and artillery can bring it down.", where)
+		return fmt.Sprintf("[danger]A rival city is establishing to the %s.[/] "+
+			"Its extractors and war factory will make forces here.", where)
 	case ReportGun:
-		if r.Oil >= baseMaxLevel {
-			return fmt.Sprintf("The base to the %s fires faster now.", where)
-		}
-		return fmt.Sprintf("[danger]The base to the %s has its gun up[/]: it shells buildings within %s.",
-			where, si(baseGunRangeUnits, "m"))
+		return fmt.Sprintf("A rival building to the %s is complete.", where)
 	case ReportBaseDown:
-		return fmt.Sprintf("The base to the %s has fallen. Its garrison runs for the mist.", where)
+		return fmt.Sprintf("The rival city to the %s has fallen.", where)
+	case ReportSortie:
+		return fmt.Sprintf("[danger]A rival battalion is assembling to the %s.[/]",
+			where)
+	case ReportCityIncoming:
+		return fmt.Sprintf("[danger]A crawler approaches from the %s.[/] "+
+			"It is looking for a place to establish a city.", where)
+	case ReportCityBuilding:
+		index := int(r.Stage)
+		if index >= 0 && index < len(cityBuildOrder) {
+			return fmt.Sprintf("The rival city to the %s completed its %s.",
+				where, cityBuildingName(cityBuildOrder[index]))
+		}
 	case ReportRazed:
 		return fmt.Sprintf("[danger]A shell brought a building down, %s.[/] Half of it lies there as a pile.", where)
 	}

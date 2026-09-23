@@ -7,14 +7,9 @@ import (
 
 // The rivals' law, after DESIGN.md's "Enemies": other people live in the
 // fog, and their repulsors drink oil like the colony's. They come for
-// it. A visit is one party: the first is a lone scout that siphons a
-// little and leaves its mark, the ones after are a crawler - the vehicle
-// that carries the party's repulsor - and its raiders, which camp at the
-// edge of the clear ground, get ready for a while and then drive to the
-// nearest tank with oil in it, fill up and leave. From settleFromVisit
-// on, a visit with no base in the region comes to stay: its crawler digs
-// in as a base, which grows a gun and shells the colony's buildings
-// (sim_shots.go has the shots).
+// it. The introduction is a scout and one raiding party. After that,
+// crawlers arrive to establish cities, which build extractors and a war
+// factory that sends forces from the city (sim_cities.go).
 //
 // A repulsor repels the fog and nothing else, so a party drives into a
 // bubble as it pleases. The fog is as hard on them as on the colony: a
@@ -44,30 +39,27 @@ const (
 
 	reportsKept = 12 // reports the state remembers
 
-	// The settled enemy: from settleFromVisit on, a visit with no base in
-	// the region yet comes to stay. Its crawler digs in as a base, which
-	// grows a level every baseGrowTicks; from level 2 it has a gun.
-	settleFromVisit   = 3
-	baseGrowTicks     = 150 * 60 // ticks between two levels: 2.5 min
-	baseMaxLevel      = 3
-	baseGunRangeUnits = 1500.0
-	baseGunMinUnits   = 200.0   // u under which the gun can't drop a shell
-	baseGunReload     = 8 * 60  // ticks between two shells at level 2
-	baseGunReloadFast = 5 * 60  // and at level 3
-	baseShellDamage   = 50.0
+	cityArtilleryReload = 6 * 60
+	cityArtilleryDamage = 45.0
 )
 
-// EnemyKind names a rival vehicle.
+// EnemyKind names a rival vehicle or city structure.
 type EnemyKind string
 
 const (
-	EnemyScout   EnemyKind = "scout"   // alone, under a small repulsor of its own
-	EnemyCrawler EnemyKind = "crawler" // carries the party's repulsor
-	EnemyRaider  EnemyKind = "raider"  // a tanker: it lives under the crawler's bubble
-	EnemyBase    EnemyKind = "base"    // a crawler dug in: it doesn't move, and it grows a gun
+	EnemyScout        EnemyKind = "scout"   // alone, under a small repulsor of its own
+	EnemyCrawler      EnemyKind = "crawler" // carries the party's repulsor
+	EnemyRaider       EnemyKind = "raider"  // a tanker: it lives under the crawler's bubble
+	EnemyBase         EnemyKind = "base"
+	EnemyArtillery    EnemyKind = "enemyartillery"
+	EnemyCityCrawler  EnemyKind = "citycrawler"
+	EnemyCityRepulsor EnemyKind = "cityrepulsor"
+	EnemyCityOilworks EnemyKind = "cityoilworks"
+	EnemyCityMine     EnemyKind = "citymine"
+	EnemyCityFactory  EnemyKind = "cityfactory"
 )
 
-// enemySpec is what a kind of vehicle is made of.
+// enemySpec is a rival entity's physical and combat properties.
 type enemySpec struct {
 	speed     float64 // u/s
 	health    float64
@@ -87,7 +79,17 @@ func enemySpecOf(kind EnemyKind) enemySpec {
 	case EnemyCrawler:
 		return enemySpec{12, 300, 120, 0, 10, 25, 8, 50, 130}
 	case EnemyBase:
-		return enemySpec{0, 900, 170, 0, 60, 150, 8, 50, 130}
+		return enemySpec{0, 1200, 0, 0, 60, 150, 0, 0, 0}
+	case EnemyArtillery:
+		return enemySpec{12, 240, 170, 0, 10, 35, 0, 0, 0}
+	case EnemyCityCrawler:
+		return enemySpec{0, 300, 0, 0, 10, 25, 0, 0, 0}
+	case EnemyCityRepulsor:
+		return enemySpec{0, 300, 170, 0, 0, 0, 0, 0, 0}
+	case EnemyCityOilworks, EnemyCityMine:
+		return enemySpec{0, 200, 0, 0, 0, 0, 0, 0, 0}
+	case EnemyCityFactory:
+		return enemySpec{0, 250, 0, 0, 0, 0, 0, 0, 0}
 	}
 	return enemySpec{20, 100, 0, 60, 4, 8, 5, 40, 110}
 }
@@ -104,6 +106,7 @@ type Enemy struct {
 	Fogged int64   // ticks it has stood in the fog with no repulsor over it
 	Reload int64   // ticks until its gun's next shot (sim_squads.go)
 	Aim    int64   // the trooper its last shot went to
+	City   int64   // owning city for its static structures
 }
 
 // PartyStage is where a visit has got to.
@@ -114,7 +117,7 @@ const (
 	StageCamp     PartyStage = "camp"     // getting ready
 	StageRaid     PartyStage = "raid"     // driving to a tank and siphoning it
 	StageLeave    PartyStage = "leave"    // driving back out
-	StageSettled  PartyStage = "settled"  // dug in around its base, for good
+	StageSettled  PartyStage = "settled"
 )
 
 // Party is one visit: the vehicles that came together.
@@ -125,17 +128,18 @@ type Party struct {
 	CampX, CampY   float64
 	Wait           int64 // ticks of camp left
 	Siphon         int64 // ticks of siphoning left before it gives up
-	Settles        bool  // it comes to stay: at its camp the crawler digs in
-	Level          int64 // settled: what the base has grown to
-	Grow           int64 // settled: ticks until the next level
+	City           int64 // city that produced this sortie; 0 for introduction visits
+	Artillery      bool  // sortie includes mobile artillery
+	CityArrives    bool  // this crawler is founding a city, not a raid
 }
 
 // Raids is the rivals' clock: how many visits have ended, which is how
 // they grow, and the tick the next one comes at.
 type Raids struct {
-	Visits int64
-	NextAt int64
-	Settle bool // the dev tools asked for the next visit to come and stay
+	Visits       int64
+	NextAt       int64
+	FirstBearing float64
+	BearingKnown bool
 }
 
 // Mark is what a scout paints on the ground before it leaves.
@@ -149,24 +153,28 @@ type Mark struct {
 type ReportKind string
 
 const (
-	ReportScout     ReportKind = "scout"     // a scout siphoned and left its mark
-	ReportCamp      ReportKind = "camp"      // a party camped
-	ReportRaid      ReportKind = "raid"      // a camped party moves in
-	ReportLeft      ReportKind = "left"      // a party got away
-	ReportDestroyed ReportKind = "destroyed" // a party was lost to the last vehicle
-	ReportSettled   ReportKind = "settled"   // a party dug in: a base stands in the region
-	ReportGun       ReportKind = "gun"       // a base grew its gun, or a faster one
-	ReportBaseDown  ReportKind = "basedown"  // a base fell
-	ReportRazed     ReportKind = "razed"     // a shell brought a building down
+	ReportScout        ReportKind = "scout"     // a scout siphoned and left its mark
+	ReportCamp         ReportKind = "camp"      // a party camped
+	ReportRaid         ReportKind = "raid"      // a camped party moves in
+	ReportLeft         ReportKind = "left"      // a party got away
+	ReportDestroyed    ReportKind = "destroyed" // a party was lost to the last vehicle
+	ReportSettled      ReportKind = "settled"   // a party dug in: a base stands in the region
+	ReportGun          ReportKind = "gun"
+	ReportBaseDown     ReportKind = "basedown" // a base fell
+	ReportRazed        ReportKind = "razed"    // a shell brought a building down
+	ReportSortie       ReportKind = "sortie"
+	ReportCityIncoming ReportKind = "cityincoming"
+	ReportCityBuilding ReportKind = "citybuilding"
 )
 
 // Report is one line of news, written by the simulation and worded by
 // the view.
 type Report struct {
-	Tick int64
-	Kind ReportKind
-	Oil  float64 // liters stolen, where the kind counts them
-	X, Y float64 // where it happened, in units
+	Tick  int64
+	Kind  ReportKind
+	Oil   float64 // liters stolen, where the kind counts them
+	Stage int64   // city building index, for ReportCityBuilding
+	X, Y  float64 // where it happened, in units
 }
 
 // roll returns the state's next random number, from 0 to 1: gameplay
@@ -241,6 +249,7 @@ func partyMembers(s *State, party int64) []Enemy {
 // stepEnemies moves the rivals one tick forward: the clock that sends
 // them, each party's stage, and the fog's due.
 func stepEnemies(s *State) {
+	stepCities(s)
 	stepRaids(s)
 	for _, id := range sortedPartyIDs(s) {
 		stepParty(s, s.Parties[id])
@@ -253,7 +262,8 @@ func stepEnemies(s *State) {
 // move at a time: the clock for the next starts when this one ends. A
 // settled one is no visit any more, and the raids go on around it.
 func stepRaids(s *State) {
-	for _, p := range s.Parties {
+	for _, id := range sortedPartyIDs(s) {
+		p := s.Parties[id]
 		if p.Stage != StageSettled {
 			return
 		}
@@ -263,13 +273,27 @@ func stepRaids(s *State) {
 		s.Raids.NextAt = s.Ticks + raidFirstScoutTicks
 	}
 	if s.Ticks >= s.Raids.NextAt {
+		if s.Raids.Visits >= 2 {
+			if len(s.Cities) >= cityLimit {
+				s.Raids.NextAt = s.Ticks + int64(cityIntervalCycles)*fogCycleTicks
+				return
+			}
+			if s.spawnCityVisit() {
+				s.Raids.NextAt = s.Ticks +
+					int64(cityIntervalCycles)*fogCycleTicks
+			} else {
+				s.Raids.NextAt = s.Ticks + fogCycleTicks
+			}
+			return
+		}
 		s.spawnVisit()
 	}
 }
 
 // settled reports whether a base stands in the region.
 func settled(s *State) bool {
-	for _, p := range s.Parties {
+	for _, id := range sortedPartyIDs(s) {
+		p := s.Parties[id]
 		if p.Stage == StageSettled {
 			return true
 		}
@@ -305,7 +329,14 @@ func (s *State) spawnVisit() {
 	if s.Parties == nil {
 		s.Parties = map[int64]Party{}
 	}
-	angle := s.roll() * 2 * math.Pi
+	angle := s.Raids.FirstBearing
+	if s.Raids.Visits == 0 || !s.Raids.BearingKnown {
+		angle = s.roll() * 2 * math.Pi
+		if s.Raids.Visits == 0 {
+			s.Raids.FirstBearing = angle
+			s.Raids.BearingKnown = true
+		}
+	}
 	cx, cy := tileCenterUnits(coreCol, coreRow)
 	at := func(tiles float64) (x, y float64) {
 		most := float64(regionCols*unitsPerTile) - 1
@@ -319,8 +350,6 @@ func (s *State) spawnVisit() {
 	kinds := []EnemyKind{EnemyScout}
 	if visit := s.Raids.Visits; visit > 0 {
 		p.Stage, p.Wait = StageApproach, prepareTicks(visit)
-		p.Settles = s.Raids.Settle || (visit >= settleFromVisit && !settled(s))
-		s.Raids.Settle = false
 		kinds = []EnemyKind{EnemyCrawler}
 		for i := 0; i < raidersOf(visit); i++ {
 			kinds = append(kinds, EnemyRaider)
@@ -362,7 +391,9 @@ func stepParty(s *State, p Party) {
 	}
 	lead := members[0]
 	// With its repulsor gone a party has nothing left to do but run.
-	if enemySpecOf(lead.Kind).bubble <= 0 {
+	if enemySpecOf(lead.Kind).bubble <= 0 &&
+		(p.City == 0 ||
+			(p.Stage == StageSettled && lead.Kind != EnemyBase)) {
 		p.Stage = StageLeave
 	}
 	switch p.Stage {
@@ -370,28 +401,25 @@ func stepParty(s *State, p Party) {
 		if !s.driveParty(members, p.CampX, p.CampY) {
 			break
 		}
-		if !p.Settles {
-			p.Stage = StageCamp
-			s.report(ReportCamp, 0, p.CampX, p.CampY)
-			break
+		if p.CityArrives {
+			crawler := s.Enemies[lead.ID]
+			coreX, coreY := tileCenterUnits(coreCol, coreRow)
+			angle := math.Atan2(crawler.Y-coreY, crawler.X-coreX)
+			cityID := s.foundCityFromCrawler(crawler, angle)
+			city := s.Cities[cityID]
+			crawler.Kind = EnemyCityCrawler
+			crawler.Party, crawler.City = 0, cityID
+			crawler.X, crawler.Y = cityCrawlerPosition(city)
+			crawler.Health = enemySpecOf(EnemyCityCrawler).health
+			s.Enemies[crawler.ID] = crawler
+			delete(s.Parties, p.ID)
+			s.report(ReportSettled, 0, city.X, city.Y)
+			s.Raids.NextAt = s.Ticks + int64(cityIntervalCycles)*fogCycleTicks
+			return
 		}
-		// The crawler digs in: the same vehicle, a base from now on.
-		base := s.Enemies[lead.ID]
-		base.Kind, base.Health = EnemyBase, enemySpecOf(EnemyBase).health
-		s.Enemies[base.ID] = base
-		p.Stage, p.Level, p.Grow = StageSettled, 1, baseGrowTicks
-		s.report(ReportSettled, 0, p.CampX, p.CampY)
-		s.startCalm()
+		p.Stage = StageCamp
+		s.report(ReportCamp, 0, p.CampX, p.CampY)
 	case StageSettled:
-		if p.Level < baseMaxLevel {
-			p.Grow--
-			if p.Grow <= 0 {
-				p.Level++
-				p.Grow = baseGrowTicks
-				s.report(ReportGun, float64(p.Level), lead.X, lead.Y)
-			}
-		}
-		s.fireBaseGun(p, lead)
 	case StageCamp:
 		p.Wait--
 		if p.Wait <= 0 {
@@ -427,8 +455,17 @@ func (s *State) endParty(p Party, kind ReportKind, oil, x, y float64) {
 	if s.Raids.Visits > 0 || kind == ReportDestroyed {
 		s.report(kind, oil, x, y)
 	}
-	if p.Level == 0 {
-		s.startCalm()
+	if p.City != 0 {
+		if city, ok := s.Cities[p.City]; ok {
+			city.NextSortie = s.Ticks + citySortieTicks
+			s.Cities[city.ID] = city
+		}
+		return
+	}
+	s.startCalm()
+	if s.Raids.Visits >= 2 {
+		s.Raids.NextAt = s.Ticks +
+			int64(cityFirstDelayCycles)*fogCycleTicks
 	}
 }
 
@@ -438,49 +475,34 @@ func (s *State) startCalm() {
 	s.Raids.NextAt = s.Ticks + calmTicks(s.Raids.Visits)
 }
 
-// fireBaseGun is a base's artillery, from level 2 on: it shells the
-// nearest building of the colony in its reach - never the core, which
-// nothing hurts - or, with none, the nearest trooper; nothing nearer
-// than its minimum.
-func (s *State) fireBaseGun(p Party, base Enemy) {
-	if p.Level < 2 {
+func (s *State) fireCityArtillery(e Enemy) {
+	if s.Parties[e.Party].Stage != StageRaid {
 		return
 	}
-	if base.Reload > 0 {
-		base.Reload--
-		s.Enemies[base.ID] = base
+	if e.Reload > 0 {
+		e.Reload--
+		s.Enemies[e.ID] = e
 		return
 	}
-	inReach := func(x, y float64) (float64, bool) {
-		gap := math.Hypot(x-base.X, y-base.Y)
-		return gap, gap >= baseGunMinUnits && gap <= baseGunRangeUnits
-	}
-	tx, ty, found, bestGap := 0.0, 0.0, false, math.Inf(1)
+	targetX, targetY, found, nearest := 0.0, 0.0, false, math.Inf(1)
 	for _, id := range sortedBuildingIDs(s) {
-		x, y := cellCenterUnits(s.Buildings[id].Col, s.Buildings[id].Row)
-		if gap, ok := inReach(x, y); ok && gap < bestGap {
-			tx, ty, found, bestGap = x, y, true, gap
+		b := s.Buildings[id]
+		x, y := cellCenterUnits(b.Col, b.Row)
+		gap := math.Hypot(x-e.X, y-e.Y)
+		if gap < 200 || gap > artilleryRangeUnits || gap >= nearest {
+			continue
 		}
-	}
-	if !found {
-		for _, id := range sortedRobotIDs(s) {
-			r := s.Robots[id]
-			if gap, ok := inReach(r.X, r.Y); ok && r.Kind == RobotCombat && gap < bestGap {
-				tx, ty, found, bestGap = r.X, r.Y, true, gap
-			}
-		}
+		targetX, targetY, nearest, found = x, y, gap, true
 	}
 	if !found {
 		return
 	}
-	base.Reload = baseGunReload
-	if p.Level >= baseMaxLevel {
-		base.Reload = baseGunReloadFast
-	}
-	s.Enemies[base.ID] = base
+	e.Reload = cityArtilleryReload
+	s.Enemies[e.ID] = e
 	s.fire(Shot{
-		Kind: ShotShell, FromX: base.X, FromY: base.Y, ToX: tx, ToY: ty,
-		Damage: baseShellDamage, Rival: true,
+		Kind: ShotShell, FromX: e.X, FromY: e.Y,
+		ToX: targetX, ToY: targetY, Damage: cityArtilleryDamage,
+		Rival: true,
 	})
 }
 
@@ -578,14 +600,24 @@ func repulsed(s *State, e Enemy) bool {
 			return true
 		}
 	}
+	if e.City != 0 {
+		city, ok := s.Cities[e.City]
+		if ok && cityHasRepulsor(s, city) &&
+			math.Hypot(city.X-e.X, city.Y-e.Y) <= 170 {
+			return true
+		}
+	}
 	return false
 }
 
-// stepExposure is the fog's due: a vehicle in the mist with no repulsor
-// of its party over it lasts enemyFogTicks, and then it is digested.
+// stepExposure is the fog's due: a mobile rival in the mist without a
+// nearby repulsor lasts enemyFogTicks, and then is digested.
 func stepExposure(s *State) {
 	for _, id := range sortedEnemyIDs(s) {
 		e := s.Enemies[id]
+		if e.City != 0 && (e.Party == 0 || e.Kind == EnemyBase) {
+			continue
+		}
 		if fogAt(s, e.X, e.Y) <= 0 || repulsed(s, e) {
 			e.Fogged = 0
 			s.Enemies[id] = e
@@ -607,8 +639,33 @@ func (s *State) killEnemy(id int64) {
 		return
 	}
 	delete(s.Enemies, id)
+	if e.City != 0 && (e.Party == 0 || e.Kind == EnemyBase) {
+		city, belongs := s.Cities[e.City]
+		if belongs {
+			if e.Kind == EnemyBase ||
+				(e.Kind == EnemyCityCrawler &&
+					!cityHasBuilding(s, city, EnemyBase)) {
+				for _, buildingID := range city.BuildingIDs {
+					delete(s.Enemies, buildingID)
+				}
+				delete(s.Cities, city.ID)
+				s.report(ReportBaseDown, 0, e.X, e.Y)
+			} else {
+				for i, buildingID := range city.BuildingIDs {
+					if buildingID == id {
+						city.BuildingIDs = append(city.BuildingIDs[:i],
+							city.BuildingIDs[i+1:]...)
+						break
+					}
+				}
+				s.Cities[city.ID] = city
+			}
+		}
+	}
 	if e.Kind == EnemyBase {
-		s.report(ReportBaseDown, 0, e.X, e.Y)
+		if e.City == 0 {
+			s.report(ReportBaseDown, 0, e.X, e.Y)
+		}
 	}
 	spec := enemySpecOf(e.Kind)
 	col := int(clamp64(math.Floor(e.X/buildingCell), 0, regionCellCols-1))

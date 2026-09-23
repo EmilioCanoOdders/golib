@@ -146,7 +146,10 @@ func (a OrderSquad) apply(s *State) {
 	most := float64(regionCols*unitsPerTile) - 1
 	sq.X, sq.Y = clamp64(a.X, 1, most), clamp64(a.Y, 1, most)
 	if e, ok := s.Enemies[a.Enemy]; ok {
-		sq = Squad{Home: a.Squad, Order: OrderAttack, Party: e.Party, Focus: e.ID}
+		sq = Squad{
+			Home: a.Squad, Order: OrderAttack,
+			Party: e.Party, Focus: e.ID,
+		}
 	}
 	s.Squads[a.Squad] = sq
 }
@@ -307,30 +310,22 @@ func (a DevResetWorld) apply(s *State) {
 	*s = *newGameOn(a.Seed)
 }
 
-// DevNextVisit brings the rivals' next visit in at once, to stay when
-// Settle asks for it. It does nothing while a party is on the move in
-// the region: they come one at a time.
-type DevNextVisit struct {
-	Settle bool
-}
+// DevNextVisit brings the next scheduled arrival in at once. It does
+// nothing while a party is moving through the region.
+type DevNextVisit struct{}
 
-func (a DevNextVisit) apply(s *State) {
-	for _, p := range s.Parties {
+func (DevNextVisit) apply(s *State) {
+	for _, id := range sortedPartyIDs(s) {
+		p := s.Parties[id]
 		if p.Stage != StageSettled {
 			return
 		}
 	}
 	s.Raids.NextAt = s.Ticks + 1
-	if a.Settle {
-		s.Raids.Settle = true
-		if s.Raids.Visits == 0 {
-			s.Raids.Visits = 1 // the scout never stays
-		}
-	}
 }
 
 // DevHurryRivals ends the wait of every party that is waiting: a camped
-// one moves in on the next tick, and a base grows its next level.
+// one moves in on the next tick.
 type DevHurryRivals struct{}
 
 func (DevHurryRivals) apply(s *State) {
@@ -339,10 +334,63 @@ func (DevHurryRivals) apply(s *State) {
 		switch p.Stage {
 		case StageCamp:
 			p.Wait = 0
-		case StageSettled:
-			p.Grow = 0
 		}
 		s.Parties[id] = p
+	}
+}
+
+type DevNewCity struct{}
+
+func (DevNewCity) apply(s *State) {
+	if len(s.Cities) >= cityLimit {
+		return
+	}
+	x, y, angle, ok := s.nextCitySpot()
+	if !ok {
+		return
+	}
+	s.foundCity(x, y, angle)
+}
+
+type DevFinishCityBuilding struct{}
+
+func (DevFinishCityBuilding) apply(s *State) {
+	for _, id := range sortedCityIDs(s) {
+		city := s.Cities[id]
+		if city.Stage < len(cityBuildOrder) {
+			s.finishCityBuilding(&city)
+			s.Cities[id] = city
+			return
+		}
+	}
+}
+
+type DevFinishCityBattalion struct{}
+
+func (DevFinishCityBattalion) apply(s *State) {
+	for _, id := range sortedCityIDs(s) {
+		city := s.Cities[id]
+		before := len(s.Parties)
+		s.finishCitySortie(&city)
+		s.Cities[id] = city
+		if len(s.Parties) > before {
+			return
+		}
+	}
+}
+
+type DevSendCityBattalion struct{}
+
+func (DevSendCityBattalion) apply(s *State) {
+	for _, cityID := range sortedCityIDs(s) {
+		for _, partyID := range sortedPartyIDs(s) {
+			p := s.Parties[partyID]
+			if p.City == cityID && p.Stage == StageCamp {
+				p.Wait = 0
+				s.Parties[partyID] = p
+				return
+			}
+		}
 	}
 }
 

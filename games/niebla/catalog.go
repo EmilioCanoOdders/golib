@@ -279,10 +279,16 @@ var catalog = map[ThingType]ThingInfo{
 			}
 		},
 	},
-	TypeBase:    {Name: "Rival base", Color: enemyLampColor, Primary: true, Details: enemyDetails},
-	TypeScout:   {Name: "Rival scout", Color: enemyLampColor, Details: enemyDetails},
-	TypeCrawler: {Name: "Rival crawler", Color: enemyLampColor, Details: enemyDetails},
-	TypeRaider:  {Name: "Rival raider", Color: enemyLampColor, Details: enemyDetails},
+	TypeBase:           {Name: "Rival Nexus", Color: enemyLampColor, Primary: true, Details: enemyDetails},
+	TypeCityRepulsor:   {Name: "Rival antimist post", Color: panelDimColor, Primary: true, Details: enemyDetails},
+	TypeCityOilworks:   {Name: "Rival oil extractor", Color: panelDimColor, Primary: true, Details: enemyDetails},
+	TypeCityMine:       {Name: "Rival mineral mine", Color: panelDimColor, Primary: true, Details: enemyDetails},
+	TypeCityFactory:    {Name: "Rival war factory", Color: panelDimColor, Primary: true, Details: enemyDetails},
+	TypeCityCrawler:    {Name: "Rival city rig", Color: panelDimColor, Primary: true, Details: enemyDetails},
+	TypeEnemyArtillery: {Name: "Rival mobile artillery", Color: enemyLampColor, Details: enemyDetails},
+	TypeScout:          {Name: "Rival scout", Color: enemyLampColor, Details: enemyDetails},
+	TypeCrawler:        {Name: "Rival crawler", Color: enemyLampColor, Details: enemyDetails},
+	TypeRaider:         {Name: "Rival raider", Color: enemyLampColor, Details: enemyDetails},
 	TypeSite: {
 		Name:    "Building site",
 		Color:   siteColor,
@@ -330,20 +336,35 @@ func enemyDetails(s *State, thing Thing) []Detail {
 		details = append(details, Detail{"repulsor", "none: it lives under its crawler's"})
 	}
 	if e.Kind == EnemyBase {
-		p := s.Parties[e.Party]
-		gun := "none yet"
-		if p.Level >= 2 {
-			gun = fmt.Sprintf("shells buildings, %s to %s",
-				si(baseGunMinUnits, "m"), si(baseGunRangeUnits, "m"))
-		}
 		details = append(details,
-			Detail{"level", fmt.Sprintf("%d of %d", p.Level, baseMaxLevel)},
-			Detail{"gun", gun})
-		if p.Level < baseMaxLevel {
-			left := (p.Grow + 59) / 60
-			details = append(details, Detail{
-				"grows in", fmt.Sprintf("%d:%02d", left/60, left%60),
-			})
+			Detail{"city", "produces mobile forces"},
+			Detail{"static weapons", "none"})
+	}
+	if e.City != 0 {
+		if city, ok := s.Cities[e.City]; ok {
+			details = append(details,
+				Detail{"city oil", si(math.Round(city.Oil), "L")},
+				Detail{"city mineral", si(math.Round(city.Lilac), "kg")},
+			)
+			if city.Stage < len(cityBuildOrder) {
+				left := (city.Work + 59) / 60
+				details = append(details, Detail{
+					"building", fmt.Sprintf("%s, %d:%02d",
+						cityBuildingName(cityBuildOrder[city.Stage]),
+						left/60, left%60),
+				})
+			} else {
+				left := city.NextSortie - s.Ticks
+				if left < 0 {
+					left = 0
+				}
+				details = append(details,
+					Detail{"oil reserve", si(math.Round(city.OilDeposit), "L")},
+					Detail{"mineral reserve", si(math.Round(city.LilacDeposit), "kg")},
+					Detail{"forces sent", fmt.Sprintf("%d", city.Sorties)},
+					Detail{"next force", fmt.Sprintf("%d:%02d", left/3600, left/60%60)},
+				)
+			}
 		}
 	}
 	if spec.oilCap > 0 {

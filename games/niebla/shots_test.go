@@ -5,21 +5,34 @@ import (
 	"testing"
 )
 
-// settledBase brings a party in to stay and runs until its crawler has
-// dug in, and returns the base.
-func settledBase(t *testing.T, s *State) Enemy {
+// settledCityNexus builds a city for shot tests and returns its Nexus.
+func settledCityNexus(t *testing.T, s *State) Enemy {
 	t.Helper()
-	Apply(s, DevNextVisit{Settle: true})
-	if !tickUntil(s, 60*600, func() bool { return settled(s) }) {
-		t.Fatalf("the party never dug in")
+	cityID := s.foundCity(3300, 3000, 0.4)
+	city := s.Cities[cityID]
+	for range cityBuildOrder {
+		s.finishCityBuilding(&city)
 	}
-	for _, id := range sortedEnemyIDs(s) {
-		if e := s.Enemies[id]; e.Kind == EnemyBase {
-			return e
+	s.Cities[cityID] = city
+	partyID := s.NextID
+	s.NextID++
+	party := Party{ID: partyID, Stage: StageSettled, City: cityID}
+	s.Parties[partyID] = party
+	city = s.Cities[cityID]
+	var core Enemy
+	for _, id := range city.BuildingIDs {
+		e := s.Enemies[id]
+		if e.Kind != EnemyBase {
+			continue
 		}
+		e.Party = partyID
+		s.Enemies[id] = e
+		core = e
 	}
-	t.Fatalf("a settled party has no base")
-	return Enemy{}
+	if core.ID == 0 {
+		t.Fatal("the city has no core")
+	}
+	return core
 }
 
 // cellNear returns the cell a spot of the region falls on.
@@ -60,50 +73,22 @@ func TestABulletFliesBeforeItHurts(t *testing.T) {
 	}
 }
 
-func TestAVisitThatSettlesDigsInGrowsAGunAndShellsABuildingDown(t *testing.T) {
+func TestSettledCityDoesNotFireByItself(t *testing.T) {
 	s := newGame()
-	delete(s.Robots, 1) // nobody mends
-	delete(s.Robots, 2)
-	visits := s.Raids.Visits
-	base := settledBase(t, s)
-	if lastReport(s).Kind != ReportSettled || base.Health != enemySpecOf(EnemyBase).health {
-		t.Errorf("dug in, the report is %q and the base has %v health",
-			lastReport(s).Kind, base.Health)
+	core := settledCityNexus(t, s)
+	if core.Health != enemySpecOf(EnemyBase).health {
+		t.Errorf("the city Nexus has %v health", core.Health)
 	}
-	if s.Raids.Visits <= visits || s.Raids.NextAt <= s.Ticks {
-		t.Errorf("a base stops the raids' clock: %+v", s.Raids)
-	}
-	x, y := towardCore(base.X, base.Y, 800)
+	city := s.Cities[s.Parties[core.Party].City]
+	city.Stage = len(cityBuildOrder)
+	city.BuildingIDs = []int64{core.ID}
+	s.Cities[city.ID] = city
+	x, y := towardCore(core.X, core.Y, 800)
 	col, row := cellNear(x, y)
 	silo := raised(t, s, BuildingSilo, col, row)
-	runTicks(s, baseGrowTicks-1)
-	if len(s.Shots) != 0 || s.Parties[base.Party].Level != 1 {
-		t.Fatalf("a level 1 base already shoots, or grew early")
-	}
-	runTicks(s, 1)
-	if s.Parties[base.Party].Level != 2 || lastReport(s).Kind != ReportGun {
-		t.Fatalf("after its time the base is level %d and the report %q",
-			s.Parties[base.Party].Level, lastReport(s).Kind)
-	}
-	if !tickUntil(s, 60*60, func() bool { return s.Buildings[silo.ID].Damage > 0 }) {
-		t.Fatalf("the base's gun never hit the silo 800 m away")
-	}
-	if got := s.Buildings[silo.ID].Damage; got != baseShellDamage {
-		t.Errorf("a shell did %v damage, want %v", got, baseShellDamage)
-	}
-	if !tickUntil(s, 60*300, func() bool { _, stands := s.Buildings[silo.ID]; return !stands }) {
-		t.Fatalf("the silo never fell")
-	}
-	if lastReport(s).Kind != ReportRazed {
-		t.Errorf("the report is %q, want the silo razed", lastReport(s).Kind)
-	}
-	p, littered := pileAt(s, col, row)
-	if !littered || p.Lilac != siloCostLilac*wreckRefund {
-		t.Errorf("the wreck left %+v, want %v kg", p, siloCostLilac*wreckRefund)
-	}
-	// The core takes nothing.
-	if s.Stock.Oil != startingStockOil {
-		t.Errorf("the core's tank changed under the shells")
+	runTicks(s, cityBuildTicks+60*60)
+	if len(s.Shots) != 0 || s.Buildings[silo.ID].Damage != 0 {
+		t.Fatalf("the city fired without producing a mobile artillery unit")
 	}
 }
 
@@ -121,21 +106,29 @@ func TestRobotsMendADamagedBuilding(t *testing.T) {
 	}
 }
 
-func TestArtilleryShellsWhatTheColonySeesAndABaseFalls(t *testing.T) {
+func TestArtilleryShellsWhatTheColonySeesAndCityNexusFalls(t *testing.T) {
 	s := newGame()
 	s.Stock = Stock{Oil: 1000, Lilac: 2500}
 	delete(s.Robots, 1)
 	delete(s.Robots, 2)
-	base := settledBase(t, s)
-	x, y := towardCore(base.X, base.Y, 1000)
+	core := settledCityNexus(t, s)
+	city := s.Cities[s.Parties[core.Party].City]
+	for _, id := range city.BuildingIDs {
+		if id != core.ID {
+			delete(s.Enemies, id)
+		}
+	}
+	city.BuildingIDs = []int64{core.ID}
+	s.Cities[city.ID] = city
+	x, y := towardCore(core.X, core.Y, 1000)
 	col, row := cellNear(x, y)
 	raised(t, s, BuildingArtillery, col, row)
 	runTicks(s, 60*20)
 	if len(s.Shots) != 0 || s.Stock.Lilac != 2500 {
-		t.Fatalf("the piece fired at a base nobody sees")
+		t.Fatalf("the piece fired at a Nexus nobody sees")
 	}
-	// A spotter within sight of the base, and the shells fly.
-	sx, sy := towardCore(base.X, base.Y, sightUnits*0.8)
+	// A spotter within sight of the Nexus, and the shells fly.
+	sx, sy := towardCore(core.X, core.Y, sightUnits*0.8)
 	s.spawnRobot(RobotCore, sx, sy)
 	spotter := s.NextID - 1
 	keep := func() {
@@ -152,31 +145,31 @@ func TestArtilleryShellsWhatTheColonySeesAndABaseFalls(t *testing.T) {
 	if !fired || s.Stock.Lilac != 2500-artilleryShellLilac {
 		t.Fatalf("with a spotter the piece fired %v and the lilac is %v", fired, s.Stock.Lilac)
 	}
-	health := s.Enemies[base.ID].Health
+	health := s.Enemies[core.ID].Health
 	flight := int(1000/(shellSpeed/60)) + 5
 	for i := 0; i < flight; i++ {
 		keep()
 		runTicks(s, 1)
 	}
-	if got := s.Enemies[base.ID].Health; got > health-artilleryShellDamage {
-		t.Errorf("after a shell's flight the base has %v health, had %v", got, health)
+	if got := s.Enemies[core.ID].Health; got > health-artilleryShellDamage {
+		t.Errorf("after a shell's flight the Nexus has %v health, had %v", got, health)
 	}
 	for i := 0; i < 60*400; i++ {
-		if _, stands := s.Enemies[base.ID]; !stands {
+		if _, stands := s.Enemies[core.ID]; !stands {
 			break
 		}
 		keep()
 		runTicks(s, 1)
 	}
-	if _, stands := s.Enemies[base.ID]; stands {
-		t.Fatalf("the artillery never brought the base down")
+	if _, stands := s.Enemies[core.ID]; stands {
+		t.Fatalf("the artillery never brought the Nexus down")
 	}
 	found := false
 	for _, r := range s.Reports {
 		found = found || r.Kind == ReportBaseDown
 	}
 	if !found {
-		t.Errorf("nobody reported the base's fall: %+v", s.Reports)
+		t.Errorf("nobody reported the city's fall: %+v", s.Reports)
 	}
 	if !tickUntil(s, 60*600, func() bool { return !settled(s) && len(s.Enemies) == 0 }) {
 		t.Errorf("the garrison never left: %d vehicles", len(s.Enemies))

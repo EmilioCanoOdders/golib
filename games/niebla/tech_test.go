@@ -123,15 +123,26 @@ func TestMobileUnitsWaitForTheFirstRaidToLeave(t *testing.T) {
 	}
 }
 
-func TestArtilleryWaitsForABase(t *testing.T) {
+func TestArtilleryWaitsForARivalFactory(t *testing.T) {
 	s := newGame()
 	if dropArrived(s, techArtilleryID) {
-		t.Fatal("artillery came to a region with no base")
+		t.Fatal("artillery came to a region with no rival city")
 	}
-	s.Parties[9] = Party{ID: 9, Stage: StageSettled}
-	stepTech(s) // the wiring is pinned by the clock test; this is the trigger
+	s.Cities[9] = City{ID: 9}
+	s.Enemies[10] = Enemy{ID: 10, Kind: EnemyBase, City: 9}
+	s.Cities[9] = City{ID: 9, Stage: 1, BuildingIDs: []int64{10}}
+	stepTech(s)
+	if dropArrived(s, techArtilleryID) {
+		t.Fatal("artillery came before the rival factory was built")
+	}
+	s.Enemies[11] = Enemy{ID: 11, Kind: EnemyCityFactory, City: 9}
+	city := s.Cities[9]
+	city.Stage = len(cityBuildOrder)
+	city.BuildingIDs = append(city.BuildingIDs, 11)
+	s.Cities[9] = city
+	stepTech(s)
 	if !dropArrived(s, techArtilleryID) || !kindUnlocked(s, BuildingArtillery) {
-		t.Fatal("a base settled and artillery never came")
+		t.Fatal("the rival factory completed but artillery never arrived")
 	}
 }
 

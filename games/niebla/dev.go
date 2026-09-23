@@ -22,15 +22,18 @@ const (
 	devStripX       = 16
 	devStripY       = 68
 
-	devSwellButton = 0
-	devRobotButton = 1
-	devResetButton = 2 // the same region, dealt again
-	devWorldButton = 3 // another region, from a seed of its own
-	devVisitButton = 4 // the rivals' next visit, now
-	devHurryButton = 5 // a camped party stops waiting; it sits under the visit's
-	devFastButton  = 6 // the game at devFastTicks a frame; under new world's
-	devBaseButton  = 7 // the rivals' next visit, now and to stay; under reset world's
-	devTechButton  = 8 // the next schematics of the ladder, now
+	devSwellButton           = 0
+	devRobotButton           = 1
+	devResetButton           = 2 // the same region, dealt again
+	devWorldButton           = 3 // another region, from a seed of its own
+	devVisitButton           = 4 // the rivals' next visit, now
+	devHurryButton           = 5 // a camped party stops waiting; it sits under the visit's
+	devFastButton            = 6 // the game at devFastTicks a frame; under new world's
+	devTechButton            = 7
+	devCityButton            = 8
+	devBuildCityButton       = 9
+	devFinishBattalionButton = 10
+	devSendBattalionButton   = 11
 
 	devFastTicks = 8 // ticks of simulation per update while fast forward is on
 )
@@ -61,20 +64,10 @@ func (d *devTools) ticksPerUpdate() int {
 }
 
 func devButtonBounds(index int) golib.Rectangle {
-	// The second row: each button under the one it goes with.
-	under := map[int]int{
-		devHurryButton: devVisitButton,
-		devFastButton:  devWorldButton,
-		devBaseButton:  devResetButton,
-	}
-	if above, second := under[index]; second {
-		bounds := devButtonBounds(above)
-		bounds.Y += devButtonHeight + 4
-		return bounds
-	}
+	const columns = 8
 	return golib.Rectangle{
-		X:      devStripX + float32(index)*(devButtonWidth+devButtonGap),
-		Y:      devStripY,
+		X:      devStripX + float32(index%columns)*(devButtonWidth+devButtonGap),
+		Y:      devStripY + float32(index/columns)*(devButtonHeight+4),
 		Width:  devButtonWidth,
 		Height: devButtonHeight,
 	}
@@ -128,8 +121,8 @@ func (d *devTools) update(s *playScene, input *golib.Input) bool {
 		Apply(s.state, DevNextVisit{})
 		return true
 	}
-	if devButtonBounds(devBaseButton).Contains(mx, my) {
-		Apply(s.state, DevNextVisit{Settle: true})
+	if devButtonBounds(devCityButton).Contains(mx, my) {
+		Apply(s.state, DevNewCity{})
 		return true
 	}
 	if devButtonBounds(devHurryButton).Contains(mx, my) {
@@ -142,6 +135,18 @@ func (d *devTools) update(s *playScene, input *golib.Input) bool {
 	}
 	if devButtonBounds(devTechButton).Contains(mx, my) {
 		Apply(s.state, DevNextTech{})
+		return true
+	}
+	if devButtonBounds(devBuildCityButton).Contains(mx, my) {
+		Apply(s.state, DevFinishCityBuilding{})
+		return true
+	}
+	if devButtonBounds(devFinishBattalionButton).Contains(mx, my) {
+		Apply(s.state, DevFinishCityBattalion{})
+		return true
+	}
+	if devButtonBounds(devSendBattalionButton).Contains(mx, my) {
+		Apply(s.state, DevSendCityBattalion{})
 		return true
 	}
 	if d.placing {
@@ -190,26 +195,32 @@ func (d *devTools) draw(s *playScene, screen *golib.Screen) {
 		robot = "placing: click ground"
 	}
 	labels := []string{
-		devSwellButton: swell,
-		devRobotButton: robot,
-		devResetButton: "reset world",
-		devWorldButton: "new world",
-		devVisitButton: "rivals: next visit",
-		devHurryButton: "rivals: stop waiting",
-		devBaseButton:  "rivals: a base",
-		devFastButton:  fmt.Sprintf("fast forward x%d", devFastTicks),
-		devTechButton:  "next schematics",
+		devSwellButton:           swell,
+		devRobotButton:           robot,
+		devResetButton:           "reset world",
+		devWorldButton:           "new world",
+		devVisitButton:           "rivals: next visit",
+		devHurryButton:           "rivals: stop waiting",
+		devCityButton:            "rivals: new city",
+		devFastButton:            fmt.Sprintf("fast forward x%d", devFastTicks),
+		devTechButton:            "next schematics",
+		devBuildCityButton:       "finish city build",
+		devFinishBattalionButton: "finish battalion",
+		devSendBattalionButton:   "send battalion",
 	}
 	lit := []bool{
-		devSwellButton: s.state.Fog.Held,
-		devRobotButton: d.placing,
-		devResetButton: false,
-		devWorldButton: false,
-		devVisitButton: len(s.state.Parties) > 0,
-		devHurryButton: false,
-		devBaseButton:  settled(s.state),
-		devFastButton:  d.fast,
-		devTechButton:  false,
+		devSwellButton:           s.state.Fog.Held,
+		devRobotButton:           d.placing,
+		devResetButton:           false,
+		devWorldButton:           false,
+		devVisitButton:           len(s.state.Parties) > 0,
+		devHurryButton:           false,
+		devCityButton:            len(s.state.Cities) >= cityLimit,
+		devFastButton:            d.fast,
+		devTechButton:            false,
+		devBuildCityButton:       false,
+		devFinishBattalionButton: false,
+		devSendBattalionButton:   false,
 	}
 	for i, label := range labels {
 		rect := devButtonBounds(i)
@@ -223,4 +234,9 @@ func (d *devTools) draw(s *playScene, screen *golib.Screen) {
 	}
 	screen.DrawText(fmt.Sprintf("dev   seed %d", s.state.Seed),
 		devTitle.X+devTitle.Width, devTitle.Y+10, 12, panelDimColor, uiText)
+	if cityIDs := sortedCityIDs(s.state); len(cityIDs) > 0 {
+		screen.DrawText(fmt.Sprintf("city %d (oldest)", cityIDs[0]),
+			devTitle.X+devTitle.Width+102, devTitle.Y+11,
+			10, panelDimColor, uiText)
+	}
 }

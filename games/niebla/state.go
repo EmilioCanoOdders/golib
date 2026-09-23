@@ -27,6 +27,7 @@ type State struct {
 	Fog        Fog                // the region's weather: the cycles and the swell
 	Enemies    map[int64]Enemy    // the rivals' vehicles, by ID (sim_enemies.go)
 	Parties    map[int64]Party    // the rivals' visits under way, by ID
+	Cities     map[int64]City     // settled rival cities and their production
 	Raids      Raids              // the rivals' clock: the visits that were, the next one
 	Marks      map[int64]Mark     // what the scouts painted on the ground, by ID
 	Reports    []Report           // the news the rivals made, oldest first
@@ -190,6 +191,7 @@ func newGameOn(seed int64) *State {
 		Pipes:     map[int64]Pipe{},
 		Enemies:   map[int64]Enemy{},
 		Parties:   map[int64]Party{},
+		Cities:    map[int64]City{},
 		Marks:     map[int64]Mark{},
 		Squads:    map[int64]Squad{},
 		Shots:     map[int64]Shot{},
@@ -221,6 +223,7 @@ func (s *State) enterRegion() {
 			s.Drain[depositKey(d)] = depositFull(d)
 		}
 	}
+	s.migrateSettledCities()
 }
 
 // spawnRobot adds one robot to the colony at a spot, with the tank full
