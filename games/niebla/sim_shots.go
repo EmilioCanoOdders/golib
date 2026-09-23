@@ -61,6 +61,7 @@ type Shot struct {
 	ToX, ToY     float64
 	Enemy        int64 // bullets: the rival vehicle it flies to
 	Robot        int64 // bullets: the trooper it flies to
+	Building     int64 // bullets: the guard post it flies to
 	Damage       float64
 	Rival        bool // the rivals fired it: a shell's blast hurts the other side
 }
@@ -100,6 +101,9 @@ func stepShots(s *State) {
 			if r, ok := s.Robots[shot.Robot]; ok {
 				shot.ToX, shot.ToY = r.X, r.Y
 			}
+			if b, ok := s.Buildings[shot.Building]; ok {
+				shot.ToX, shot.ToY = cellCenterUnits(b.Col, b.Row)
+			}
 		}
 		dx, dy := shot.ToX-shot.X, shot.ToY-shot.Y
 		gap := math.Hypot(dx, dy)
@@ -121,6 +125,7 @@ func (s *State) land(shot Shot) {
 	if shot.Kind == ShotBullet {
 		s.hurtEnemy(shot.Enemy, shot.Damage)
 		s.hurtTrooper(shot.Robot, shot.Damage)
+		s.hurtBuilding(shot.Building, shot.Damage)
 		return
 	}
 	near := func(x, y float64) bool {

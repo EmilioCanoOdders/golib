@@ -113,6 +113,8 @@ also grows a base its next level at once, and `rivals: a base`, under
 | `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, the blobs of oil by the state's tick) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
 | `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset world, new world, the rivals' next visit, next schematics —; view only, acting through the `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
 | `tech.go` | The schematics on the screen: the badge over the core - breathing halos around the drop's mark - while an unopened drop waits, the callout its click opens (`techWords`, `techWrap`), and the words (`techWords`) and ink (`techInk`) of each drop; view, never state |
+| `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and crystal pings, gunfire and shell impacts, and interface clicks; world emitters fade with their distance in meters to the camera's ground center, whose altitude rises with zoom-out. Individual shell whistles track their own positions through the descending half of flight. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |
+| `tools/soundgen/` | The maker of the wind, oil and mineral ambience loops: stdlib Go renders the noise beds as WAV for conversion to OGG, and the mineral ring as a seamless WAV with irregular pitch drift of at most one semitone; run it only when a loop changes |
 | `draw.go` | The region painter: the core's monolith, buildings with their damage bars, robots and troopers, the bubbles' rings, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `markup_test.go` | Markup parser and tooltip layout/button tests |
@@ -442,8 +444,10 @@ the nearest, each shot paid from its own tank. Orders are
 and `stepSquads` drops an attack whose party is gone and passes a fallen
 focus on to the party's leader. `stepEnemyGuns` is the rivals' side:
 vehicles whose `enemySpec` has a gun fire a bullet at the nearest
-trooper in reach; `hurtTrooper` (`sim_shots.go`) is where a trooper
-falls and leaves its pile. The robots' loop in `stepSim` skips a robot
+trooper or guard post in reach; `hurtTrooper` (`sim_shots.go`) is where a
+trooper falls and leaves its pile, and a bullet aimed at a building
+(`Shot.Building`) lands in `hurtBuilding` like a shell's blast does. The
+robots' loop in `stepSim` skips a robot
 that fell earlier in the same tick.
 
 In the play scene `ordering` holds the war factory whose squad the

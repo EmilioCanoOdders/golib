@@ -179,6 +179,7 @@ func (s *playScene) pickRadial(mx, my float32) {
 		}
 		s.radialGroup = item.group
 		s.radialLevel = 1
+		s.au.ui(1)
 		return
 	}
 	item, hit := radialLeafHover(radialLeafLayout(s), mx, my)
@@ -189,6 +190,7 @@ func (s *playScene) pickRadial(mx, my float32) {
 	Apply(s.state, MarkBuilding{
 		Kind: item.kind, Col: s.radialCol, Row: s.radialRow,
 	})
+	s.au.ui(0.95)
 	s.closeRadial()
 }
 
@@ -197,6 +199,7 @@ func (s *playScene) openRadial(col, row int) {
 	s.radial = true
 	s.radialLevel = 0
 	s.radialCol, s.radialRow = col, row
+	s.au.ui(1.05)
 }
 
 // closeRadial puts the build menu away.

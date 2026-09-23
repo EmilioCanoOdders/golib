@@ -8,8 +8,8 @@ import "math"
 // rival party, a vehicle of it first; nobody places a trooper by hand.
 // A trooper shoots whatever rival comes in its reach, whatever it is
 // doing, and pays each shot out of its own tank. The rivals' guns shoot
-// back, at troopers and at nothing else; their shells are another matter
-// (sim_shots.go).
+// back, at troopers and at guard posts and at nothing else; their shells
+// are another matter (sim_shots.go).
 
 // Tuning: the squads' numbers, with units in the name.
 const (
@@ -172,7 +172,8 @@ func (r *Robot) shoot(s *State) {
 }
 
 // stepEnemyGuns is the rivals shooting back: a vehicle with a gun fires
-// at the nearest trooper in its reach, and at nothing else.
+// at the nearest trooper or guard post in its reach, whichever stands
+// closer, and at nothing else.
 func stepEnemyGuns(s *State) {
 	for _, id := range sortedEnemyIDs(s) {
 		e := s.Enemies[id]
@@ -185,18 +186,32 @@ func stepEnemyGuns(s *State) {
 			s.Enemies[id] = e
 			continue
 		}
-		target, found := nearestTrooper(s, e.X, e.Y, spec.gunRange)
-		if !found {
+		trooper, trooperIn := nearestTrooper(s, e.X, e.Y, spec.gunRange)
+		post, postIn := nearestGuard(s, e.X, e.Y, spec.gunRange)
+		ptx, pty := cellCenterUnits(post.Col, post.Row)
+		switch {
+		case trooperIn && (!postIn ||
+			math.Hypot(trooper.X-e.X, trooper.Y-e.Y) <=
+				math.Hypot(ptx-e.X, pty-e.Y)):
+			e.Reload, e.Aim = spec.reload, trooper.ID
+			s.Enemies[id] = e
+			s.fire(Shot{
+				Kind: ShotBullet, FromX: e.X, FromY: e.Y,
+				ToX: trooper.X, ToY: trooper.Y,
+				Robot: trooper.ID, Damage: spec.damage, Rival: true,
+			})
+		case postIn:
+			e.Reload, e.Aim = spec.reload, post.ID
+			s.Enemies[id] = e
+			s.fire(Shot{
+				Kind: ShotBullet, FromX: e.X, FromY: e.Y,
+				ToX: ptx, ToY: pty,
+				Building: post.ID, Damage: spec.damage, Rival: true,
+			})
+		default:
 			e.Aim = 0
 			s.Enemies[id] = e
-			continue
 		}
-		e.Reload, e.Aim = spec.reload, target.ID
-		s.Enemies[id] = e
-		s.fire(Shot{
-			Kind: ShotBullet, FromX: e.X, FromY: e.Y, ToX: target.X, ToY: target.Y,
-			Robot: target.ID, Damage: spec.damage, Rival: true,
-		})
 	}
 }
 
@@ -212,6 +227,24 @@ func nearestTrooper(s *State, x, y, reach float64) (Robot, bool) {
 		}
 		if gap := math.Hypot(r.X-x, r.Y-y); gap <= bestGap && (!found || gap < bestGap) {
 			best, found, bestGap = r, true, gap
+		}
+	}
+	return best, found
+}
+
+// nearestGuard returns the guard post closest to a spot, within a
+// reach; IDs break ties.
+func nearestGuard(s *State, x, y, reach float64) (Building, bool) {
+	var best Building
+	found, bestGap := false, reach
+	for _, id := range sortedBuildingIDs(s) {
+		b := s.Buildings[id]
+		if b.Kind != BuildingGuard {
+			continue
+		}
+		bx, by := cellCenterUnits(b.Col, b.Row)
+		if gap := math.Hypot(bx-x, by-y); gap <= bestGap && (!found || gap < bestGap) {
+			best, found, bestGap = b, true, gap
 		}
 	}
 	return best, found

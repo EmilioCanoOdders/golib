@@ -39,8 +39,9 @@ const autosaveTicks = 900
 // Draw renders the state and changes nothing.
 type playScene struct {
 	state *State
-	mites *miteField // the fog's wear on what stands in it; looks only
-	fx    *fxField   // shots' light, flashes, sparks and smoke; looks only
+	mites *miteField  // the fog's wear on what stands in it; looks only
+	fx    *fxField    // shots' light, flashes, sparks and smoke; looks only
+	au    *audioField // the region's sound; looks and hears only
 	dev   devTools
 
 	camera       *golib.Camera
@@ -60,8 +61,8 @@ type playScene struct {
 	pickedRow    int
 	expanded     map[string]bool // which cards stand open, by thing ID
 	armed        string          // the card whose trash can was pressed once, by thing ID
-	radial       bool       // the build menu stands open on a cell
-	radialCol    int        // the cell the menu opened on
+	radial       bool            // the build menu stands open on a cell
+	radialCol    int             // the cell the menu opened on
 	radialRow    int
 	radialLevel  int        // the ring open: 0 the groups, 1 their blueprints
 	radialGroup  buildGroup // the group the second ring shows
@@ -88,6 +89,7 @@ func newPlayScene(state *State) *playScene {
 		state:    state,
 		mites:    newMiteField(),
 		fx:       newFxField(),
+		au:       newAudioField(),
 		expanded: map[string]bool{},
 	}
 	s.camera = golib.NewCamera(screenWidth, screenHeight)
@@ -105,6 +107,7 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 	// the region. No other key quits, and the menu is where quitting from.
 	if input.KeyPressed(golib.KeyEscape) || input.GamepadPressed(0, golib.GamepadBack) {
 		s.saveNow()
+		s.au.stopLoops()
 		golib.SwitchScene(newMenuScene())
 		return
 	}
@@ -135,6 +138,7 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 	ticks := s.dev.ticksPerUpdate()
 	for i := 0; i < ticks; i++ {
 		Apply(s.state, Tick{})
+		s.au.update(s, 1)
 	}
 	s.mites.update(s.state, dt)
 	s.fx.update(s.state, dt)
@@ -172,6 +176,7 @@ func (s *playScene) updateSquadKeys(input *golib.Input) {
 				s.ordering = 0
 			} else {
 				s.ordering = slots[i]
+				s.au.ui(1)
 				s.closeRadial()
 			}
 			return
@@ -195,6 +200,7 @@ func (s *playScene) updateTech(input *golib.Input) bool {
 	}
 	if id := techPending(s.state); id != "" && s.techBadgeHolds(mx, my) {
 		Apply(s.state, AckTech{ID: id})
+		s.au.ui(1.1)
 		s.techCallout = id
 		s.closeRadial()
 		return true
@@ -222,6 +228,7 @@ func (s *playScene) updateSquadBoxes(input *golib.Input) bool {
 			s.ordering = 0
 		} else {
 			s.ordering = slots[i]
+			s.au.ui(1)
 			s.closeRadial()
 		}
 		return true
@@ -409,6 +416,7 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 		// arms the ordering pointer instead of picking the cell.
 		if home, ok := s.squadMarkAt(mx, my); ok {
 			s.ordering = home
+			s.au.ui(1)
 			s.closeRadial()
 			return
 		}
@@ -473,6 +481,7 @@ func (s *playScene) buildableCell(col, row int) bool {
 // pressButton applies the action a card's button asks for on the picked
 // cell. Deposits are tiles, so their actions take the cell's tile.
 func (s *playScene) pressButton(row tooltipRow) {
+	s.au.ui(1)
 	thing := row.thing
 	tcol, trow := cellTile(s.pickedCol, s.pickedRow)
 	switch row.button {
@@ -501,6 +510,7 @@ func (s *playScene) pressButton(row tooltipRow) {
 // demolish applies what a card's armed trash can asks for: a site
 // leaves the queue, a building comes down.
 func (s *playScene) demolish(thing Thing) {
+	s.au.ui(0.8)
 	if thing.Type == TypeSite {
 		Apply(s.state, CancelJob{Col: thing.CellCol, Row: thing.CellRow})
 		return

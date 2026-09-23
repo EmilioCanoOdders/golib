@@ -199,3 +199,51 @@ func TestAShellMissesWhoMovedOn(t *testing.T) {
 		t.Errorf("a shell hurt a vehicle two blasts away: %v health", got)
 	}
 }
+
+func TestARaiderShootsAGuardPostAndThePostCanFall(t *testing.T) {
+	s := newGame()
+	seedStock(s)
+	noRivals(s)
+	col, row := groundNearCore()
+	post := raised(t, s, BuildingGuard, col, row)
+	// A raider parked inside its own reach, inside the bubble, with
+	// nobody of the colony to shoot at but the post.
+	px, py := cellCenterUnits(col, row)
+	s.Enemies[900] = Enemy{
+		ID: 900, Kind: EnemyRaider, X: px + 80, Y: py, Health: 100,
+	}
+	var shot Shot
+	if !tickUntil(s, 60*60, func() bool {
+		for _, sh := range s.Shots {
+			if sh.Building == post.ID {
+				shot = sh
+				return true
+			}
+		}
+		return false
+	}) {
+		t.Fatalf("the raider never shot the post")
+	}
+	if shot.Kind != ShotBullet || !shot.Rival || shot.Robot != 0 {
+		t.Fatalf("the shot at the post is %+v", shot)
+	}
+	// Leave the post two hits short: the next two bring it down, and a
+	// building's wreck is a pile of half its cost.
+	b := s.Buildings[post.ID]
+	b.Damage = buildingHealth(BuildingGuard) -
+		2*enemySpecOf(EnemyRaider).damage
+	s.Buildings[post.ID] = b
+	if !tickUntil(s, 60*60, func() bool {
+		_, stands := s.Buildings[post.ID]
+		return !stands
+	}) {
+		t.Fatalf("the post never fell under the raider's fire")
+	}
+	if lastReport(s).Kind != ReportRazed {
+		t.Errorf("the report is %q, want the post razed", lastReport(s).Kind)
+	}
+	if p, littered := pileAt(s, col, row); !littered ||
+		p.Lilac != guardCostLilac*wreckRefund {
+		t.Errorf("the wreck left %+v, want %v kg", p, guardCostLilac*wreckRefund)
+	}
+}

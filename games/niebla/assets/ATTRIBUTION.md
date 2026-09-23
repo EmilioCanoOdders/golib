@@ -12,3 +12,44 @@ Files in this folder that were not made for GoLib. Keep this file with them: a
 | Source | Google Fonts, <https://fonts.google.com/specimen/Fira+Sans> |
 | License | SIL Open Font License 1.1, <https://openfontlicense.org/open-font-license-official-text/> |
 | Author | Copyright (c) 2012-2015, The Mozilla Foundation and Telefonica S.A. |
+
+## Sounds
+
+`wind-loop.ogg`, `oil-bed.ogg` and `mineral-ring.wav` are synthesized for this game by
+`tools/soundgen` and need no attribution.
+
+**`sounds/click.ogg`** and **`sounds/oil-drip.ogg`**: the interface's
+click and one of the oil pools' bloops.
+
+| Field | Value |
+| --- | --- |
+| Source | Kenney Interface Sounds, <https://kenney.nl/assets/interface-sounds> |
+| License | Creative Commons CC0 1.0, <https://creativecommons.org/publicdomain/zero/1.0/> |
+| Author | Kenney |
+
+**`sounds/artillery-fire.ogg`** and **`sounds/artillery-fire-distant.ogg`**
+(a filtered, echoed derivative of the first): the colony's artillery and
+the rivals' base gun.
+
+| Field | Value |
+| --- | --- |
+| Source | "Cannon fire" by Thimras, OpenGameArt, <https://opengameart.org/content/cannon-fire> |
+| License | Creative Commons CC0 1.0, <https://creativecommons.org/publicdomain/zero/1.0/> |
+| Author | Thimras |
+
+**`sounds/gun-a.ogg`** and **`sounds/gun-b.ogg`**: small arms, the
+troopers' and the rivals'.
+
+| Field | Value |
+| --- | --- |
+| Source | "25 CC0 bang / firework SFX" by rubberduck, OpenGameArt, <https://opengameart.org/content/25-cc0-bang-firework-sfx> |
+| License | Creative Commons CC0 1.0, <https://creativecommons.org/publicdomain/zero/1.0/> |
+| Author | rubberduck |
+
+**`sounds/oil-gurgle.ogg`**: the oil pools' rarer, thicker seethe.
+
+| Field | Value |
+| --- | --- |
+| Source | "Bubbling Acid" by spookymodem, OpenGameArt, <https://opengameart.org/content/bubbling-acid> |
+| License | Creative Commons CC-BY 3.0, <https://creativecommons.org/licenses/by/3.0/> |
+| Author | spookymodem |
