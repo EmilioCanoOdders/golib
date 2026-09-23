@@ -10,7 +10,8 @@ import (
 // held falls on its cell as one pile, which the robots haul back to the
 // stores. Nothing goes straight back: a refund is a haul.
 const (
-	demolishRefund = 1.0 // the part of a blueprint's cost that falls to the ground
+	demolishRefund  = 1.0  // the part of a blueprint's cost that falls to the ground
+	unitWreckRefund = 0.25 // the part of a lost unit's resources recovered
 
 	pileDust = 0.0001 // under this, a pile's amount counts as nothing
 
@@ -54,6 +55,32 @@ func (s *State) dropPile(col, row int, oil, lilac float64) {
 	p.Oil += oil
 	p.Lilac += lilac
 	s.Piles[p.ID] = p
+}
+
+func (s *State) dropRobotWreck(r Robot) {
+	lilac, oil := 0.0, 0.0
+	switch r.Kind {
+	case RobotBuilt:
+		lilac, oil = robotCostLilac, robotCostOil
+	case RobotCombat:
+		lilac, oil = trooperCostLilac, trooperCostOil
+	}
+
+	oil += r.Tank
+	switch r.Cargo {
+	case TypeOil:
+		oil += r.Carry
+	case TypeLilac:
+		lilac += r.Carry
+	}
+
+	col, row := robotCell(r)
+	s.dropPile(
+		col,
+		row,
+		oil*unitWreckRefund,
+		lilac*unitWreckRefund,
+	)
 }
 
 // canDemolish reports whether a building may go. A protector stays

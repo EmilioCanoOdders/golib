@@ -98,7 +98,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `state.go` | The simulation's state: robots (core, built or combat), buildings with their tanks, reloads and damage, stock, what remains of each deposit, build jobs, piles, pipes, the fog, and the rivals' tables (`Enemies`, `Parties`, `Cities`, `Raids`, `Marks`, `Reports`, `Squads`, `Shots`, the PRNG's `Rolls`) plus the schematics' `Tech`; `newGame`, which deals the starting region |
 | `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
 | `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, oldest build job then the oldest damaged building then a section of pipe, pick up loose items, own post, a trooper's squad, rest by the core —, the claim on a section of pipe (`stepLayPipe`) and the idle ranks (`parkSlot`, `idleRank`) |
-| `sim_piles.go` | Demolition and loose items: `canDemolish`, the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
+| `sim_piles.go` | Demolition, unit wrecks and loose items: `canDemolish`, the 25% unit recovery (`dropRobotWreck`), the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, storage caps, refuel spots, and the two factories' works (`robotWorks`: what each builds, for how much, how long) |
 | `sim_oil.go` | Oil's tanks: the core's, the silos' and the chargers'; `oilTotal`, `oilCap`, `payOil`, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
 | `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus` |
@@ -332,6 +332,11 @@ dry post holds nobody with oil left in its tank — and outside a bubble, a tank
 fog digests the robot. Both the burn and the drag are dials at the top
 of `sim_buildings.go`.
 
+When the fog digests a built robot, `stepSim` leaves a wreck with
+`unitWreckRefund` 0.25 of each resource: build cost, cargo and remaining
+tank oil. Troopers falling to enemy fire use the same recovery in
+`dropRobotWreck`.
+
 The stores have a roof: `oilCap`/`lilacCap` is the core's own room plus
 every silo and warehouse. A robot hauling into a full store stands at
 the store trying again each tick (its card says waiting for storage), and
@@ -465,7 +470,8 @@ and `stepSquads` drops an attack whose party is gone and passes a fallen
 focus on to the party's leader. `stepEnemyGuns` is the rivals' side:
 vehicles whose `enemySpec` has a gun fire a bullet at the nearest
 trooper or guard post in reach; `hurtTrooper` (`sim_shots.go`) is where a
-trooper falls and leaves its pile, and a bullet aimed at a building
+trooper falls and leaves 25% of its cost and remaining tank in a pile, and
+a bullet aimed at a building
 (`Shot.Building`) lands in `hurtBuilding` like a shell's blast does. The
 robots' loop in `stepSim` skips a robot
 that fell earlier in the same tick.
@@ -654,7 +660,9 @@ marking pays and its building rises, the fog refuses ground but not a
 protector, one tile fits several buildings on its cells, a cell with a
 job pending takes no second job, the factory queues and rolls out tanked
 robots, a built robot refuels before it runs dry, the fog digests a dry
-one outside the bubbles, deep fog halves every walker's pace and a
+one outside the bubbles and leaves a quarter of its cost, cargo and tank
+oil, deep fog
+halves every walker's pace and a
 protector's pocket cancels it, and full stores hold the cargo until a
 silo opens room. `piles_test.go` pins the demolition: the cost falls as
 a pile and comes home whole, a factory's robot is cancelled and refunded,
@@ -693,8 +701,9 @@ touch no job, pile or post; a squad walks to the spot it is told to
 guard and mends there, and an order for anything but a war factory is
 none; a squad sent after a camped crawler brings it down with every
 raider still standing, burns its tanks and gets shot at, and goes back
-to its door when the party is gone; a lone trooper falls and leaves its
-wreck, and a demolished war factory's trooper rests by the core.
+to its door when the party is gone; a lone trooper falls and leaves 25% of
+its cost and remaining tank in its wreck, and a demolished war factory's
+trooper rests by the core.
 `TestTheNumberKeysCallTheWarFactoriesOldestFirst` pins the keys' order
 (`squadSlots`), `TestASquadsMarkPicksItsSquad` the pennant's and the
 ring's picking (`squadMarkAt`), and `TestTheSquadsBoxesLieApartAndPickTheirSquad`

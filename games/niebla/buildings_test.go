@@ -231,11 +231,24 @@ func TestFogDigestsARobotRunDryOutsideTheBubbles(t *testing.T) {
 	fx, fy := tileCenterUnits(2, 2)
 	s.Robots[id] = Robot{
 		ID: id, Kind: RobotBuilt, X: fx, Y: fy, Tank: 0,
-		PostCol: -1, PostRow: -1,
+		PostCol: -1, PostRow: -1, Carry: 12, Cargo: TypeOil,
 	}
+	r := s.Robots[id]
 	Apply(s, Tick{})
 	if _, ok := s.Robots[id]; ok {
 		t.Fatal("the fog left a dry robot standing")
+	}
+	col, row := robotCell(r)
+	p, ok := pileAt(s, col, row)
+	if !ok {
+		t.Fatal("the digested robot left no wreck")
+	}
+	wantOil := (robotCostOil + r.Carry) * unitWreckRefund
+	wantLilac := robotCostLilac * unitWreckRefund
+	if math.Abs(p.Oil-wantOil) > 0.001 ||
+		math.Abs(p.Lilac-wantLilac) > 0.001 {
+		t.Errorf("the robot's wreck holds %v L and %v kg, want %v and %v",
+			p.Oil, p.Lilac, wantOil, wantLilac)
 	}
 	if len(s.Robots) != startingRobots {
 		t.Errorf("the colony holds %d robots, want %d",

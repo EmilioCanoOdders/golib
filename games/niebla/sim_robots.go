@@ -34,8 +34,9 @@ const (
 
 // stepSim moves the world one tick forward: the weather, the
 // factories, the pipes, the rivals and the guard posts, then the robots
-// in ID order, so the outcome never depends on map iteration. A built robot empty of oil outside every bubble is
-// digested by the fog and leaves the colony.
+// in ID order, so the outcome never depends on map iteration. A built robot
+// empty of oil outside every bubble is digested by the fog and leaves a
+// quarter of each resource in a wreck: its cost and onboard resources.
 func stepSim(s *State) {
 	stepTech(s)
 	stepFog(s)
@@ -55,6 +56,7 @@ func stepSim(s *State) {
 		stepRobot(s, &r)
 		if r.tanked() && r.Tank <= 0 && !inSafeZone(s, r.X, r.Y) {
 			delete(s.Robots, id)
+			s.dropRobotWreck(r)
 			continue
 		}
 		s.Robots[id] = r

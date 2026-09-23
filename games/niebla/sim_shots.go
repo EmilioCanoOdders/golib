@@ -167,9 +167,9 @@ func (s *State) hurtEnemy(id int64, damage float64) {
 	}
 }
 
-// hurtTrooper takes health off a trooper; one that falls leaves a wreck's
-// worth of lilac and what its tank held. Robots that work have no health
-// to take.
+// hurtTrooper takes health off a trooper; one that falls leaves a quarter
+// of each resource in a wreck: its cost and onboard resources. Robots that
+// work have no health to take.
 func (s *State) hurtTrooper(id int64, damage float64) {
 	r, ok := s.Robots[id]
 	if !ok || r.Kind != RobotCombat {
@@ -179,8 +179,7 @@ func (s *State) hurtTrooper(id int64, damage float64) {
 	s.Robots[id] = r
 	if r.Health <= 0 {
 		delete(s.Robots, id)
-		col, row := robotCell(r)
-		s.dropPile(col, row, r.Tank, trooperWreckLilac)
+		s.dropRobotWreck(r)
 	}
 }
 

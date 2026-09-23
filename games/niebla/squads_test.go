@@ -161,7 +161,7 @@ func TestAFallenTrooperLeavesItsWreckAndADemolishedWarFactoryItsSquad(t *testing
 	}
 	wreck := false
 	for _, p := range s.Piles {
-		wreck = wreck || p.Lilac == trooperWreckLilac
+		wreck = wreck || p.Lilac == trooperCostLilac*unitWreckRefund
 	}
 	if !wreck {
 		t.Errorf("the fallen trooper left no wreck: %+v", s.Piles)
@@ -178,6 +178,29 @@ func TestAFallenTrooperLeavesItsWreckAndADemolishedWarFactoryItsSquad(t *testing
 	}
 	if _, ordered := s.Squads[home.ID]; ordered {
 		t.Errorf("a demolished war factory's squad keeps its order")
+	}
+}
+
+func TestAFallenTrooperLeavesAQuarterOfItsResources(t *testing.T) {
+	s := newGame()
+	x, y := tileCenterUnits(2, 2)
+	id := s.spawnRobot(RobotCombat, x, y)
+	r := s.Robots[id]
+	r.Tank = 80
+	s.Robots[id] = r
+
+	s.hurtTrooper(id, trooperHealth)
+	col, row := robotCell(r)
+	p, ok := pileAt(s, col, row)
+	if !ok {
+		t.Fatal("the fallen trooper left no wreck")
+	}
+	wantOil := (trooperCostOil + r.Tank) * unitWreckRefund
+	wantLilac := trooperCostLilac * unitWreckRefund
+	if math.Abs(p.Oil-wantOil) > 0.001 ||
+		math.Abs(p.Lilac-wantLilac) > 0.001 {
+		t.Errorf("the trooper's wreck holds %v L and %v kg, want %v and %v",
+			p.Oil, p.Lilac, wantOil, wantLilac)
 	}
 }
 

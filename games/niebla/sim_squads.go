@@ -19,7 +19,6 @@ const (
 	trooperCostLilac   = 80.0 // kg
 	trooperCostOil     = 60.0 // L
 	trooperBuildTicks  = 900  // ticks to build one: 15 s
-	trooperWreckLilac  = 40.0 // kg a fallen trooper leaves on the ground
 	squadSize          = 6    // troopers to a war factory
 	trooperHealth      = 80.0
 	trooperRangeUnits  = 120.0 // u
