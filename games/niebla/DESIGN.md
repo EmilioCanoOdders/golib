@@ -126,6 +126,10 @@ an assembling battalion or a force on the move. City-building reports
 replace the earlier passive-base/gun-up notices in the historical screen
 description above.
 
+The oil patch remains one selectable resource across its cells. Its pump
+and any pump site appear only on the pump's cell; clicking the visible
+pump body selects that cell, whose panel shows only the pump.
+
 - **Pause:** the frozen region under a message. The fog does not advance while paused.
 - **Colony lost** (later): when the core is somehow unreachable, or the player quits the region.
 
@@ -244,6 +248,10 @@ Protector fuel, in `sim_buildings.go`: `protectorOilCap` 200 L,
 and `protectorRadiusFadeBelow` 5%. These are provisional economy dials.
 The radius fades linearly below the threshold and is zero with an empty tank.
 
+Pump picking, in `inspect.go`: the visible isometric body selects the pump's
+cell. The deposit remains one functional patch, while pump and site cards
+stay local to that cell.
+
 The region is generated from `State.Seed` (`worldgen.go`, its laws tested over 40 seeds in `worldgen_test.go`; `defaultSeed` 0 is a new game's and an old save's). **Relief** comes from wave function collapse over landform blocks (`reliefBlock` 4 cells, 100 m): each block is a wave over `reliefLevels` 4 levels (0 basin, 1 plain, 2 and 3 hills), neighbors - diagonal too - differ by a level at the most, the blocks within `reliefCorePlain` 2.2 tiles of the core are pinned to the plain and `reliefMarks` 16 hilltops and basins are pinned out in the region; then the block with the least left to decide collapses to a level drawn by `reliefWeight` times `reliefAffinity` for each neighbor already at it (the plain's pull, 6, is what leaves the great flats), and what that rules out spreads. The constraint keeps every wave an unbroken run of levels, so the collapse never contradicts. The levels land on the cells' corners after a smooth wander (`reliefWarpCells` 2.6) that takes the blocks' straight edges away; a level is `levelHeight` 4 m, a slope is one level to the cell (16%), a cell with four equal corners is flat, and `canPlace` asks for one: 95% of the ground is. The relief is looks and building ground for now - robots walk it at their one speed. **Cover** is three octaves of noise in zones `zoneWave` 28 cells wide, thicker in the basins, thinner on the slopes. **Deposits** follow `depositPlans`: one pool and one vein whole inside the bubble (hearts 1.7 to 2.4 tiles out, radius 6.5 to 7.5 cells) and two more of each with their hearts 7.2 to 8.4 tiles out (radius 8 to 12 cells), hearts `depositApart` 3.2 tiles apart and on flat ground, where the pump stands and the robots load. A body is a stretched, turned blob (veins 1.55, pools 1.15) whose edge a noise bends, mottled all over and broken into specks toward the rim; each cell has a richness from 0 to 1, and what a deposit holds is its richness times `oilPerRichCell` 70 L or `lilacPerRichCell` 240 kg - about 3 kL and 10 t by the core, up to 10 kL and 30 t far out. A tile belongs to a deposit when it holds `depositTileOre` 0.8 of richness and touches the heart's tile through others that do; the ore on the tiles that don't is dropped, and no two deposits share a tile.
 
 The world speaks SI: `unitMeters` 1 (one world unit is one meter, in `things.go`, so a tile is 200 m across, 4 ha), the core is a monolith in the old proportions, 1 by 4 by 9 - `coreSlabDeep` 4 m, `coreSlabWide` 16 m, `coreHeight` 36 m, the tallest thing the colony will see - ; the core's card headlines its bubble radius (800 m). Each thing type gets its color from the catalog in `catalog.go`, which falls back to a color hashed from the type's name, stable forever, for types it has no entry for yet. Text colors itself with the `[name]...[/]` markup of `markup.go`; the palette holds one color per thing type plus `dim`, `light` and `fog`. In `inspect.go`: `tooltipWidth` 260 px, `titleSize`/`textSize` 12/10, the panel anchored to the tile's projected corner (it flips to the tile's left near the screen's right edge), `buttonWidth` 96 and `buttonRow` 22 for the cards' send/recall robot buttons.
@@ -299,6 +307,10 @@ The prototype is done when these five have landed, on top of the debts under [La
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-23: clicking a pump's visible body now selects its own cell.
+  Pump and pump-site cards stay on that cell; the pool keeps its deposit
+  card elsewhere, while still owning one pump for placement and extraction.
+  Pinned by `TestAPumpAndItsSiteBelongOnlyToTheirCell`.
 - 2026-09-23: colony protectors now have dedicated oil tanks, paid for
   with their blueprint, refilled by robots or pipes and excluded from
   general spending and rival raids. Their radius fades below 5% charge;

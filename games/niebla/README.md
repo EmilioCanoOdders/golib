@@ -129,7 +129,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `region.go` | The region's measures, `land` (the generated ground of the seed in hand) and `useRegion`, the isometric `project` that lifts by the relief and its inverse `unproject`, tile helpers, `Deposit` and `depositAt`; pure Go, no drawing |
 | `worldgen.go` | The generator, a pure function of the seed: relief by wave function collapse, ground cover, deposits as fields of richness; its own PRNG and noise; pure Go, no drawing |
 | `ground.go` | The ground's painter: relief as lit slopes, cover colors with a grain, blocks sized to the zoom and culled to the view, rocks, bushes, tufts, and the deposits cell by cell (`oreCut` wears them from the rim in) |
-| `things.go` | What a cell holds, the unit the player picks by: `Thing` snapshots out of layout plus state (a deposit's cell shows its whole patch; rival vehicles and bases standing on the cell have cards too), the robots' captions, troopers' and menders' among them, `tileAtWorld`, the SI quantities; pure Go, no drawing |
+| `things.go` | What a cell holds, the unit the player picks by: `Thing` snapshots out of layout plus state (a deposit's card spans its patch, while buildings and sites stay on their own cell; rival vehicles and bases standing on the cell have cards too), the robots' captions, troopers' and menders' among them, `tileAtWorld`, the SI quantities; pure Go, no drawing |
 | `catalog.go` | The entity database: per thing type its name, color, unit and card lines, plus the stable-color fallback |
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
 | `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons (a war factory's `build trooper` and `give order` among them) and the integrity line of a damaged building; the cell's outline (`cellDiamond`) |
@@ -146,7 +146,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
 | `economy_test.go` | The deterministic economy probe: safe harvesting, worker growth and a protected oil outpost over three seeds, sampled each minute into an opt-in CSV report with protector fuel separated from spendable oil |
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
-| `pipes_test.go` | Pumps and pipes driven directly: a pump stands on a pool and a pool takes one, a pipe is paid by the section and laid by the robots, who claim a section each - the nearest free one - and stand by it until it is laid, a half-laid pipe from an old save keeps its work, a laid pipe carries the pool into its tank and stops at a full one or a dry pool, oil has a place and pipes move it between tanks (shares, ports, payments, a demolished tank's oil), robots carry oil to a tank with room and refill where there is oil, what `LayPipe` refuses, a pipe leaves with its ends and its cost falls as a pile, the curve passes through its bends, pipes survive a save, the pool's cards carry the pump and its pipe |
+| `pipes_test.go` | Pumps and pipes driven directly: a pump stands on a pool and a pool takes one, pump and site cards stay on the pump cell while the deposit card spans its patch, the pump body is clickable, pipes are paid by section and laid by robots, who claim a section each - the nearest free one - and stand by it until it is laid, a half-laid pipe from an old save keeps its work, a laid pipe carries the pool into its tank and stops at a full one or a dry pool, oil has a place and pipes move it between tanks (shares, ports, payments, a demolished tank's oil), robots carry oil to a tank with room and refill where there is oil, what `LayPipe` refuses, a pipe leaves with its ends and its cost falls as a pile, the curve passes through its bends, pipes survive a save |
 | `protector_test.go` | Protector fuel: upkeep drains its dedicated tank, radius fades below the configured threshold and vanishes empty, robots and pipes refill it, the reserve stays unavailable to other costs, old saves migrate once with starting charge, and an opt-in state fixture supports visual shots |
 | `mites_test.go` | The mites driven with no window: counted by volume and only in the fog, tight on what stands still and trailing a walker, fading over what is gone, the falloff's layers |
 | `dev_test.go` | The dev actions: a held swell stays up and doesn't count, a placed robot is built, the city tool buttons have separate hit boxes, `unitsAtWorld` undoes `project` |
@@ -269,10 +269,11 @@ The **pump** (`BuildingPump`) is the one kind `canPlace` takes on oil
 instead of ground: on a pool with oil left and no pump yet
 (`patchPumped`), inside a bubble. It isn't in the radial menu - a click on
 a pool inspects it - so the pool's card carries `build pump`, which marks
-it on `pumpCell`, the patch's middle; `sameGround` makes `thingsAt` show
-a pool's pump and site on every cell of the pool. Both the pump's button
-and `lay pipe` stay off the cards until they would work - their
-schematics arrived and the stores can pay (`kindUnlocked`, and
+it on `pumpCell`, the patch's middle. The pump and its site appear only on
+that cell; the rest of the pool keeps its deposit card. The patch still
+owns the pump for placement and extraction, so it takes only one. Both the
+pump's button and `lay pipe` stay off the cards until they would work -
+their schematics arrived and the stores can pay (`kindUnlocked`, and
 `LayPipe`'s frontier-kit guard).
 
 A **pipe** (`State.Pipes`, by ID) carries oil one way, `From` a pump or
@@ -633,9 +634,12 @@ its tiles on the screen, but a click selects the cell under it
 (`cellAtWorld`), the outline is the cell's (`cellDiamond`) and the panel
 lists what stands on that cell alone (`thingsAt`) - its building, site or
 pile and the robots on it -, so a silo's panel never shows the charger
-beside it. What is bigger than a cell shows whole from any cell of it: a
-deposit patch, with its pump, and the core. Deposits stay tile-shaped, so
-the scene hands their actions the cell's tile (`cellTile`).
+beside it. Clicking a pump's visible body picks its own cell, and its
+card replaces the deposit card there; the deposit remains one functional
+patch, but its pump and site are not selectable from the other cells.
+Deposits still show their whole card from any of their cells, as does the
+core from any cell of its pad. Deposits stay tile-shaped, so the scene
+hands their actions the cell's tile (`cellTile`).
 
 `tileAtWorld` undoes `project`: a tile's diamond on the screen is the square
 `[col, col+1) x [row, row+1)` in tiles, so the inverse is exact, and a point

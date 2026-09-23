@@ -59,6 +59,7 @@ type playScene struct {
 	picked       bool // a cell is selected and shows its panel
 	pickedCol    int  // the selected cell
 	pickedRow    int
+	pickedThing  string          // a visible body's card picked on that cell
 	expanded     map[string]bool // which cards stand open, by thing ID
 	armed        string          // the card whose trash can was pressed once, by thing ID
 	radial       bool            // the build menu stands open on a cell
@@ -374,6 +375,7 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 	}
 	if rightClick {
 		s.picked = false
+		s.pickedThing = ""
 		s.armed = ""
 		s.backRadial()
 	}
@@ -386,7 +388,10 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 		// The panel, while it stands, wins over whatever sits under it:
 		// its buttons act even where it covers buildable ground.
 		if s.picked {
-			panel := tooltipLayout(s.state, s.camera, s.pickedCol, s.pickedRow, s.expanded)
+			panel := tooltipLayoutForSelection(
+				s.state, s.camera, s.pickedCol, s.pickedRow,
+				s.expanded, s.pickedThing,
+			)
 			if panel.contains(mx, my) {
 				if thing, blocked, ok := panel.trashAt(mx, my); ok {
 					switch {
@@ -411,6 +416,9 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 				return
 			}
 		}
+		if s.pickPumpAt(mx, my) {
+			return
+		}
 		// A squad's mark picks its squad where it stands: the pennant of
 		// a guarding one, the ring around an attack's focus. The click
 		// arms the ordering pointer instead of picking the cell.
@@ -426,9 +434,11 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 			s.buildableCell(s.hoverCellCol, s.hoverCellRow) {
 			s.openRadial(s.hoverCellCol, s.hoverCellRow)
 			s.picked = false
+			s.pickedThing = ""
 		} else {
 			s.picked = s.hoverCell
 			s.pickedCol, s.pickedRow = s.hoverCellCol, s.hoverCellRow
+			s.pickedThing = ""
 		}
 	}
 }
@@ -600,7 +610,10 @@ func (s *playScene) Draw(screen *golib.Screen) {
 		s.drawOrderingLabel(screen)
 	}
 	if s.picked && !s.radial && s.ordering == 0 {
-		panel := tooltipLayout(s.state, s.camera, s.pickedCol, s.pickedRow, s.expanded)
+		panel := tooltipLayoutForSelection(
+			s.state, s.camera, s.pickedCol, s.pickedRow,
+			s.expanded, s.pickedThing,
+		)
 		panel.arm(s.armed)
 		drawTooltip(screen, panel, s.mouse.X, s.mouse.Y)
 	}

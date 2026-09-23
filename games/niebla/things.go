@@ -116,27 +116,28 @@ type Thing struct {
 	Area    float64 // deposits: the ground its ore covers, in hectares
 }
 
-// thingsAt returns the things standing on a cell, the unit the player
-// picks and counts by: the ground's own thing first - the deposit or the
-// core whose tile the cell is part of -, then its building, its site and
-// its pile, then the robots on it by ID. A deposit's cell shows its whole
-// patch's card: the vein is one thing, however many tiles it spans.
-// Rocks and bushes are decoration, so they have no card yet.
+// thingsAt returns what stands on a cell, the unit the player picks and
+// counts by: the deposit or core under it, then its building, site and
+// pile, then the robots on it by ID. A deposit's card spans its whole
+// patch, but buildings and sites belong only to their own cell.
 func thingsAt(s *State, col, row int) []Thing {
 	var things []Thing
 	tcol, trow := cellTile(col, row)
+	pump := pumpOnCell(s, col, row)
 	switch tileAt(tcol, trow) {
 	case kindOil, kindLilac:
-		d, _ := depositAt(tcol, trow)
-		thing := depositThing(d)
-		thing.Amount = remainingAt(s, tcol, trow)
-		things = append(things, thing)
+		if !pump {
+			d, _ := depositAt(tcol, trow)
+			thing := depositThing(d)
+			thing.Amount = remainingAt(s, tcol, trow)
+			things = append(things, thing)
+		}
 	case kindCore:
 		things = append(things, coreAt(tcol, trow))
 	}
 	for _, id := range sortedBuildingIDs(s) {
 		b := s.Buildings[id]
-		if !sameGround(b.Col, b.Row, col, row) {
+		if b.Col != col || b.Row != row {
 			continue
 		}
 		thing := buildingThing(b)
@@ -154,9 +155,10 @@ func thingsAt(s *State, col, row int) []Thing {
 		things = append(things, thing)
 	}
 	for _, job := range s.Jobs {
-		if sameGround(job.Col, job.Row, col, row) {
-			things = append(things, siteThing(job))
+		if job.Col != col || job.Row != row {
+			continue
 		}
+		things = append(things, siteThing(job))
 	}
 	if p, littered := pileAt(s, col, row); littered {
 		things = append(things, pileThing(p))
@@ -168,6 +170,22 @@ func thingsAt(s *State, col, row int) []Thing {
 		things = append(things, enemyThing(s, e))
 	}
 	return things
+}
+
+// pumpOnCell reports whether a pump or its site occupies this cell.
+func pumpOnCell(s *State, col, row int) bool {
+	for _, id := range sortedBuildingIDs(s) {
+		b := s.Buildings[id]
+		if b.Kind == BuildingPump && b.Col == col && b.Row == row {
+			return true
+		}
+	}
+	for _, job := range s.Jobs {
+		if job.Kind == BuildingPump && job.Col == col && job.Row == row {
+			return true
+		}
+	}
+	return false
 }
 
 // enemiesOnCell returns the rival vehicles standing on a cell, in ID
@@ -212,18 +230,6 @@ func stageWords(stage PartyStage) string {
 		return "dug in"
 	}
 	return "leaving"
-}
-
-// sameGround reports whether what stands on one cell shows on another's
-// card: it is the same cell, or both lie on the same deposit patch - a
-// pool is one thing, so its pump shows wherever the pool is picked.
-func sameGround(cellCol, cellRow, col, row int) bool {
-	if cellCol == col && cellRow == row {
-		return true
-	}
-	here, ok := depositAt(cellTile(col, row))
-	there, okThere := depositAt(cellTile(cellCol, cellRow))
-	return ok && okThere && here == there
 }
 
 // robotsOnCell returns the robots standing on a cell, in ID order.

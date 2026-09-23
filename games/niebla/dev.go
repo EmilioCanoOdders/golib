@@ -165,7 +165,7 @@ func (d *devTools) update(s *playScene, input *golib.Input) bool {
 func (d *devTools) resetWorld(s *playScene, seed int64) {
 	Apply(s.state, DevResetWorld{Seed: seed})
 	d.placing = false
-	s.picked, s.armed = false, ""
+	s.picked, s.pickedThing, s.armed = false, "", ""
 	s.closeRadial()
 	s.laying = pipeLaying{}
 	s.ordering = 0

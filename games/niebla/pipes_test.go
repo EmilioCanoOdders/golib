@@ -5,6 +5,8 @@ import (
 	"math"
 	"reflect"
 	"testing"
+
+	"golib"
 )
 
 // safePool returns the oil pool inside the core's bubble.
@@ -425,7 +427,7 @@ func TestPipesSurviveASave(t *testing.T) {
 	}
 }
 
-func TestAPoolsCardsCarryThePumpAndItsPipe(t *testing.T) {
+func TestAPumpAndItsSiteBelongOnlyToTheirCell(t *testing.T) {
 	s := newGame()
 	seedStock(s)
 	arriveAll(s)
@@ -443,23 +445,124 @@ func TestAPoolsCardsCarryThePumpAndItsPipe(t *testing.T) {
 	}
 	seedStock(s)
 	pump := pumpOn(t, s, d)
-	// The pool is one thing: every tile of it shows its pump.
+	pc, pr := pumpCell(d)
+	if !patchPumped(s, d.Col, d.Row) {
+		t.Fatal("the pump no longer belongs to its pool functionally")
+	}
 	for _, tile := range depositTiles(d) {
-		{
-			col, row := tile[0], tile[1]
-			cc, cr := tileCell(col, row)
-			panel = tooltipLayout(s, camera, cc, cr, map[string]bool{})
-			if panel.findButton(buttonLayPipe) == nil {
-				t.Errorf("tile %d, %d of the pool doesn't show its pump", col, row)
-			}
-			if panel.findButton(buttonBuildPump) != nil {
-				t.Errorf("tile %d, %d offers a second pump", col, row)
-			}
+		col, row := tileCell(tile[0], tile[1])
+		if col == pc && row == pr {
+			col++
+		}
+		things := thingsAt(s, col, row)
+		foundOil, foundPump := false, false
+		for _, thing := range things {
+			foundOil = foundOil || thing.Type == TypeOil
+			foundPump = foundPump || thing.Type == TypePump
+		}
+		if !foundOil {
+			t.Errorf("pool tile %d, %d lost its deposit card", tile[0], tile[1])
+		}
+		if foundPump {
+			t.Errorf("pool tile %d, %d shows a pump from another cell",
+				tile[0], tile[1])
 		}
 	}
+	if things := thingsAt(s, pc, pr); len(things) != 1 ||
+		things[0].Type != TypePump {
+		t.Fatalf("the pump cell shows %v, want only the pump", things)
+	}
+	pumpPanel := tooltipLayout(s, camera, pc, pr, map[string]bool{})
+	titles := 0
+	for _, row := range pumpPanel.rows {
+		if !row.title {
+			continue
+		}
+		titles++
+		if row.thing.Type != TypePump {
+			t.Errorf("the pump cell also shows a %s card", row.thing.Type)
+		}
+	}
+	if titles != 1 || pumpPanel.findButton(buttonLayPipe) == nil {
+		t.Errorf("the pump cell has %d cards and pipe button %v",
+			titles, pumpPanel.findButton(buttonLayPipe) != nil)
+	}
+
+	pcTileCol, pcTileRow := cellTile(pc, pr)
+	pcTile := [2]int{pcTileCol, pcTileRow}
+	var otherTile [2]int
+	foundOtherTile := false
+	for _, tile := range depositTiles(d) {
+		if tile == pcTile {
+			continue
+		}
+		otherTile = tile
+		foundOtherTile = true
+		break
+	}
+	if !foundOtherTile {
+		t.Fatal("the pool has no tile away from its pump")
+	}
+	otherCol, otherRow := tileCell(otherTile[0], otherTile[1])
+	otherPanel := tooltipLayout(s, camera, otherCol, otherRow, map[string]bool{})
+	if otherPanel.findButton(buttonLayPipe) != nil {
+		t.Error("another pool cell offers the pump's pipe")
+	}
+	if otherPanel.findButton(buttonSend) == nil {
+		t.Error("another pool cell lost the deposit's send button")
+	}
+
+	site := newGame()
+	site.Jobs = []Job{{Kind: BuildingPump, Col: pc, Row: pr}}
+	if things := thingsAt(site, pc, pr); len(things) != 1 ||
+		things[0].Type != TypeSite {
+		t.Errorf("the pump site cell shows %v, want only the site", things)
+	}
+	if things := thingsAt(site, otherCol, otherRow); len(things) != 1 ||
+		things[0].Type != TypeOil {
+		t.Errorf("a different pool cell shows %v, want only its deposit", things)
+	}
+
+	worker := s.Robots[1]
+	worker.X, worker.Y = cellCenterUnits(pc, pr)
+	s.Robots[worker.ID] = worker
+	scene := newPlayScene(s)
+	gx, gy := projectBuilding(pump)
+	across, height := buildingSize(BuildingPump)
+	scale := buildingIcon(across, height, scene.zoom)
+	point := scene.camera.ToScreen(golib.Vector2{
+		X: gx,
+		Y: gy - height*scale*unitH*0.5,
+	})
+	if !scene.pickPumpAt(point.X, point.Y) {
+		t.Fatal("clicking the pump body didn't pick the pump")
+	}
+	if !scene.picked || scene.pickedCol != pc || scene.pickedRow != pr {
+		t.Errorf("the pump body picked cell %d, %d, want %d, %d",
+			scene.pickedCol, scene.pickedRow, pc, pr)
+	}
+	selected := tooltipLayoutForSelection(
+		s, scene.camera, scene.pickedCol, scene.pickedRow,
+		scene.expanded, scene.pickedThing,
+	)
+	selectedTitles := 0
+	for _, row := range selected.rows {
+		if !row.title {
+			continue
+		}
+		selectedTitles++
+		if row.thing.Type != TypePump {
+			t.Errorf("clicking the raised pump shows a %s card", row.thing.Type)
+		}
+	}
+	if selectedTitles != 1 {
+		t.Errorf("clicking the raised pump shows %d cards, want only its card",
+			selectedTitles)
+	}
+
 	Apply(s, LayPipe{From: pump.ID, To: 0})
-	panel = tooltipLayout(s, camera, dc, dr, map[string]bool{})
-	if panel.findButton(buttonRemovePipe) == nil {
+	pumpPanel = tooltipLayout(s, camera, pc, pr, map[string]bool{})
+	if pumpPanel.findButton(buttonRemovePipe) == nil {
 		t.Error("a piped pump doesn't offer to remove its pipe")
 	}
 }

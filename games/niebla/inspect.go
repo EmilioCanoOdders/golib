@@ -106,8 +106,26 @@ func tooltipLayout(
 	col, row int,
 	expanded map[string]bool,
 ) tooltip {
+	return tooltipLayoutForSelection(s, camera, col, row, expanded, "")
+}
+
+func tooltipLayoutForSelection(
+	s *State,
+	camera *golib.Camera,
+	col, row int,
+	expanded map[string]bool,
+	focusedThing string,
+) tooltip {
 	t := tooltip{col: col, row: row, w: tooltipWidth}
 	things := thingsAt(s, col, row)
+	if focusedThing != "" {
+		for _, thing := range things {
+			if thing.ID == focusedThing {
+				things = []Thing{thing}
+				break
+			}
+		}
+	}
 	tcol, trow := cellTile(col, row)
 	t.lone = len(things) == 1
 	t.rows = append(t.rows, tooltipRow{header: true})
@@ -449,6 +467,56 @@ func (t tooltip) findButton(label string) *tooltipRow {
 		}
 	}
 	return nil
+}
+
+// pickPumpAt selects the pump or pump site whose drawn body holds the
+// screen point.
+func (s *playScene) pickPumpAt(x, y float32) bool {
+	for _, id := range sortedBuildingIDs(s.state) {
+		b := s.state.Buildings[id]
+		if b.Kind != BuildingPump {
+			continue
+		}
+		if !pumpBodyContains(s, x, y, b.Col, b.Row) {
+			continue
+		}
+		s.picked = true
+		s.pickedCol, s.pickedRow = b.Col, b.Row
+		s.pickedThing = buildingThing(b).ID
+		s.armed = ""
+		s.closeRadial()
+		return true
+	}
+	for _, job := range s.state.Jobs {
+		if job.Kind != BuildingPump {
+			continue
+		}
+		if !pumpBodyContains(s, x, y, job.Col, job.Row) {
+			continue
+		}
+		s.picked = true
+		s.pickedCol, s.pickedRow = job.Col, job.Row
+		s.pickedThing = siteThing(job).ID
+		s.armed = ""
+		s.closeRadial()
+		return true
+	}
+	return false
+}
+
+// pumpBodyContains tests the pump's projected body, including its icon
+// scale when the camera is far out.
+func pumpBodyContains(s *playScene, x, y float32, col, row int) bool {
+	gx, gy := projectBuilding(Building{Col: col, Row: row})
+	across, height := buildingSize(BuildingPump)
+	icon := buildingIcon(across, height, s.zoom) * s.zoom
+	foot := s.camera.ToScreen(golib.Vector2{X: gx, Y: gy})
+	halfWidth := across * unitW * icon / 2
+	capRadius := across * unitW * icon * 0.22
+	top := foot.Y - (height+1)*unitH*icon - capRadius
+	bottom := foot.Y + across*unitH*icon/2
+	return x >= foot.X-halfWidth && x <= foot.X+halfWidth &&
+		y >= top && y <= bottom
 }
 
 // cellDiamond returns a cell's outline in world space, lifted to a
