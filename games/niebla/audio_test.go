@@ -157,9 +157,21 @@ func TestAudioFallsWithReceiverDistanceAndHeight(t *testing.T) {
 			previous = got
 		}
 	}
+	cameraOver(s, x, y, 32)
+	near := s.au.audible(s, x+200, y, gunVolume)
+	distant := s.au.audible(s, x+800, y, gunVolume)
+	if distant >= near*0.6 {
+		t.Fatalf("a gun 800 meters away is still too loud: %g after %g", distant, near)
+	}
+	shell := s.au.audibleWithFalloff(
+		s, x+800, y, shellVolume, shellReach, shellFalloff,
+	)
+	if shell <= distant {
+		t.Fatalf("a cannon lost its extra reach: %g versus gun %g", shell, distant)
+	}
 	cameraOver(s, x, y, 1)
-	if got := s.au.audibleFrom(
-		s, x+1900, y, shellVolume, shellReach,
+	if got := s.au.audibleWithFalloff(
+		s, x+1900, y, shellVolume, shellReach, shellFalloff,
 	); got < 0.1 {
 		t.Fatalf("artillery 1900 meters away vanished at the farthest zoom: %g", got)
 	}

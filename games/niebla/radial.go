@@ -224,10 +224,13 @@ func (s *playScene) pickRadial(mx, my float32) {
 		s.au.ui(0.6)
 		return
 	}
+	before := len(s.state.Jobs)
 	Apply(s.state, MarkBuilding{
 		Kind: item.kind, Col: s.radialCol, Row: s.radialRow,
 	})
-	s.au.ui(0.95)
+	if len(s.state.Jobs) > before {
+		s.au.placed()
+	}
 	s.closeRadial()
 }
 

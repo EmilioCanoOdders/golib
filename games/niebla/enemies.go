@@ -19,6 +19,13 @@ const (
 	markScale = 1.3 // the scout's doodle, about 40 u long
 )
 
+func latestReport(s *State) (Report, bool) {
+	if len(s.Reports) == 0 {
+		return Report{}, false
+	}
+	return s.Reports[len(s.Reports)-1], true
+}
+
 // drawMarks paints what the scouts left on the ground, in spray paint:
 // the oldest drawing there is, flat on the ground, so everything walks
 // over it.

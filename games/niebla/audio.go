@@ -17,6 +17,9 @@ import (
 
 const (
 	uiClickVolume  = 0.8         // a press of the interface
+	uiClickPitch   = 0.72        // a deeper press than the source recording
+	placeVolume    = 0.7         // a site marked on the ground
+	alertVolume    = 0.65        // a new rival report
 	shellVolume    = 1.0         // the colony's artillery speaking
 	shellFarVolume = 0.9         // a rival city's mobile artillery
 	gunVolume      = 0.9         // small arms, the colony's and the rivals'
@@ -43,12 +46,16 @@ const (
 	nearZoomFloor  = 0.35        // the weight the world keeps at the farthest stop
 	audioReach     = 2800.0      // meters a world sound carries from the camera
 	shellReach     = 3800.0      // a cannon carries farther than small arms
+	audioFalloff   = 2.3         // nearby sounds dominate the general mix
+	shellFalloff   = 1.3         // cannon reports keep more of their distance
 	audioHigh      = 2100.0      // receiver height in meters at the farthest zoom
 	audioFloor     = 0.02        // quieter than this and a sound doesn't start
 )
 
 type audioField struct {
 	click    *golib.Sound
+	place    *golib.Sound
+	alert    *golib.Sound
 	shell    *golib.Sound
 	shellFar *golib.Sound
 	burst    *golib.Sound
@@ -73,7 +80,13 @@ type audioField struct {
 
 func newAudioField() *audioField {
 	a := &audioField{
-		click:    golib.NewSoundFile("sounds/click.ogg"),
+		click: golib.NewSoundFile("sounds/click.ogg"),
+		place: golib.NewSound(golib.SoundSpec{
+			Wave: golib.WaveNoise, Frequency: 125, Slide: -240,
+			Duration: 0.27, Attack: 0.002, Release: 0.24,
+			Volume: 0.6,
+		}),
+		alert:    golib.NewSoundFile("sounds/alert.wav"),
 		shell:    golib.NewSoundFile("sounds/artillery-fire.ogg"),
 		shellFar: golib.NewSoundFile("sounds/artillery-fire-distant.ogg"),
 		burst: golib.NewSound(golib.SoundSpec{
@@ -124,7 +137,15 @@ func newAudioField() *audioField {
 // ui plays the interface's click; the pitch keeps each kind of press
 // recognizable by ear alone.
 func (a *audioField) ui(pitch float32) {
-	a.click.PlayWith(uiClickVolume, pitch)
+	a.click.PlayWith(uiClickVolume, pitch*uiClickPitch)
+}
+
+func (a *audioField) placed() {
+	a.place.PlayWith(placeVolume, 1)
+}
+
+func (a *audioField) warning() {
+	a.alert.PlayWith(alertVolume, 1)
 }
 
 // nearness says how close the view stands to the ground: the weight
@@ -145,6 +166,12 @@ func (a *audioField) audible(s *playScene, x, y, base float64) float32 {
 func (a *audioField) audibleFrom(
 	s *playScene, x, y, base, reach float64,
 ) float32 {
+	return a.audibleWithFalloff(s, x, y, base, reach, audioFalloff)
+}
+
+func (a *audioField) audibleWithFalloff(
+	s *playScene, x, y, base, reach, falloff float64,
+) float32 {
 	center := s.camera.Center()
 	rx, ry := unproject(center.X, center.Y)
 	stop := golib.Clamp(
@@ -156,7 +183,7 @@ func (a *audioField) audibleFrom(
 	if fall <= 0 {
 		return 0
 	}
-	v := base * fall
+	v := base * math.Pow(fall, falloff)
 	if v < audioFloor {
 		return 0
 	}
@@ -286,8 +313,9 @@ func (a *audioField) fired(s *playScene, shot Shot) {
 		if shot.Rival {
 			sound, base = a.shellFar, shellFarVolume
 		}
-		if v := a.audibleFrom(
+		if v := a.audibleWithFalloff(
 			s, shot.FromX, shot.FromY, base, shellReach,
+			shellFalloff,
 		); v > 0 {
 			sound.PlayWith(v, golib.RandomFloat(0.96, 1.04))
 		}

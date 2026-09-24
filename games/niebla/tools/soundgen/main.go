@@ -20,12 +20,42 @@ import (
 const rate = 22050
 
 func main() {
+	if len(os.Args) == 3 && os.Args[1] == "--alert" {
+		write(os.Args[2], alert())
+		return
+	}
 	if len(os.Args) == 2 {
 		write(os.Args[1], mineralRing())
 		return
 	}
 	write(os.Args[1], wind())
 	write(os.Args[2], oilBed())
+}
+
+func alert() []float64 {
+	out := make([]float64, int(1.5*rate))
+	hornNote(out, 0, 0.25, 110, 0.75)
+	hornNote(out, 0.28, 0.25, 146.83, 0.8)
+	hornNote(out, 0.58, 0.78, 196, 0.85)
+	hornNote(out, 0.58, 0.78, 98, 0.65)
+	hornNote(out, 0.58, 0.78, 146.83, 0.35)
+	normalize(out, 0.75)
+	return out
+}
+
+func hornNote(out []float64, start, duration, hz, level float64) {
+	for i := int(start * rate); i < len(out); i++ {
+		elapsed := float64(i)/rate - start
+		if elapsed >= duration {
+			break
+		}
+		attack := math.Min(1, elapsed/0.035)
+		release := math.Min(1, (duration-elapsed)/0.18)
+		breath := 0.93 + 0.07*math.Sin(2*math.Pi*5*elapsed)
+		phase := 2 * math.Pi * hz * elapsed
+		out[i] += level * attack * release * breath * (math.Sin(phase) + 0.55*math.Sin(2*phase) +
+			0.3*math.Sin(3*phase) + 0.12*math.Sin(4*phase))
+	}
 }
 
 func mineralRing() []float64 {

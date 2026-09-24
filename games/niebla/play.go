@@ -126,6 +126,7 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 		setFilters(!monitor.on)
 	}
 	s.updateCamera(input, dt)
+	previousReport, hadReport := latestReport(s.state)
 	taken := s.dev.update(s, input)
 	if !taken {
 		taken = s.updateTech(input)
@@ -142,6 +143,11 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 	for i := 0; i < ticks; i++ {
 		Apply(s.state, Tick{})
 		s.au.update(s, 1)
+		if report, ok := latestReport(s.state); ok &&
+			(!hadReport || report != previousReport) {
+			s.au.warning()
+			previousReport, hadReport = report, true
+		}
 	}
 	if s.pickedRobot != 0 {
 		if _, alive := s.state.Robots[s.pickedRobot]; !alive {
@@ -568,7 +574,11 @@ func (s *playScene) pressButton(row tooltipRow) {
 	case buttonBuildPump:
 		if d, ok := depositAt(tcol, trow); ok {
 			col, row := pumpCell(d)
+			before := len(s.state.Jobs)
 			Apply(s.state, MarkBuilding{Kind: BuildingPump, Col: col, Row: row})
+			if len(s.state.Jobs) > before {
+				s.au.placed()
+			}
 		}
 	case buttonLayPipe:
 		if end, ok := pipeEndOf(s.state, thing); ok {

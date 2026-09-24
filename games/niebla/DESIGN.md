@@ -324,6 +324,15 @@ make it jump by tens of screen pixels. Blender is only for editing and
 rendering the art, never for building or playing the game.
 
 ## Sounds
+Mix adjustment (2026-09-24): ordinary world sounds now drop with the
+remaining reach raised to 2.3, rather than linearly; cannon reports use
+1.3 and retain their longer 3800 m reach. Interface clicks play at 0.72
+of their former pitch. Marking a building site (including a pump) makes
+a low, soft thump instead of another click. Each new rival report sounds
+a short, low three-note brass fanfare, made by `tools/soundgen` as
+`assets/sounds/alert.wav`; reports already present in a loaded save are
+silent. The fanfare is interface audio, independent of camera distance.
+
 Audio correction (2026-09-23): the listener is the camera's ground center
 in meters, lifted as the zoom wheel pulls out (up to 2100 m). Every world
 emitter uses the same three-dimensional distance to that listener, fading
@@ -368,6 +377,10 @@ fast-forward cannot swallow a short-lived shot between updates.
 Landed (2026-09-22), in `audio.go`, all of it view: the world speaks where it happens and the view weighs it. Every world sound is multiplied by how close the view stands (`nearness`: a whisper at stop 0, whole from stop 3, never nothing) and by its distance to the view's middle (a little past the view's width on screen), so far out the world whispers under the wind. The wind loop and the oil pools' buried seethe are synthesized by `tools/soundgen` and read as files (`wind-loop.ogg`, `oil-bed.ogg`), so they loop with no seam; the wind is three layers driven by one long gust - a deep rumble always there, an air that swells with it, a whistle only the strongest gusts sing - so being far out sounds like the atmosphere and not like a fault. the bed lives at the nearest pool with oil left (never a dry one) and drops a bloop (`oil-drip.ogg`) every 5-20 s and a thicker gurgle (`oil-gurgle.ogg`, CC-BY) every 30-70 s, while the lilac veins, the minerals, sparkle: a soft crystal ping, one of three pitches varied by the play, every 0.4-2.5 s at the nearest vein with ore - and the more veins the view hears, the louder and the sooner the next ping, so the shimmer grows with the mineral in earshot. The war's shots are learned the way the lights learn them, by comparing the state's with the ones seen last: the colony's artillery its cannon recording (`artillery-fire.ogg`, CC0), a rival base's gun the filtered, echoing one of the same (`artillery-fire-distant.ogg`), small arms two short reports (`gun-a/b.ogg`, CC0) held to one sound every few ticks, a shell in the last second over the view falls whistling (a falling note made in code, once per shell), and its landing is a wide whump of noise, made in code too. The interface clicks (`click.ogg`, CC0): opening the build menu, picking a group or a blueprint, every card's button, the schematics' badge, calling a squad, the trash can's two presses. Still to come: the fog's own low loop outside bubbles, the repulsor hum, robot blips, a digestion crunch, a construction chime, sirens. Fully playable muted.
 
 ## Tuning
+In `audio.go`: `audioFalloff` 2.3 for world sounds, `shellFalloff` 1.3
+for cannon reports; `uiClickPitch` 0.72, `placeVolume` 0.7 and
+`alertVolume` 0.65 set the interface mix.
+
 Lost colony units leave `unitWreckRefund` 0.25 of each resource: build
 cost, cargo and remaining tank. The wreck is a pile on their cell
 (`sim_piles.go`). Fog-digested workers and fallen combat units use the
@@ -463,6 +476,9 @@ The prototype is done when these five have landed, on top of the debts under [La
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-24: world audio fades harder with distance except for cannon
+  reports; clicks are lower, marking a site thumps, and fresh rival
+  reports announce themselves with a low brass fanfare.
 - 2026-09-24: repairs now belong to a military mechanic, not the colony's
   ordinary workers. A war factory builds one for 100 kg of lilac and 50 L
   of oil in 15 s; the 60-health unit seeks the oldest damaged building,
