@@ -37,6 +37,15 @@ NIEBLA_PROTECTOR_SHOT_STATE=../../build/niebla/protector.json \
 
 The test prints the protector cell's click position for the current layout.
 
+To inspect the joined outline of the core and two overlapping protectors:
+
+```text
+NIEBLA_BUBBLE_SHOT_STATE=../../build/niebla/bubbles.json \
+  ./golib go -C games/niebla test -run TestWriteBubbleShotState
+./golib shot niebla 60 --save build/niebla/bubbles.json \
+  --input "Enter@1"
+```
+
 To inspect the offscreen guides for a rival report and pending schematics:
 
 ```text
@@ -155,6 +164,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `shots.go` | Shots on the screen and their light, for looks only: bullets as streaks, shells on their arc over a shadow, pools of light added over the ground and what stands on it (`lightPool`), guns' flashes, and bursts of sparks that cool from yellow to red, embers and smoke; the field (`fxField`) learns of fired and landed shots by comparing the state's with the ones it saw last; view, never state |
 | `enemies.go` | The rivals on the screen: the scouts' marks on the ground, shadows and eight-view PNG models for all four moving rival chassis, damage bars and the words the player is told (`threatWords` for the HUD, `reportWords` and `drawReport` for the news) |
 | `mist.go` | The fog on the screen: a haze outside every repulsor's circle and `mistLayers` layers that thicken it past the line, each the region minus the clear circles (`clearDiscs`: the core's, the protectors', the rivals'), cut in strips whose gaps join into quads (`drawMist`, `mistGaps`), so the circles are round at every zoom and the air inside them is clear |
+| `bubble_edges.go` | The core's and protectors' joined clear ground: circle intersections divide each boundary into arcs, and only the arcs outside every other bubble are drawn, leaving one exterior outline |
 | `swell.go` | How a pressing swell looks, by its pressure: waves of shade rolling in to the line, stopping at the clear circles, and one-pixel static over the mist; a pure picture of the state |
 | `region.go` | The region's measures, `land` (the generated ground of the seed in hand) and `useRegion`, the isometric `project` that lifts by the relief and its inverse `unproject`, tile helpers, `Deposit` and `depositAt`; pure Go, no drawing |
 | `worldgen.go` | The generator, a pure function of the seed: relief by wave function collapse, ground cover, deposits as fields of richness; its own PRNG and noise; pure Go, no drawing |
@@ -170,7 +180,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `guides.go` | Screen-edge arrows for an offscreen rival report or pending schematics, with layout kept clear of the HUD and the two guides separated when they point the same way; view, never state |
 | `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and amplitude-modulated crystal pings, gunfire and shell impacts, low interface clicks, a site-marking thump and a low fanfare for new rival reports. Ordinary world emitters fade steeply with distance and become quiet beyond the view; cannon reports keep their longer, gentler range. Individual shell whistles track their own positions through the descending half of flight. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |
 | `tools/soundgen/` | The maker of the wind, oil and mineral sounds and `assets/sounds/alert.wav`: stdlib Go renders the noise beds as WAV for conversion to OGG, the mineral ring as a seamless WAV with irregular pitch drift of at most one semitone, the crystal ping with amplitude modulation, and the low alert fanfare with `--alert`; run it only when a sound changes |
-| `draw.go` | The region painter: the core's monolith, buildings with their damage bars, the bubbles' rings, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
+| `draw.go` | The region painter: the core's monolith, buildings with their damage bars, the bubbles' outside edges, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
 | `units.go` | The colony's four unit models on the ground, with Blender-rendered shadows, cargo, charge feedback and combat-unit health bars |
 | `worldsprites.go` | The eight eight-direction model and shadow sheets in the world and the scaled model icons; converts the world ground point to a screen pixel before drawing so moving sprites do not jump by the camera's zoom |
 | `orientation.go` | The screen-space eight-way facing derived from an isometric movement vector, and the ground-plane yaw used for world details |

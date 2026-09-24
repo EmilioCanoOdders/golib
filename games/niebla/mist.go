@@ -22,28 +22,37 @@ const (
 // disc is a circle on the flat ground, in units.
 type disc struct{ x, y, r float64 }
 
-// clearDiscs lists the circles the fog stays out of: the core's bubble,
-// every protector's and every rival repulsor's. A circle follows what
-// carries it up the relief, as its outline does.
-func clearDiscs(s *State) []disc {
-	lifted := func(x, y, r float64) disc {
-		h := float64(land.heightAt(float32(x), float32(y)))
-		return disc{x - h, y - h, r}
-	}
+// colonyClearDiscs lists the core's and protectors' bubbles. A circle
+// follows what carries it up the relief, as its outline does.
+func colonyClearDiscs(s *State) []disc {
 	cx, cy := tileCenterUnits(coreCol, coreRow)
 	discs := []disc{{cx, cy, coreBubbleRadius * unitsPerTile}}
 	for _, id := range sortedBuildingIDs(s) {
 		if b := s.Buildings[id]; b.Kind == BuildingProtector {
 			x, y := cellCenterUnits(b.Col, b.Row)
 			if radius := protectorRadiusTiles(b); radius > 0 {
-				discs = append(discs, lifted(x, y, radius*unitsPerTile))
+				discs = append(discs,
+					liftedDisc(x, y, radius*unitsPerTile))
 			}
 		}
 	}
+	return discs
+}
+
+func liftedDisc(x, y, radius float64) disc {
+	height := float64(land.heightAt(float32(x), float32(y)))
+	return disc{x - height, y - height, radius}
+}
+
+// clearDiscs lists every circle the fog stays out of: the colony's and
+// every rival repulsor's.
+func clearDiscs(s *State) []disc {
+	discs := colonyClearDiscs(s)
 	for _, id := range sortedEnemyIDs(s) {
 		e := s.Enemies[id]
 		if reach := enemySpecOf(e.Kind).bubble; reach > 0 {
-			discs = append(discs, lifted(e.X, e.Y, reach))
+			discs = append(discs,
+				liftedDisc(e.X, e.Y, reach))
 		}
 	}
 	return discs

@@ -456,25 +456,17 @@ func protectorBubbleCenter(b Building) (cx, cy float32) {
 	return project(float32(x), float32(y))
 }
 
-// drawBubbles rings the safe ground: the core's bubble and a dimmer ring
-// per shadow protector. Inside a ring the air is clear - the fog's cover
-// leaves the circles out (mist.go) - so the rings carry no tint.
+// drawBubbles outlines the outside edge of the core's and protectors'
+// joined clear ground. Their overlapping inner edges are left unpainted.
 func drawBubbles(s *State, screen *golib.Screen, zoom float32) {
-	for _, id := range sortedBuildingIDs(s) {
-		b := s.Buildings[id]
-		if b.Kind != BuildingProtector {
-			continue
+	discs := colonyClearDiscs(s)
+	for i := range discs {
+		color, thickness := bubbleEdgeColor, 3/zoom
+		if i > 0 {
+			color, thickness = protectorEdgeColor, 2/zoom
 		}
-		cx, cy := protectorBubbleCenter(b)
-		if radius := protectorRadiusTiles(b); radius > 0 {
-			ellipseOutline(screen, cx, cy, float32(radius), 2/zoom,
-				protectorEdgeColor)
-		}
+		drawDiscOutline(screen, discs, i, thickness, color)
 	}
-	cx, cy := projectCore()
-	// The outlines keep their thickness on the screen, not in the world:
-	// inside the bubble they would grow into roads.
-	ellipseOutline(screen, cx, cy, coreBubbleRadius, 3/zoom, bubbleEdgeColor)
 }
 
 // drawCorePad paints the core's whole tile as its pad, on the ground, so
