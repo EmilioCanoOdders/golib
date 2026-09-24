@@ -131,15 +131,15 @@ func TestTheOreSoundsOnlyWhereTheViewStands(t *testing.T) {
 	}
 }
 
-func TestAudioFallsWithReceiverDistanceAndHeight(t *testing.T) {
+func TestAudioFallsWithViewDistanceAndZoom(t *testing.T) {
 	s := newPlayScene(nil)
 	x, y := float64(2500), float64(2500)
 	previous := float32(0)
 	for _, zoom := range []float32{1, 2, 8, 32} {
 		cameraOver(s, x, y, zoom)
 		got := s.au.audible(s, x, y, shellVolume)
-		if got <= previous {
-			t.Fatalf("artillery at zoom %g has volume %g, after %g",
+		if got < previous {
+			t.Fatalf("a world sound at zoom %g has volume %g, after %g",
 				zoom, got, previous)
 		}
 		previous = got
@@ -150,7 +150,7 @@ func TestAudioFallsWithReceiverDistanceAndHeight(t *testing.T) {
 		for _, distance := range []float64{200, 400, 600, 800} {
 			cameraOver(s, x+distance, y, zoom)
 			got := s.au.audible(s, x, y, gunVolume)
-			if got >= previous {
+			if got > previous {
 				t.Fatalf("gun grew louder at zoom %g with the camera %g meters away: %g after %g",
 					zoom, distance, got, previous)
 			}
@@ -158,9 +158,9 @@ func TestAudioFallsWithReceiverDistanceAndHeight(t *testing.T) {
 		}
 	}
 	cameraOver(s, x, y, 32)
-	near := s.au.audible(s, x+200, y, gunVolume)
+	near := s.au.audible(s, x+30, y, gunVolume)
 	distant := s.au.audible(s, x+800, y, gunVolume)
-	if distant >= near*0.6 {
+	if distant >= near*0.05 {
 		t.Fatalf("a gun 800 meters away is still too loud: %g after %g", distant, near)
 	}
 	shell := s.au.audibleWithFalloff(
@@ -177,7 +177,7 @@ func TestAudioFallsWithReceiverDistanceAndHeight(t *testing.T) {
 	}
 	cameraOver(s, 0, 0, 8)
 	if got := s.au.audible(s, x, y, shellVolume); got != 0 {
-		t.Fatalf("off-screen artillery has volume %g", got)
+		t.Fatalf("an off-screen world sound has volume %g", got)
 	}
 }
 

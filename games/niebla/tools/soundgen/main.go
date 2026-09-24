@@ -2,6 +2,7 @@
 //
 //	go run ./tools/soundgen wind.wav oilbed.wav
 //	go run ./tools/soundgen mineral-ring.wav
+//	go run ./tools/soundgen --tink mineral-tink.wav
 //
 // Wind and oil are lowpassed noise, crossfaded into themselves. The
 // mineral ring wanders at irregular intervals and ends on a whole wave.
@@ -22,6 +23,10 @@ const rate = 22050
 func main() {
 	if len(os.Args) == 3 && os.Args[1] == "--alert" {
 		write(os.Args[2], alert())
+		return
+	}
+	if len(os.Args) == 3 && os.Args[1] == "--tink" {
+		write(os.Args[2], mineralTink())
 		return
 	}
 	if len(os.Args) == 2 {
@@ -101,6 +106,26 @@ func mineralRing() []float64 {
 		out[i] = 0.4 * math.Sin(2*math.Pi*phase)
 		phase += hz[i] * correction / rate
 	}
+	return out
+}
+
+func mineralTink() []float64 {
+	const seconds = 0.8
+	const frequency = 3800.0
+	out := make([]float64, int(seconds*rate))
+	for i := range out {
+		at := float64(i) / rate
+		attack := math.Min(1, at/0.004)
+		release := math.Min(1, (seconds-at)/0.16)
+		decay := math.Exp(-3.8 * at)
+		modulation := 0.25 + 0.75*(0.5+0.5*
+			math.Sin(2*math.Pi*6*at))
+		phase := 2 * math.Pi * frequency * at
+		metal := math.Sin(phase) + 0.24*math.Sin(2*phase) +
+			0.08*math.Sin(3*phase)
+		out[i] = attack * release * decay * modulation * metal
+	}
+	normalize(out, 0.75)
 	return out
 }
 

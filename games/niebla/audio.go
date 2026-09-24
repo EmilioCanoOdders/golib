@@ -11,9 +11,8 @@ import (
 // speaks where it happens — a shell sounds from the gun that fired it, a
 // drip from the pool it left — and the view weighs every world sound by
 // the distance from its source to the camera's center on the ground.
-// The three ambience loops are
-// synthesized by tools/soundgen; short pings, whistles and impacts are
-// made in code.
+// The mineral ping and three ambience loops are synthesized by
+// tools/soundgen; whistles and impacts are made in code.
 
 const (
 	uiClickVolume  = 0.8         // a press of the interface
@@ -29,8 +28,8 @@ const (
 	whistleCount   = 8           // independent incoming shells at once
 	dripVolume     = 0.6         // an oil pool's bloop
 	gurgleVolume   = 0.55        // its rarer, thicker cousin
-	tinkVolume     = 0.2125 / 12 // a lilac vein's crystal ping
-	ringVolume     = 0.28        // the vein's continuous resonance
+	tinkVolume     = 0.2125 / 48 // a lilac vein's crystal ping
+	ringVolume     = 0.05        // the vein's continuous resonance
 	tinkCrowdBoost = 0.15        // how much every extra audible vein lifts a ping
 	tinkCrowdHurry = 0.5         // and how much it hurries the next one along
 	windFarVolume  = 0.18        // the wind, the whole region in view
@@ -44,11 +43,12 @@ const (
 	tinkLatest     = 75          // and at the most: 1.25 s
 	nearZoomSpan   = 2.0         // zooms of glide from a whisper to a full world
 	nearZoomFloor  = 0.35        // the weight the world keeps at the farthest stop
-	audioReach     = 2800.0      // meters a world sound carries from the camera
+	audioReach     = 2800.0      // ordinary world max range, meters
+	audioViewReach = 1.5         // view radii ordinary sounds carry
 	shellReach     = 3800.0      // a cannon carries farther than small arms
-	audioFalloff   = 2.3         // nearby sounds dominate the general mix
+	audioFalloff   = 3.2         // nearby sounds dominate the general mix
 	shellFalloff   = 1.3         // cannon reports keep more of their distance
-	audioHigh      = 2100.0      // receiver height in meters at the farthest zoom
+	audioHigh      = 2100.0      // cannon listener height at the farthest zoom
 	audioFloor     = 0.02        // quieter than this and a sound doesn't start
 )
 
@@ -64,7 +64,7 @@ type audioField struct {
 	gunB     *golib.Sound
 	drip     *golib.Sound
 	gurgle   *golib.Sound
-	tinks    [3]*golib.Sound
+	tink     *golib.Sound
 	ring     *golib.Sound
 	wind     *golib.Sound
 	oilBed   *golib.Sound
@@ -95,26 +95,11 @@ func newAudioField() *audioField {
 			Wave: golib.WaveNoise, Frequency: 140, Slide: -100,
 			Duration: 1.1, Attack: 0.002, Release: 0.95, Volume: 1,
 		}),
-		gunA:   golib.NewSoundFile("sounds/gun-a.ogg"),
-		gunB:   golib.NewSoundFile("sounds/gun-b.ogg"),
-		drip:   golib.NewSoundFile("sounds/oil-drip.ogg"),
-		gurgle: golib.NewSoundFile("sounds/oil-gurgle.ogg"),
-		tinks: [3]*golib.Sound{
-			// A crystal's ping: a soft note with a short life of its
-			// overtones, and the pitch the play varies.
-			golib.NewSound(golib.SoundSpec{
-				Wave: golib.WaveTriangle, Frequency: 3840,
-				Duration: 0.7, Attack: 0.001, Release: 0.65, Volume: 1,
-			}),
-			golib.NewSound(golib.SoundSpec{
-				Wave: golib.WaveTriangle, Frequency: 5120,
-				Duration: 0.65, Attack: 0.001, Release: 0.6, Volume: 1,
-			}),
-			golib.NewSound(golib.SoundSpec{
-				Wave: golib.WaveTriangle, Frequency: 6400,
-				Duration: 0.6, Attack: 0.001, Release: 0.55, Volume: 1,
-			}),
-		},
+		gunA:         golib.NewSoundFile("sounds/gun-a.ogg"),
+		gunB:         golib.NewSoundFile("sounds/gun-b.ogg"),
+		drip:         golib.NewSoundFile("sounds/oil-drip.ogg"),
+		gurgle:       golib.NewSoundFile("sounds/oil-gurgle.ogg"),
+		tink:         golib.NewSoundFile("sounds/mineral-tink.wav"),
 		ring:         golib.NewSoundFile("sounds/mineral-ring.wav"),
 		wind:         golib.NewSoundFile("sounds/wind-loop.ogg"),
 		oilBed:       golib.NewSoundFile("sounds/oil-bed.ogg"),
@@ -149,26 +134,47 @@ func (a *audioField) warning() {
 }
 
 // nearness says how close the view stands to the ground: the weight
-// every world sound carries. It never reaches nothing - far out, what
-// stands by the view's middle still whispers under the wind - and from
-// zoom 3 on it is whole.
+// ordinary world sounds carry. It never reaches nothing, and from zoom 3
+// on it is whole.
 func nearness(zoom float32) float32 {
 	return nearZoomFloor +
 		(1-nearZoomFloor)*golib.Clamp((zoom-1)/nearZoomSpan, 0, 1)
 }
 
-// audible weighs a world sound against the listener at the camera's
-// center, including its height above the ground at the current zoom.
+// audible weighs an ordinary world sound by its distance from the view
+// and the size of the ground currently on screen.
 func (a *audioField) audible(s *playScene, x, y, base float64) float32 {
-	return a.audibleFrom(s, x, y, base, audioReach)
+	center := s.camera.Center()
+	rx, ry := unproject(center.X, center.Y)
+	dx, dy := x-float64(rx), y-float64(ry)
+	reach := math.Min(audioReach, audioViewRadius(s.zoom)*audioViewReach)
+	if reach <= 0 {
+		return 0
+	}
+	fall := 1 - math.Hypot(dx, dy)/reach
+	if fall <= 0 {
+		return 0
+	}
+	v := base * math.Pow(fall, audioFalloff) *
+		float64(nearness(s.zoom))
+	if v < audioFloor {
+		return 0
+	}
+	return float32(math.Min(v, 1))
 }
 
-func (a *audioField) audibleFrom(
-	s *playScene, x, y, base, reach float64,
-) float32 {
-	return a.audibleWithFalloff(s, x, y, base, reach, audioFalloff)
+func audioViewRadius(zoom float32) float64 {
+	if zoom <= 0 {
+		return 0
+	}
+	halfWidth := float64(screenWidth) / (2 * float64(zoom))
+	halfHeight := float64(screenHeight) / (2 * float64(zoom))
+	x := halfWidth / float64(unitW)
+	y := halfHeight / float64(unitH)
+	return math.Sqrt(2 * (x*x + y*y))
 }
 
+// audibleWithFalloff keeps cannon reports on their longer, elevated range.
 func (a *audioField) audibleWithFalloff(
 	s *playScene, x, y, base, reach, falloff float64,
 ) float32 {
@@ -220,10 +226,9 @@ func (a *audioField) update(s *playScene, ticks int) {
 		a.ring.Loop()
 		a.tinkIn -= ticks
 		if a.tinkIn <= 0 {
-			tink := a.tinks[golib.RandomInt(0, len(a.tinks)-1)]
 			loud := heard * tinkVolume *
 				min(1.4, 1+tinkCrowdBoost*float32(crowd-1))
-			tink.PlayWith(loud, golib.RandomFloat(0.9, 1.15))
+			a.tink.PlayWith(loud, golib.RandomFloat(0.8, 1.3))
 			hurry := 1 + tinkCrowdHurry*float32(crowd-1)
 			a.tinkIn = int(float32(tinkSoonest+
 				golib.RandomInt(0, tinkLatest-tinkSoonest)) / hurry)

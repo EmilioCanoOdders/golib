@@ -21,8 +21,8 @@ need no third-party attribution.
 
 ## Sounds
 
-`wind-loop.ogg`, `oil-bed.ogg` and `mineral-ring.wav` are synthesized for this game by
-`tools/soundgen` and need no attribution.
+`wind-loop.ogg`, `oil-bed.ogg`, `mineral-ring.wav` and `mineral-tink.wav`
+are synthesized for this game by `tools/soundgen` and need no attribution.
 
 **`sounds/click.ogg`** and **`sounds/oil-drip.ogg`**: the interface's
 click and one of the oil pools' bloops.
