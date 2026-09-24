@@ -24,7 +24,17 @@ const (
 	techCalloutRow         = 17.0  // a wrapped line's height
 	techCalloutHead        = 22.0  // the title's line height
 	techCalloutSize        = 13.0  // the body's text size
-	techCalloutMaxBodyRows = 4 // rows reserved in the dismissal hitbox
+	techCalloutMaxBodyRows = 4     // rows reserved in the dismissal hitbox
+
+	// One square per thing a drop brings, drawn like the workers'
+	// portraits a deposit's card holds: the icon of its construction
+	// above, its name below.
+	techSquareW       = 80.0 // three fill the plate's inside, gaps and all
+	techSquareH       = 72.0
+	techSquareGap     = 8.0
+	techSquareIcon    = 40.0 // the box an icon is fitted into
+	techSquareName    = 9.0  // the name's text size
+	techSquareNameRow = 11.0 // and its lines' height
 )
 
 // techBreath is the pulse the glow rides, 0 to 1, from the state's tick
@@ -111,47 +121,73 @@ func drawTechBadge(s *playScene, screen *golib.Screen) {
 	drawTechMark(screen, id, x, y, techBadgeR*1.5)
 }
 
-// techWords is what a drop's callout says: its title, one sentence of
-// body, and the dim list of what it brings.
-func techWords(id string) (title, body, list string) {
+// techItem is one thing a drop brings: a blueprint's body and name, or
+// the pipes, which build no building and carry a mark of their own.
+type techItem struct {
+	name  string
+	kind  BuildingKind
+	pipes bool
+}
+
+// techBrings lists what a drop brought in, one per square: the
+// blueprints of its rung in the ladder and, with the frontier kit, the
+// pipes whose LayPipe asks for that drop by name.
+func techBrings(id string) []techItem {
+	for i := range techLadder {
+		d := &techLadder[i]
+		if d.id != id {
+			continue
+		}
+		items := make([]techItem, 0, len(d.kinds)+1)
+		for _, kind := range d.kinds {
+			items = append(items, techItem{
+				name: catalogInfo(buildingType(kind)).Name,
+				kind: kind,
+			})
+		}
+		if id == techFrontierID {
+			items = append(items, techItem{name: "Pipes", pipes: true})
+		}
+		return items
+	}
+	return nil
+}
+
+// techWords is what a drop's callout says: its title and one sentence of
+// what it is for. The squares under them say what it brings.
+func techWords(id string) (title, body string) {
 	switch id {
 	case techInfraID:
 		return "infrastructure",
-			"Schematics received. Click empty ground to raise a building.",
-			"silo, warehouse, charger"
+			"Schematics received. Click empty ground to raise a building."
 	case techGuardID:
 		return "guard post",
-			"They are at the tanks: the mark they leave is their claim. A guard post would stop the next visit.",
-			"guard"
+			"They are at the tanks: the mark they leave is their claim. A guard post would stop the next visit."
 	case techFrontierID:
 		return "frontier kit",
-			"Grow the safe ground and draw oil without legs. Pipes come with them.",
-			"protector, pump, pipes"
+			"Grow the safe ground and draw oil without legs. Pipes come with them."
 	case techIndustryID:
 		return "robot factory",
-			"More hands for the colony.",
-			"factory"
+			"More hands for the colony."
 	case techMobileID:
 		return "war factory",
-			"Troopers are its squad. Keys 1-9 give the order.",
-			"war factory"
+			"Troopers are its squad. Keys 1-9 give the order."
 	case techArtilleryID:
 		return "artillery",
-			"It shells what the colony sees. Every shell costs lilac and oil.",
-			"artillery"
+			"It shells what the colony sees. Every shell costs lilac and oil."
 	}
-	return "schematics", "The core received schematics.", ""
+	return "schematics", "The core received schematics."
 }
 
-// techWrap breaks a callout's body into lines that fit the plate.
-func techWrap(screen *golib.Screen, text string, width float32) []string {
+// techWrap breaks a text into the lines that fit the width at its size.
+func techWrap(screen *golib.Screen, text string, width, size float32) []string {
 	lines, line := []string{}, ""
 	for _, word := range strings.Fields(text) {
 		try := word
 		if line != "" {
 			try = line + " " + word
 		}
-		if line != "" && screen.TextWidth(try, techCalloutSize, uiText) > width {
+		if line != "" && screen.TextWidth(try, size, uiText) > width {
 			lines = append(lines, line)
 			line = word
 			continue
@@ -175,9 +211,13 @@ func techCalloutRect(s *playScene, height float32) golib.Rectangle {
 	return golib.Rectangle{X: x, Y: y, Width: techCalloutW, Height: height}
 }
 
+// techCalloutBounds is the callout's hitbox: as tall as its tallest
+// picture - four body rows and the squares' row - whatever the body
+// wrapped into, so no click on the plate falls through to the region.
 func techCalloutBounds(s *playScene) golib.Rectangle {
 	height := techCalloutPad*2 + techCalloutHead +
-		float32(techCalloutMaxBodyRows+1)*techCalloutRow
+		float32(techCalloutMaxBodyRows)*techCalloutRow +
+		techSquareGap + techSquareH
 	return techCalloutRect(s, height)
 }
 
@@ -186,20 +226,22 @@ func (s *playScene) dismissTechCallout(mx, my float32) bool {
 	return techCalloutBounds(s).Contains(mx, my)
 }
 
-// drawTechCallout paints the open drop's teaching, anchored to the
-// badge and kept on the screen. Clicking it closes the callout; a click
-// elsewhere closes it and acts on the region.
+// drawTechCallout paints the open drop's teaching and the squares of
+// what it brought, anchored to the badge and kept on the screen.
+// Clicking it closes the callout; a click elsewhere closes it and acts
+// on the region.
 func drawTechCallout(s *playScene, screen *golib.Screen) {
 	if s.techCallout == "" {
 		return
 	}
-	title, body, list := techWords(s.techCallout)
+	title, body := techWords(s.techCallout)
 	inner := float32(techCalloutW - 2*techCalloutPad)
-	lines := techWrap(screen, body, inner)
+	lines := techWrap(screen, body, inner, techCalloutSize)
+	brings := techBrings(s.techCallout)
 	h := techCalloutPad + techCalloutHead +
 		float32(len(lines))*techCalloutRow + techCalloutPad
-	if list != "" {
-		h += techCalloutRow
+	if len(brings) > 0 {
+		h += techSquareGap + techSquareH
 	}
 	plate := techCalloutRect(s, h)
 	screen.DrawRectangle(plate, panelColor)
@@ -211,8 +253,43 @@ func drawTechCallout(s *playScene, screen *golib.Screen) {
 		screen.DrawText(line, tx, ty, techCalloutSize, panelTextColor, uiText)
 		ty += techCalloutRow
 	}
-	if list != "" {
-		drawMarkup(screen, "[dim]"+list+"[/]", tx, ty, techCalloutSize,
-			panelTextColor)
+	if len(brings) > 0 {
+		drawTechSquares(screen, brings, tx, ty+techSquareGap)
+	}
+}
+
+// drawTechSquares paints one square per thing a drop brought in, side
+// by side from x, y: the plate of a deposit's worker portrait, the icon
+// of its construction above and its name below.
+func drawTechSquares(
+	screen *golib.Screen,
+	brings []techItem,
+	x, y float32,
+) {
+	nameTop := y + 3 + techSquareIcon + 5
+	nameBand := float32(2 * techSquareNameRow)
+	for i, item := range brings {
+		area := golib.Rectangle{
+			X:      x + float32(i)*(techSquareW+techSquareGap),
+			Y:      y,
+			Width:  techSquareW,
+			Height: techSquareH,
+		}
+		screen.DrawRectangle(area, buttonColor)
+		screen.DrawRectangleOutline(area, 1, buttonEdgeColor)
+		cx := area.X + techSquareW/2
+		cy := area.Y + 3 + techSquareIcon/2
+		if item.pipes {
+			drawPipeIcon(screen, cx, cy, techSquareIcon)
+		} else {
+			drawBlueprintIcon(screen, item.kind, cx, cy, techSquareIcon)
+		}
+		names := techWrap(screen, item.name, techSquareW-12, techSquareName)
+		ny := nameTop + (nameBand-float32(len(names))*techSquareNameRow)/2
+		for _, line := range names {
+			screen.DrawText(line, cx, ny, techSquareName, panelTextColor,
+				golib.TextOptions{Font: uiFont, Align: golib.AlignCenter})
+			ny += techSquareNameRow
+		}
 	}
 }

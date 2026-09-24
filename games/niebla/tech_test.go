@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"reflect"
 	"testing"
 
@@ -223,6 +224,70 @@ func TestDismissingTechCalloutPassesOutsideClicksThrough(t *testing.T) {
 	}
 }
 
+func TestEveryDropSquaresWhatItBrings(t *testing.T) {
+	want := map[string][]techItem{
+		techInfraID: {
+			{name: "Oil silo", kind: BuildingSilo},
+			{name: "Mineral warehouse", kind: BuildingWarehouse},
+			{name: "Robot charger", kind: BuildingCharger},
+		},
+		techGuardID: {
+			{name: "Guard post", kind: BuildingGuard},
+		},
+		techFrontierID: {
+			{name: "Shadow protector", kind: BuildingProtector},
+			{name: "Oil pump", kind: BuildingPump},
+			{name: "Pipes", pipes: true},
+		},
+		techIndustryID: {
+			{name: "Robot factory", kind: BuildingFactory},
+		},
+		techMobileID: {
+			{name: "War factory", kind: BuildingWarFactory},
+		},
+		techArtilleryID: {
+			{name: "Artillery", kind: BuildingArtillery},
+		},
+	}
+	if len(want) != len(techLadder) {
+		t.Fatalf("%d drops are squared about, the ladder has %d",
+			len(want), len(techLadder))
+	}
+	for i := range techLadder {
+		id := techLadder[i].id
+		got := techBrings(id)
+		if !reflect.DeepEqual(got, want[id]) {
+			t.Errorf("drop %q brings %v, want %v", id, got, want[id])
+		}
+	}
+	if items := techBrings("no such drop"); items != nil {
+		t.Errorf("an unknown drop brings %v, want nothing", items)
+	}
+}
+
+func TestTechCalloutHitboxCoversItsSquares(t *testing.T) {
+	s := newPlayScene(newGame())
+	s.techCallout = techInfraID
+	box := techCalloutBounds(s)
+	want := float32(2*techCalloutPad + techCalloutHead +
+		techCalloutMaxBodyRows*techCalloutRow +
+		techSquareGap + techSquareH)
+	if box.Height != want {
+		t.Fatalf("the hitbox is %v tall, want %v", box.Height, want)
+	}
+	bottomX, bottomY := box.X+4, box.Y+box.Height-1
+	if !s.dismissTechCallout(bottomX, bottomY) {
+		t.Fatal("a click on the squares' last row was not consumed")
+	}
+	if s.techCallout != "" {
+		t.Fatal("a click on the squares did not close the callout")
+	}
+	s.techCallout = techInfraID
+	if s.dismissTechCallout(bottomX, bottomY+1) {
+		t.Fatal("a click under the callout was consumed")
+	}
+}
+
 func TestASaveFromBeforeTheSchematicsOpensWhatItEarned(t *testing.T) {
 	s := newGame()
 	s.Deliveries = 3
@@ -326,5 +391,43 @@ func TestTheTechSurvivesARoundTrip(t *testing.T) {
 	if !reflect.DeepEqual(back.Tech, s.Tech) {
 		t.Errorf("the tech ledger changed across a JSON round trip: %v vs %v",
 			back.Tech, s.Tech)
+	}
+}
+
+// TestWriteTechShotState writes the states the schematics callout's
+// shots start from: NIEBLA_TECH_SHOT_STATE with the infrastructure
+// waiting (three blueprints) and NIEBLA_TECH_PIPES_SHOT_STATE with the
+// frontier kit (the protector, the pump and the pipes). Skipped
+// otherwise, the way tests write nothing. Each run prints where the
+// badge stands on the screen for the current layout.
+func TestWriteTechShotState(t *testing.T) {
+	infra := os.Getenv("NIEBLA_TECH_SHOT_STATE")
+	frontier := os.Getenv("NIEBLA_TECH_PIPES_SHOT_STATE")
+	if infra == "" && frontier == "" {
+		t.Skip("set NIEBLA_TECH_SHOT_STATE / NIEBLA_TECH_PIPES_SHOT_STATE" +
+			" to write the schematics callout's shot states")
+	}
+	write := func(path string, tech map[string]bool) {
+		s := newGame()
+		noRivals(s)
+		s.Deliveries = 1
+		s.Tech = tech
+		x, y := techBadgeAt(newPlayScene(s))
+		t.Logf("schematics badge click: %0.0f,%0.0f", x, y)
+		data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+		if err != nil {
+			t.Fatalf("the state doesn't marshal: %v", err)
+		}
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			t.Fatalf("writing %s: %v", path, err)
+		}
+	}
+	if infra != "" {
+		write(infra, map[string]bool{techInfraID: false})
+	}
+	if frontier != "" {
+		write(frontier, map[string]bool{
+			techInfraID: true, techFrontierID: false,
+		})
 	}
 }

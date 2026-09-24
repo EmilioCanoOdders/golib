@@ -9,7 +9,8 @@ import (
 // One place for the marks the build menu wears. A blueprint's icon is
 // the very body the world draws (drawBuilding), scaled down into the
 // menu's circle, so a change to a building's look is a change to its
-// icon too; the groups, which stand for no one building, carry marks of
+// icon too; the groups, which stand for no one building, and the pipes,
+// which the region lifts on posts along the ground, carry marks of
 // their own drawn here and nowhere else.
 
 // Where a gun points in an icon: up and to the right, the way a barrel
@@ -40,6 +41,27 @@ func drawBlueprintIcon(
 	// the body centered on cy rather than standing on it.
 	drawBuilding(screen, kind, cx, cy+height*unitH/2, across, height,
 		iconGunX, iconGunY)
+}
+
+// drawPipeIcon paints a pipe in miniature: the tube the region lifts on
+// posts. The square it stands on is dark, so the posts wear the pipe's
+// light metal too and the shadow the region draws is left to the world.
+func drawPipeIcon(screen *golib.Screen, cx, cy, box float32) {
+	w := box * 0.92 // the tube's length
+	tube := box * 0.2
+	lift := box * 0.5
+	ground := cy + lift*0.45
+	for _, px := range []float32{cx - w/2 + tube, cx + w/2 - tube} {
+		screen.DrawLine(
+			px, ground, px, ground-lift, tube*0.55, pipeColor,
+		)
+	}
+	screen.DrawLine(
+		cx-w/2, ground-lift, cx+w/2, ground-lift, tube, pipeDarkColor,
+	)
+	screen.DrawLine(
+		cx-w/2, ground-lift, cx+w/2, ground-lift, tube*0.62, pipeColor,
+	)
 }
 
 func drawGroupGlyph(
