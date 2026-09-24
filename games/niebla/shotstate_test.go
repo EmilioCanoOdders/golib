@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+
+	"golib"
 )
 
 // TestWriteShotSquadState writes a region with two war factories and
@@ -52,6 +54,63 @@ func TestWriteShotUnitState(t *testing.T) {
 	x, y := parkCenter()
 	s.spawnRobot(RobotBuilt, x+20, y+12)
 	s.spawnRobot(RobotCombat, x+40, y+24)
+	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWriteRobotPortraitShotState(t *testing.T) {
+	path := os.Getenv("NIEBLA_ROBOT_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_ROBOT_SHOT_STATE to write the robot portrait shot state")
+	}
+	s := newGame()
+	noRivals(s)
+	col, row, ok := nearestTileOf(kindLilac)
+	if !ok {
+		t.Fatal("the region has no lilac for the robot portrait shot")
+	}
+	camera := golib.NewCamera(screenWidth, screenHeight)
+	camera.Bounds = regionOnScreen()
+	camera.Snap()
+	patchX, patchY := tileCenterUnits(col, row)
+	sx, sy := project(float32(patchX), float32(patchY))
+	point := camera.ToScreen(golib.Vector2{X: sx, Y: sy})
+	t.Logf("click the lilac patch at %.0f, %.0f", point.X, point.Y)
+	world := camera.ToWorld(point.X, point.Y)
+	cellCol, cellRow, _ := cellAtWorld(float64(world.X), float64(world.Y))
+	parkX, parkY := parkCenter()
+	for len(s.Robots) < 10 {
+		s.spawnRobot(RobotBuilt, parkX, parkY)
+	}
+	for i := 0; i < 10; i++ {
+		Apply(s, SendRobot{Col: col, Row: row})
+	}
+	panel := tooltipLayout(
+		s, camera, cellCol, cellRow, map[string]bool{},
+	)
+	for _, row := range panel.rows {
+		if !row.workers || len(row.portraits) == 0 {
+			continue
+		}
+		portrait := row.portraits[0]
+		t.Logf("click robot %d portrait at %.0f, %.0f",
+			portrait.robot.ID,
+			portrait.area.X+portrait.area.Width/2,
+			portrait.area.Y+portrait.area.Height/2,
+		)
+		if row.pages > 1 {
+			t.Logf("click next portrait page at %.0f, %.0f",
+				row.nextPage.X+row.nextPage.Width/2,
+				row.nextPage.Y+row.nextPage.Height/2,
+			)
+		}
+		break
+	}
 	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
 	if err != nil {
 		t.Fatal(err)

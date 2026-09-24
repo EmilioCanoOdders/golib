@@ -189,20 +189,71 @@ func TestTooltipOffersRobotButtons(t *testing.T) {
 	if _, label, ok := panel.buttonAt(mid.X, mid.Y); !ok || label != buttonSend {
 		t.Errorf("buttonAt its own button gave %q, %v", label, ok)
 	}
-	// Sent for, the same card asks for the robot back.
+	// Sending once leaves room for a second worker on the same patch.
 	Apply(s, SendRobot{Col: col, Row: row})
 	panel = tooltipLayout(s, camera, cellCol, cellRow, open)
-	if panel.findButton(buttonSend) != nil {
-		t.Error("an occupied post still offers to send a robot")
+	if panel.findButton(buttonSend) == nil {
+		t.Error("the deposit stopped offering another available robot")
 	}
-	if panel.findButton(buttonRecall) == nil {
-		t.Error("an occupied post offers no recall")
+	if panel.findButton(buttonRecall) != nil {
+		t.Error("the deposit offers a group recall instead of individual cards")
+	}
+	worker := postRobots(s, col, row)[0]
+	robotPanel := tooltipLayoutForRobot(
+		s, camera, cellCol, cellRow, open, worker.ID,
+	)
+	if robotPanel.findButton(buttonRecall) == nil ||
+		robotPanel.findButton(buttonBackToDeposit) == nil {
+		t.Error("a worker's card lacks individual recall or return buttons")
+	}
+	portrait := panel.rows[0]
+	for _, row := range panel.rows {
+		if row.workers {
+			portrait = row
+			break
+		}
+	}
+	if len(portrait.portraits) != 1 {
+		t.Fatalf("the deposit shows %d portraits after one send, want 1",
+			len(portrait.portraits))
+	}
+	mid = golib.Vector2{
+		X: portrait.portraits[0].area.X + portrait.portraits[0].area.Width/2,
+		Y: portrait.portraits[0].area.Y + portrait.portraits[0].area.Height/2,
+	}
+	if picked, ok := panel.robotAt(mid.X, mid.Y); !ok || picked.ID != worker.ID {
+		t.Errorf("portrait hit returned %+v, %v, want robot %d", picked, ok, worker.ID)
+	}
+	for len(postRobots(s, col, row)) < portraitPageSize+1 {
+		id := s.spawnRobot(RobotBuilt, 0, 0)
+		r := s.Robots[id]
+		r.PostCol, r.PostRow = col, row
+		s.Robots[id] = r
+	}
+	panel = tooltipLayout(s, camera, cellCol, cellRow, open)
+	portrait = tooltipRow{}
+	for _, row := range panel.rows {
+		if row.workers {
+			portrait = row
+			break
+		}
+	}
+	if portrait.pages != 2 || len(portrait.portraits) != portraitPageSize {
+		t.Errorf("the robot portrait page has %d pages and %d portraits, want 2 and %d",
+			portrait.pages, len(portrait.portraits), portraitPageSize)
+	}
+	_, label, ok := panel.buttonAt(
+		portrait.nextPage.X+portrait.nextPage.Width/2,
+		portrait.nextPage.Y+portrait.nextPage.Height/2,
+	)
+	if !ok || label != buttonPortraitNext {
+		t.Errorf("the next-page control returned %q, %v", label, ok)
 	}
 	// A dry deposit has nobody to send.
 	drained := newGame()
 	drained.Drain[depositKey(patch)] = 0
 	panel = tooltipLayout(drained, camera, cellCol, cellRow, open)
-	if panel.findButton(buttonSend) != nil || panel.findButton(buttonRecall) != nil {
+	if panel.findButton(buttonSend) != nil {
 		t.Error("a dry deposit still offers a robot button")
 	}
 }

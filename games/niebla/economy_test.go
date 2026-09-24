@@ -142,7 +142,7 @@ func (p economyPlanner) assignPosts(s *State) {
 		if p.plan.expand && far && !depositSafe(s, deposit) {
 			continue
 		}
-		if _, owned := postOwner(s, tileCol, tileRow); !owned {
+		if len(postRobots(s, tileCol, tileRow)) == 0 {
 			Apply(s, SendRobot{Col: tileCol, Row: tileRow})
 		}
 	}

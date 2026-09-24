@@ -134,9 +134,10 @@ func ellipseSemiAxes(radius float32) (halfW, halfH float32) {
 }
 
 // Deposit is one vein or pool: a body of ore cells the colony treats as
-// a single thing, however many tiles it reaches into. One robot works a
-// whole deposit, one card describes it, and what remains of it lives in
-// the state under one key, its heart's tile. It is comparable, which is how the rules ask whether two tiles are one body.
+// a single thing, however many tiles it reaches into. Many robots may work
+// it; one card describes it, and what remains lives under one key, its
+// heart's tile. It is comparable, which is how the rules ask whether two
+// tiles are one body.
 type Deposit struct {
 	Kind       byte    // kindOil or kindLilac
 	Index      int     // its place in land.deposits

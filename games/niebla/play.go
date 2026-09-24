@@ -60,6 +60,8 @@ type playScene struct {
 	pickedCol    int  // the selected cell
 	pickedRow    int
 	pickedThing  string          // a visible body's card picked on that cell
+	pickedRobot  int64           // a worker opened from a deposit portrait
+	robotPage    int             // which page of the selected deposit's portraits
 	expanded     map[string]bool // which cards stand open, by thing ID
 	armed        string          // the card whose trash can was pressed once, by thing ID
 	radial       bool            // the build menu stands open on a cell
@@ -141,6 +143,12 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 		Apply(s.state, Tick{})
 		s.au.update(s, 1)
 	}
+	if s.pickedRobot != 0 {
+		if _, alive := s.state.Robots[s.pickedRobot]; !alive {
+			s.pickedRobot = 0
+		}
+	}
+	s.clampRobotPage()
 	s.mites.update(s.state, dt)
 	s.fx.update(s.state, dt)
 	s.savedTicks += int64(ticks)
@@ -374,6 +382,8 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 	if rightClick {
 		s.picked = false
 		s.pickedThing = ""
+		s.pickedRobot = 0
+		s.robotPage = 0
 		s.armed = ""
 		s.backRadial()
 	}
@@ -386,10 +396,7 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 		// The panel, while it stands, wins over whatever sits under it:
 		// its buttons act even where it covers buildable ground.
 		if s.picked {
-			panel := tooltipLayoutForSelection(
-				s.state, s.camera, s.pickedCol, s.pickedRow,
-				s.expanded, s.pickedThing,
-			)
+			panel := s.inspectionPanel()
 			if panel.contains(mx, my) {
 				if thing, blocked, ok := panel.trashAt(mx, my); ok {
 					switch {
@@ -403,6 +410,16 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 				}
 				if row := panel.buttonRowAt(mx, my); row != nil {
 					s.pressButton(*row)
+					if row.button == buttonRecall && s.pickedRobot != 0 {
+						s.pickedRobot = 0
+					}
+					return
+				}
+				if robot, ok := panel.robotAt(mx, my); ok {
+					s.pickedRobot = robot.ID
+					s.pickedThing = ""
+					s.expanded[robotThing(s.state, robot).ID] = true
+					s.au.ui(1)
 					return
 				}
 				if thing, ok := panel.cardAt(mx, my); ok {
@@ -414,6 +431,8 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 				return
 			}
 		}
+		s.pickedRobot = 0
+		s.robotPage = 0
 		if s.pickPumpAt(mx, my) {
 			return
 		}
@@ -438,6 +457,37 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 			s.pickedCol, s.pickedRow = s.hoverCellCol, s.hoverCellRow
 			s.pickedThing = ""
 		}
+	}
+}
+
+func (s *playScene) inspectionPanel() tooltip {
+	if s.pickedRobot != 0 {
+		if _, alive := s.state.Robots[s.pickedRobot]; alive {
+			return tooltipLayoutForRobot(
+				s.state, s.camera, s.pickedCol, s.pickedRow,
+				s.expanded, s.pickedRobot,
+			)
+		}
+	}
+	return tooltipLayoutForPage(
+		s.state, s.camera, s.pickedCol, s.pickedRow,
+		s.expanded, s.pickedThing, s.robotPage,
+	)
+}
+
+func (s *playScene) clampRobotPage() {
+	if !s.picked || s.pickedRobot != 0 {
+		return
+	}
+	tcol, trow := cellTile(s.pickedCol, s.pickedRow)
+	workers := postRobots(s.state, tcol, trow)
+	pages := (len(workers) + portraitPageSize - 1) / portraitPageSize
+	if pages == 0 {
+		s.robotPage = 0
+		return
+	}
+	if s.robotPage >= pages {
+		s.robotPage = pages - 1
 	}
 }
 
@@ -496,7 +546,19 @@ func (s *playScene) pressButton(row tooltipRow) {
 	case buttonSend:
 		Apply(s.state, SendRobot{Col: tcol, Row: trow})
 	case buttonRecall:
-		Apply(s.state, RecallRobot{Col: tcol, Row: trow})
+		Apply(s.state, RecallRobot{ID: thing.Ref})
+	case buttonBackToDeposit:
+		s.pickedRobot = 0
+	case buttonPortraitPrev:
+		if s.robotPage > 0 {
+			s.robotPage--
+		}
+	case buttonPortraitNext:
+		workers := postRobots(s.state, tcol, trow)
+		pages := (len(workers) + portraitPageSize - 1) / portraitPageSize
+		if s.robotPage+1 < pages {
+			s.robotPage++
+		}
 	case buttonBuildRobot, buttonTrooper:
 		Apply(s.state, QueueRobot{Building: thing.Ref})
 	case buttonOrder:
@@ -608,10 +670,7 @@ func (s *playScene) Draw(screen *golib.Screen) {
 		s.drawOrderingLabel(screen)
 	}
 	if s.picked && !s.radial && s.ordering == 0 {
-		panel := tooltipLayoutForSelection(
-			s.state, s.camera, s.pickedCol, s.pickedRow,
-			s.expanded, s.pickedThing,
-		)
+		panel := s.inspectionPanel()
 		panel.arm(s.armed)
 		drawTooltip(screen, panel, s.mouse.X, s.mouse.Y)
 	}

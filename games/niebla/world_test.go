@@ -70,7 +70,7 @@ func TestSentRobotHaulsOilHome(t *testing.T) {
 		t.Fatal("the region has no oil to test with")
 	}
 	Apply(s, SendRobot{Col: col, Row: row})
-	if _, owned := postOwner(s, col, row); !owned {
+	if len(postRobots(s, col, row)) == 0 {
 		t.Fatal("nobody took the oil post")
 	}
 	// The nearest pool is the safe one inside the bubble: half a minute
@@ -94,10 +94,10 @@ func TestSentRobotHaulsOilHome(t *testing.T) {
 	}
 }
 
-// TestDepositPatchIsOneUnit pins the patch law: sending a robot to any
-// tile of a vein claims the whole vein, a second send on another of its
-// tiles changes nothing, and recalling from any tile frees it.
-func TestDepositPatchIsOneUnit(t *testing.T) {
+// TestDepositPatchSharesItsWorkersAcrossEveryTile pins the patch law:
+// sending to any tile assigns another worker to the whole deposit, and
+// recalling one worker leaves the others assigned.
+func TestDepositPatchSharesItsWorkersAcrossEveryTile(t *testing.T) {
 	s := newGame()
 	col, row, ok := nearestTileOf(kindOil)
 	if !ok {
@@ -109,23 +109,30 @@ func TestDepositPatchIsOneUnit(t *testing.T) {
 		t.Fatal("the oil patch has no second tile to test with")
 	}
 	Apply(s, SendRobot{Col: col, Row: row})
-	first, owned := postOwner(s, col, row)
-	if !owned {
+	workers := postRobots(s, col, row)
+	if len(workers) == 0 {
 		t.Fatal("nobody took the oil patch")
 	}
+	first := workers[0]
 	Apply(s, SendRobot{Col: other[0], Row: other[1]})
-	again, owned := postOwner(s, other[0], other[1])
-	if !owned || again.ID != first.ID {
-		t.Errorf("the patch's second tile answered %v, want the same robot %d",
-			again, first.ID)
+	workers = postRobots(s, other[0], other[1])
+	if len(workers) != 2 {
+		t.Fatalf("the patch has %d workers after two sends, want 2", len(workers))
+	}
+	if workers[0].ID == workers[1].ID ||
+		(workers[0].ID != first.ID && workers[1].ID != first.ID) {
+		t.Errorf("the patch workers are %v, want distinct IDs including %d",
+			workers, first.ID)
 	}
 	if len(s.Robots) != startingRobots {
 		t.Fatalf("the colony grew to %d robots, want %d",
 			len(s.Robots), startingRobots)
 	}
-	Apply(s, RecallRobot{Col: other[0], Row: other[1]})
-	if _, owned := postOwner(s, col, row); owned {
-		t.Error("the patch survived a recall from its other tile")
+	Apply(s, RecallRobot{ID: first.ID})
+	workers = postRobots(s, col, row)
+	if len(workers) != 1 || workers[0].ID == first.ID {
+		t.Errorf("recalling robot %d left patch workers %v, want the other one",
+			first.ID, workers)
 	}
 }
 
@@ -140,32 +147,72 @@ func TestSendRobotPicksAndKeepsItsRobots(t *testing.T) {
 		t.Fatal("the region has no lilac to test with")
 	}
 	Apply(s, SendRobot{Col: oilCol, Row: oilRow})
-	first, ok := postOwner(s, oilCol, oilRow)
-	if !ok {
+	if len(postRobots(s, oilCol, oilRow)) == 0 {
 		t.Fatal("nobody took the oil post")
 	}
-	// A tile with its robot already asks nobody else.
+	// A second send adds a different worker to the same patch.
 	Apply(s, SendRobot{Col: oilCol, Row: oilRow})
-	again, _ := postOwner(s, oilCol, oilRow)
-	if again.ID != first.ID {
-		t.Errorf("robot %d took an occupied post from robot %d", again.ID, first.ID)
+	oilWorkers := postRobots(s, oilCol, oilRow)
+	if len(oilWorkers) != 2 || oilWorkers[0].ID == oilWorkers[1].ID {
+		t.Fatalf("two sends assigned %v to the oil patch, want two distinct robots",
+			oilWorkers)
 	}
-	// The next post goes to the robot still free.
+	// No robot already at this patch is assigned twice.
+	Apply(s, SendRobot{Col: oilCol, Row: oilRow})
+	if got := len(postRobots(s, oilCol, oilRow)); got != 2 {
+		t.Errorf("a third send made %d workers at the oil patch, want 2", got)
+	}
+	// With no free robots, the next deposit retasks one from another patch.
 	Apply(s, SendRobot{Col: veinCol, Row: veinRow})
-	second, ok := postOwner(s, veinCol, veinRow)
-	if !ok {
+	veinWorkers := postRobots(s, veinCol, veinRow)
+	if len(veinWorkers) == 0 {
 		t.Fatal("nobody took the lilac post")
 	}
-	if second.ID == first.ID {
-		t.Errorf("robot %d took both posts", first.ID)
+	second := veinWorkers[0]
+	oilWorkers = postRobots(s, oilCol, oilRow)
+	if len(oilWorkers) != 1 || oilWorkers[0].ID == second.ID {
+		t.Errorf("retasking to lilac left oil workers %v and lilac worker %d",
+			oilWorkers, second.ID)
 	}
-	// Recall frees a robot: the post stands empty, nobody replaces it.
-	Apply(s, RecallRobot{Col: oilCol, Row: oilRow})
-	if _, owned := postOwner(s, oilCol, oilRow); owned {
-		t.Error("the oil post survived its recall")
+	// Recall frees exactly that robot's post.
+	recalled := oilWorkers[0]
+	Apply(s, RecallRobot{ID: recalled.ID})
+	if workers := postRobots(s, oilCol, oilRow); len(workers) != 0 {
+		t.Errorf("the oil patch kept workers after recalling one: %v", workers)
 	}
-	if r := s.Robots[first.ID]; r.hasPost() {
-		t.Errorf("robot %d still holds a post after the recall", first.ID)
+	if r := s.Robots[recalled.ID]; r.hasPost() {
+		t.Errorf("robot %d still holds a post after the recall", recalled.ID)
+	}
+	if workers := postRobots(s, veinCol, veinRow); len(workers) != 1 {
+		t.Errorf("recalling from oil changed the lilac workers: %v", workers)
+	}
+}
+
+func TestWorkersShareAndExhaustOneDeposit(t *testing.T) {
+	s := newGame()
+	col, row, ok := nearestTileOf(kindLilac)
+	if !ok {
+		t.Fatal("the region has no lilac to test with")
+	}
+	patch, _ := depositAt(col, row)
+	amount := robotCarryLilac*3 + 7
+	s.Drain[depositKey(patch)] = amount
+	Apply(s, SendRobot{Col: col, Row: row})
+	Apply(s, SendRobot{Col: col, Row: row})
+	if workers := postRobots(s, col, row); len(workers) != 2 {
+		t.Fatalf("the vein has %d workers, want 2", len(workers))
+	}
+	for i := 0; i < 60*400 && s.Stock.Lilac < startingStockLilac+amount; i++ {
+		Apply(s, Tick{})
+	}
+	if got := s.Stock.Lilac; got != startingStockLilac+amount {
+		t.Fatalf("the stores received %v kg, want %v", got, startingStockLilac+amount)
+	}
+	if left := remainingAt(s, col, row); left != 0 {
+		t.Errorf("the vein still has %v kg after both workers finished", left)
+	}
+	if workers := postRobots(s, col, row); len(workers) != 0 {
+		t.Errorf("the dry vein kept workers assigned: %v", workers)
 	}
 }
 
@@ -185,7 +232,7 @@ func TestDryDepositReleasesItsRobot(t *testing.T) {
 	for i := 0; i < 60*400 && s.Stock.Lilac < startingStockLilac+full; i++ {
 		Apply(s, Tick{})
 	}
-	if _, owned := postOwner(s, col, row); owned {
+	if len(postRobots(s, col, row)) > 0 {
 		t.Fatal("the robot keeps a dry patch")
 	}
 	if left := remainingAt(s, col, row); left > 0 {
@@ -204,7 +251,7 @@ func TestBuildJobsComeFirst(t *testing.T) {
 		t.Fatal("the region has no oil to test with")
 	}
 	Apply(s, SendRobot{Col: col, Row: row})
-	owner, _ := postOwner(s, col, row)
+	owner := postRobots(s, col, row)[0]
 	runTicks(s, 60) // the robot sets out towards its post
 	// A build job springs up on open ground across the way, five cells
 	// north-east of the core.

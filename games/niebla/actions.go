@@ -30,8 +30,8 @@ func (Tick) apply(s *State) {
 
 // SendRobot sends a robot to work a deposit tile: the tile becomes its
 // post. The nearest free robot takes it; when every robot already has a
-// post, the nearest one is retasked. It does nothing for a tile that
-// holds no deposit, a dry one, or one that has its robot already.
+// post, the nearest one working elsewhere is retasked. It does nothing for
+// a tile that holds no deposit, a dry one, or a deposit with no spare robot.
 type SendRobot struct {
 	Col int
 	Row int
@@ -45,9 +45,6 @@ func (a SendRobot) apply(s *State) {
 	if remainingAt(s, a.Col, a.Row) <= 0 {
 		return
 	}
-	if _, owned := postOwner(s, a.Col, a.Row); owned {
-		return
-	}
 	id := pickRobot(s, a.Col, a.Row)
 	if id < 0 {
 		return
@@ -57,18 +54,19 @@ func (a SendRobot) apply(s *State) {
 	s.Robots[id] = r
 }
 
-// RecallRobot takes a tile's post away from its robot, which finishes
-// any carry it holds and then idles by the core.
+// RecallRobot takes one robot's post away, which finishes any carry it
+// holds and then idles by the core.
 type RecallRobot struct {
-	Col int
-	Row int
+	ID int64
 }
 
 func (a RecallRobot) apply(s *State) {
-	if r, ok := postOwner(s, a.Col, a.Row); ok {
-		r.clearPost()
-		s.Robots[r.ID] = r
+	r, ok := s.Robots[a.ID]
+	if !ok || !r.hasPost() {
+		return
 	}
+	r.clearPost()
+	s.Robots[r.ID] = r
 }
 
 // MarkBuilding marks a cell for a building: the blueprint's cost is paid

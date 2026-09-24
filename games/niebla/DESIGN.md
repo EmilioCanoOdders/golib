@@ -124,7 +124,39 @@ Consequence for file layout: `state.go` (types), `actions.go` (action types + `A
 
 ## Screens
 - **Menu:** the game's name over the fog, the player's number under it (`player #30E99076` - the machine's identity, hashed), Play and Quit. Play carries the player to their base as they left it, or deals a new region when there is none. Esc quits; it is the only screen where it does.
-- **Play:** the isometric region, the camera panning and zooming, the bubble drawn over the ground, robots shuttling, the fog line visible and creeping, resource counters on top. A click inspects a **cell**, the footprint of a building and the unit the player picks and counts by - the ground keeps its tiles on the screen, but the outline of what is picked is the cell's: a panel lists what stands there, one expandable card per thing, named and colored by the catalog - the building, site or pile on that cell and the robots crossing it, never the charger on the cell beside the silo. What is bigger than a cell shows whole from any cell of it: a deposit's cell shows its whole vein's card, with its pump, and the core's pad the core's. Cards start open by themselves: the cell's primary thing (deposits, buildings, the core) and, alone on its cell, any thing. **A store shows how full it is** on its own body, a vertical bar filling from the bottom, the way Oxygen Not Included's tanks do: a silo's and a charger's in oil, by its own tank; a warehouse's in lilac, by the one stock against all its roofs; the core's two, oil and lilac, down its broad face. An expanded oil or lilac card carries a button - send robot, or recall robot once the vein has one - and a robot standing on the tile shows its own card with what it is doing. A building's or a site's card carries a trash can button that demolishes it, and what it was made of stays on its cell as a pile with a card of its own (see [Demolition and loose items](#demolition-and-loose-items)). While rivals are in the region the HUD's line says in red what they are at and where (`raiders camped east, moving in 2:40`, `rival base west, level 2`), and what they do is news: a plate under the HUD, for `reportShowTicks` 15 s, says it in words (the scout's theft and its mark, a camp, a raid moving in, what it got away with, a base dug in, its gun up, a building razed, a base fallen). Rival vehicles and bases have cards like everything else, a war factory's card builds troopers and gives its squad its order, damaged things wear a bar of what is left, a picked guard post or artillery piece shows its reach, and shots fly as bullets and shells with their light. Esc saves and returns to the menu.
+- **Play:** the isometric region, the camera panning and zooming, the
+  bubble drawn over the ground, robots shuttling, the fog line visible
+  and creeping, and resource counters on top.
+  - A click inspects a **cell**, the footprint of a building and the unit
+    the player picks and counts by. The panel lists what stands there,
+    one expandable card per thing: the building, site or pile on that
+    cell and the robots crossing it, never the charger beside a silo.
+    The outline is the selected cell's. A deposit's card and its pump
+    show from any cell of the whole patch; the core's card shows from
+    any cell of its pad. Cards start open by themselves: the cell's
+    primary thing (deposits, buildings, the core) and any thing alone
+    on its cell.
+  - **A store shows how full it is** on its body, in a vertical bar
+    filling from the bottom: a silo and charger in oil, a warehouse in
+    lilac against all its roofs, and the core in both oil and lilac.
+  - An expanded oil or lilac card offers `send robot` while another
+    worker can be assigned. It lists assigned workers as up to eight
+    clickable portraits per page. A portrait opens that worker's card,
+    wherever it is in the region; `recall robot` clears only its post,
+    and `back to deposit` returns to the patch card. A robot standing
+    on a cell also has its own card with what it is doing.
+  - A building's or site's card has a trash can button. Demolished
+    buildings leave their cost and overflow on their cell as a pile
+    with a card of its own (see [Demolition and loose items](#demolition-and-loose-items)).
+  - While rivals are in the region, the HUD says in red what they are
+    doing and where (`raiders camped east, moving in 2:40`, `rival base
+    west, level 2`). A news plate under the HUD, for `reportShowTicks`
+    15 s, reports their theft, camp, raid, return, new base, razed
+    building or fallen base. Rival vehicles and bases have cards too.
+    A war factory's card builds troopers and gives its squad orders;
+    damaged things show their remaining health; picked guard posts and
+    artillery show their reach; bullets and shells fly with their light.
+  - Esc saves and returns to the menu.
 The current rival HUD reports an approaching city crawler, construction,
 an assembling battalion or a force on the move. City-building reports
 replace the earlier passive-base/gun-up notices in the historical screen
@@ -133,6 +165,12 @@ description above.
 The oil patch remains one selectable resource across its cells. Its pump
 and any pump site appear only on the pump's cell; clicking the visible
 pump body selects that cell, whose panel shows only the pump.
+
+An oil or mineral card lists every robot assigned to the whole patch,
+eight portraits per page. Clicking one opens that robot's card at the
+deposit panel, even while it is away hauling or refueling. Its card can
+recall just that worker, or return to the deposit; a dry patch releases
+all its workers.
 
 When the latest rival report is still on its plate but its location is
 outside the view, a small red arrow at the screen edge points toward it.
@@ -151,7 +189,7 @@ screen; they never move the camera or take input.
 | Mouse right, held | Drag the view: grab the ground and move it |
 | Mouse left, on a free cell of ground | Open the build menu on that cell; picking a blueprint builds it there. Until the first schematics arrive, the click inspects the cell instead |
 | Mouse left, on the schematics badge over the core | Open the drop: the badge goes and the callout says what arrived; clicking the callout closes it, while a click elsewhere closes it and acts on the region |
-| Mouse left | Select / inspect the cell under the pointer: a click on a card expands it, a card's button acts, a marked vein takes a send robot |
+| Mouse left | Select / inspect the cell under the pointer: expand a card, press its buttons, send another robot from a deposit, or click a worker portrait to open its card and recall it individually |
 | Mouse left, after a pump's `lay pipe` | On the ground: a bend of the pipe. On a ringed tank (silo, charger, core): the pipe's end, which marks it. On the pipe's last node: its menu (`connect` to the nearest store, `undo`, `cancel`). Right click: the menu away, the last bend back, or out of the mode |
 | Mouse left, after a war factory's `give order` | On a rival vehicle: the squad attacks its party, that vehicle first. On the ground: the squad guards that spot. Right click: the order away |
 | 1-9 | Call a squad: 1 is the first war factory raised, 2 the next. The key arms the order the same way `give order` does (one click orders, right click puts it away); the same key again takes it back. A squad's box at the top right - tank icon, unit count, the key below - calls it too |
@@ -179,7 +217,7 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - The buildings arrive as remote schematics, one drop per valley of the difficulty saw: infrastructure (silo, warehouse, charger) with the first delivery home, the guard post once the scout's theft is inevitable, the frontier kit (protector, pump, pipes) at 5:30, the factory at 7:00, the war factory after the introductory raid, and artillery when a rival city completes its war factory. A drop's badge waits over the core until opened; nothing unreachable is ever offered - the menu only shows what the cell could really take, and what the stores can't pay stands washed out with its shortfall boxed in red (see [Construction model](#construction-model)).
 - One generated region, a pure function of `State.Seed` (`worldgen.go`): a gentle relief with great plains, ground cover in zones, oil pools and lilac veins that thin out toward their rims, fog everywhere else. Buildings ask for a flat cell.
 - The core starts with two robots, free of charge: one can watch the oil, the other the lilac. Robots built later will cost oil each cycle.
-- Sending is by card: expand an oil or lilac card and press send robot; the nearest free robot takes the whole vein as its post (all busy, the nearest one is retasked). A vein is one thing however many tiles it spans: one card, one robot, one amount. Recall gives it back.
+- Sending is by card: expand an oil or lilac card and press send robot; the nearest free robot takes the whole deposit as its post (all busy, the nearest worker from another deposit is retasked). Repeat to assign more workers; a worker already at that deposit is never assigned twice. A vein is one thing however many tiles it spans: one card, many workers, one shared amount. Its card shows up to eight clickable robot portraits per page; each opens that worker's card, where recall removes only that robot's post. A dry deposit releases every worker still assigned to it.
 - A robot's day has its priority built in: bring home what it carries, mind its tank, finish loading, raise protectors before other build jobs (oldest first within each group), mend the oldest damaged building, lay pipe, clear piles, work its own post, rest by the core. A trooper's day is its tank and its squad's order. Idle robots go home: they line up in ranks before the core's broad face, five to a rank, and close the ranks up when one leaves; past ten the rest stand inside the first ones and a label says how many are idle. A post that runs dry releases its robot. Clearing piles of loose items sits between raising jobs and working the post, and every load ends its walk at the nearest store of its kind (warehouse or core for lilac, silo or core for oil).
 - Any building but the core can be demolished from its card, and a site cancelled. Its tasks die with it, and its whole cost, plus what the stores lose the roof for, falls on its cell as one pile of loose items that the robots haul back to the stores. A protector can't go while its current bubble is the only one over another building.
 - Rivals come for the oil, one moving party at a time: a scout four minutes in, which siphons 25 L and leaves its mark, then an introductory raid from the scout's bearing. Thirty cycles after the raid leaves, a crawler arrives and establishes a city that builds a repulsor, extractors and a war factory. The factory sends raiders first without artillery, then mobile artillery. Cities do not attack by themselves; their mobile forces do. Structures can be destroyed, wrecks drop loot, and the colony's artillery shells visible rival targets for lilac and oil (see [The rivals](#the-rivals)).
@@ -205,9 +243,10 @@ lights; factory workers are teal cargo carriers with side rails and a visible
 oil tank; war-factory troopers are broad green armored hulls with a turret,
 tracks and a projecting barrel. Cargo and refueling lights add information
 without defining the model. `units.go` draws these bodies at the world's
-size or directly at an icon's size, so a future card portrait will not
-enlarge the three-pixel dot seen at the farthest zoom. The squad strip uses
-the trooper's own body. The simulation and saved state do not change.
+size or directly at an icon's size, so a card portrait does not enlarge
+the three-pixel dot seen at the farthest zoom. Deposit cards use the same
+models for their clickable robot portraits, and the squad strip uses the
+trooper's own body. The simulation and saved state do not change.
 
 ## Sounds
 Audio correction (2026-09-23): the listener is the camera's ground center
@@ -278,7 +317,16 @@ stay local to that cell.
 
 The region is generated from `State.Seed` (`worldgen.go`, its laws tested over 40 seeds in `worldgen_test.go`; `defaultSeed` 0 is a new game's and an old save's). **Relief** comes from wave function collapse over landform blocks (`reliefBlock` 4 cells, 100 m): each block is a wave over `reliefLevels` 4 levels (0 basin, 1 plain, 2 and 3 hills), neighbors - diagonal too - differ by a level at the most, the blocks within `reliefCorePlain` 2.2 tiles of the core are pinned to the plain and `reliefMarks` 16 hilltops and basins are pinned out in the region; then the block with the least left to decide collapses to a level drawn by `reliefWeight` times `reliefAffinity` for each neighbor already at it (the plain's pull, 6, is what leaves the great flats), and what that rules out spreads. The constraint keeps every wave an unbroken run of levels, so the collapse never contradicts. The levels land on the cells' corners after a smooth wander (`reliefWarpCells` 2.6) that takes the blocks' straight edges away; a level is `levelHeight` 4 m, a slope is one level to the cell (16%), a cell with four equal corners is flat, and `canPlace` asks for one: 95% of the ground is. The relief is looks and building ground for now - robots walk it at their one speed. **Cover** is three octaves of noise in zones `zoneWave` 28 cells wide, thicker in the basins, thinner on the slopes. **Deposits** follow `depositPlans`: one pool and one vein whole inside the bubble (hearts 1.7 to 2.4 tiles out, radius 6.5 to 7.5 cells) and two more of each with their hearts 7.2 to 8.4 tiles out (radius 8 to 12 cells), hearts `depositApart` 3.2 tiles apart and on flat ground, where the pump stands and the robots load. A body is a stretched, turned blob (veins 1.55, pools 1.15) whose edge a noise bends, mottled all over and broken into specks toward the rim; each cell has a richness from 0 to 1, and what a deposit holds is its richness times `oilPerRichCell` 70 L or `lilacPerRichCell` 240 kg - about 3 kL and 10 t by the core, up to 10 kL and 30 t far out. A tile belongs to a deposit when it holds `depositTileOre` 0.8 of richness and touches the heart's tile through others that do; the ore on the tiles that don't is dropped, and no two deposits share a tile.
 
-The world speaks SI: `unitMeters` 1 (one world unit is one meter, in `things.go`, so a tile is 200 m across, 4 ha), the core is a monolith in the old proportions, 1 by 4 by 9 - `coreSlabDeep` 4 m, `coreSlabWide` 16 m, `coreHeight` 36 m, the tallest thing the colony will see - ; the core's card headlines its bubble radius (800 m). Each thing type gets its color from the catalog in `catalog.go`, which falls back to a color hashed from the type's name, stable forever, for types it has no entry for yet. Text colors itself with the `[name]...[/]` markup of `markup.go`; the palette holds one color per thing type plus `dim`, `light` and `fog`. In `inspect.go`: `tooltipWidth` 260 px, `titleSize`/`textSize` 12/10, the panel anchored to the tile's projected corner (it flips to the tile's left near the screen's right edge), `buttonWidth` 96 and `buttonRow` 22 for the cards' send/recall robot buttons.
+The world speaks SI: `unitMeters` 1 (one world unit is one meter, in
+`things.go`, so a tile is 200 m across, 4 ha); the core is a monolith in
+the old proportions, 1 by 4 by 9 - `coreSlabDeep` 4 m, `coreSlabWide`
+16 m, `coreHeight` 36 m - and its card headlines its 800 m bubble radius.
+Each thing type gets its color from `catalog.go`, which falls back to a
+stable hash of the type name; `markup.go` colors text with `[name]...[/]`.
+In `inspect.go`, `tooltipWidth` is 290 px, `titleSize`/`textSize` are
+15/13, and `buttonWidth`/`buttonRow` are 96/22. Worker portraits use a
+four-column grid, eight per page, and the panel stays anchored to the
+selected cell's projected middle.
 
 The robots, in `sim_robots.go`: `startingRobots` 2 (the core's gift, they cost nothing yet), `robotSpeed` 30 u/s and `robotCarryOil` 30 L / `robotCarryLilac` 20 kg per trip - a fast rover that shuttles like an ant, so a worked deposit shows a constant coming and going - , `robotLoadTicks` 150 (2.5 s loading at a deposit), and the idle ranks by the core: `parkSlots` 10 places, `parkRankSize` 5 to a rank, `parkSpacing` 7 u, the first rank `parkFromCore` 10 u before the monolith's broad face. A drained patch leaves one big scar and releases its robot. The stores live in the state (`State.Stock`) with the room each roof gives them, and show in the HUD and in the core's card; the robots' captions (`things.go`) read the state in the same priority order the rules do, so the words always say what the robot is doing.
 
@@ -316,10 +364,15 @@ The prototype is done when these five have landed, on top of the debts under [La
   a raid so it typically destroys about two vehicles before going down,
   with positioning, repairs and numbers still able to change the result.
   A post should buy time, not make the next raid safe to ignore.
-- **Debt - micromanaging robots**, three complaints from play (2026-09-21), to design together with the task list below:
-  - A deposit takes one robot and no more: there is no way to put two or three on a rich vein.
-  - A robot can't be clicked and told otherwise: no direct order that overrides its day (go there, come home, drop that). Squads are the first direct orders in the game (a war factory's `give order`), and the pointer's mode they use is the shape a worker's order would take.
-  - Nobody knows what each robot is doing without hunting for it on the map: a small information window will list the robots and what each one is at; its design is pending.
+- **Debt - micromanaging robots**, the remaining complaints from play
+  (2026-09-21), to design together with the task list below:
+  - A robot can't be clicked and told otherwise: no direct order that
+    overrides its day (go there, come home, drop that). Squads are the
+    first direct orders in the game (a war factory's `give order`), and
+    their pointer mode is the shape a worker's order could take.
+  - There is no colony-wide roster. Deposit cards now show their assigned
+    workers as clickable portraits and expose each worker's task and tank;
+    a global list of all robots remains to be designed.
 - **Debt, for the UI pass - a task list per robot:** robots stay generalists, jacks of all trades (decided 2026-09-21, against Ixion-style specialist workers): the fog eats robots, so a lost one must cost capacity, never a hole in a chain, and two starting robots can't afford trades. The price of generalists is the swarm - today every robot drops its post for the oldest build job, and piles will pull them the same way - so the player needs control: each robot's card lists the lines of the robot's day (build, clear piles, work a post...) and the player turns them on and off, which makes a specialist a policy instead of a model. The list is state, not view (it changes the sim's future): a field on `Robot`, set by an action (`SetRobotTasks`), read by `stepRobot` as a filter over its priority order. If robots ever differ, it is by chassis (tank, speed, carry - an expedition rover), not by trade.
 - **Debt - the relief doesn't slow anybody** (2026-09-21): the generated ground is looks and building ground only, and robots walk it at their one speed. A robot should go slower uphill (and perhaps no faster downhill), by the slope under it along its way: `Region.heightAt` gives the height at both ends of a step, and `walkTowards` in `sim_robots.go` is where the factor goes, beside the fog's drag. It moves hauls' timings, so the tests that count ticks on seed 0 will need a look.
 - **The arc (mid-game):** stabilizing the first region summons the ark, the mobile base - the game's own idea, arriving as a reward. By then the fog deepens too slowly to feel in an hour of play: a region is a chapter, not a home.
@@ -331,6 +384,15 @@ The prototype is done when these five have landed, on top of the debts under [La
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-24: deposits can employ several robots. Each send assigns a
+  different worker, preferring an idle one and otherwise retasking the
+  nearest worker from another patch; all workers share the deposit's one
+  remaining amount and spread around its loading spot. Deposit cards show
+  eight clickable portraits per page. A portrait opens that robot's card
+  even while it is away; recall clears only its post, and the card returns
+  to the deposit. Pinned by the shared-drain, individual-recall, portrait
+  hit-testing and page-layout tests; shots checked both pages and a worker
+  card opened from the second page. The saved state shape is unchanged.
 - 2026-09-23: unaffordable blueprints came back to the build menu,
   washed out. The rings keep holding only what the schematics, the
   ground and the fog allow - hiding what the stores alone refused read

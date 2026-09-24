@@ -8,27 +8,32 @@ import (
 
 // Tooltip tuning, in screen pixels. The panel is one dark plate with a row
 // per line: the cell's header, one card title per thing with its headline
-// at the right, the expanded cards' details and, for deposits, a button
-// that sends the card's robot to it, or recalls it. The card of a
+// at the right, the expanded cards' details and, for deposits, worker
+// portraits and a button to send another robot. The card of a
 // building or a site ends its title in a trash can, which demolishes it
 // on the second press.
 const (
-	tooltipWidth  = 290
-	tooltipPad    = 12
-	titleSize     = 15
-	textSize      = 13
-	titleRow      = 24 // line height of a card's title
-	textRow       = 17 // line height of the header and of a detail line
-	buttonRow     = 22 // line height of a button, with air around it
-	buttonWidth   = 96
-	barWidth      = 3  // the color bar on a card's left
-	detailLabelW  = 80 // where a detail's value starts, past its label
-	detailIndent  = 12 // how far details sit inside their card
-	tooltipGap    = 14 // from the cell's corner to the panel
-	tooltipMargin = 8  // kept between the panel and the screen's edges
-	trashWidth    = 11 // the trash can at the end of a card's title
-	trashHeight   = 13
-	trashGap      = 8 // between the trash can and the title's headline
+	tooltipWidth     = 290
+	tooltipPad       = 12
+	titleSize        = 15
+	textSize         = 13
+	titleRow         = 24 // line height of a card's title
+	textRow          = 17 // line height of the header and of a detail line
+	buttonRow        = 22 // line height of a button, with air around it
+	buttonWidth      = 96
+	barWidth         = 3  // the color bar on a card's left
+	detailLabelW     = 80 // where a detail's value starts, past its label
+	detailIndent     = 12 // how far details sit inside their card
+	tooltipGap       = 14 // from the cell's corner to the panel
+	tooltipMargin    = 8  // kept between the panel and the screen's edges
+	trashWidth       = 11 // the trash can at the end of a card's title
+	trashHeight      = 13
+	trashGap         = 8 // between the trash can and the title's headline
+	portraitPageSize = 8
+	portraitColumns  = 4
+	portraitWidth    = 56
+	portraitHeight   = 34
+	portraitGap      = 4
 )
 
 // What a card's headline reads while its trash can is armed, and while
@@ -41,14 +46,17 @@ const (
 // The labels a card's button carries. Update reads them to know which
 // action to apply, so treat them as identifiers, not prose.
 const (
-	buttonSend       = "send robot"
-	buttonRecall     = "recall robot"
-	buttonBuildRobot = "build robot"
-	buttonTrooper    = "build trooper"
-	buttonOrder      = "give order"
-	buttonBuildPump  = "build pump"
-	buttonLayPipe    = "lay pipe"
-	buttonRemovePipe = "remove"
+	buttonSend          = "send robot"
+	buttonRecall        = "recall robot"
+	buttonBuildRobot    = "build robot"
+	buttonTrooper       = "build trooper"
+	buttonOrder         = "give order"
+	buttonBuildPump     = "build pump"
+	buttonLayPipe       = "lay pipe"
+	buttonRemovePipe    = "remove"
+	buttonBackToDeposit = "back to deposit"
+	buttonPortraitPrev  = "previous robots"
+	buttonPortraitNext  = "next robots"
 )
 
 const pipeButtonWidth = 58 // a pipe row's remove button: its note needs the room
@@ -58,20 +66,32 @@ const pipeButtonWidth = 58 // a pipe row's remove button: its note needs the roo
 // when the colony could really press it - what the stores, the
 // schematics or the room refuse is not offered.
 type tooltipRow struct {
-	thing   Thing  // the card the row belongs to; empty on the header
-	detail  Detail // on a detail row
-	header  bool
-	title   bool
-	open    bool    // the card is expanded
-	summary string  // the title's headline, right-aligned
-	button  string  // the label on a button row, "" otherwise
-	note    string  // markup written beside the button
-	ref     int64   // what the button acts on, when it isn't the card's thing: a pipe
-	bx, by  float32 // the button's rectangle on the screen
-	bw, bh  float32 //
-	trash   bool    // a title row that ends in a trash can, at bx, by
-	blocked bool    // the trash can is dimmed: this one can't go
-	armed   bool    // the trash can was pressed once and asks again
+	thing       Thing  // the card the row belongs to; empty on the header
+	detail      Detail // on a detail row
+	header      bool
+	title       bool
+	open        bool    // the card is expanded
+	summary     string  // the title's headline, right-aligned
+	button      string  // the label on a button row, "" otherwise
+	note        string  // markup written beside the button
+	ref         int64   // what the button acts on, when it isn't the card's thing: a pipe
+	bx, by      float32 // the button's rectangle on the screen
+	bw, bh      float32 //
+	trash       bool    // a title row that ends in a trash can, at bx, by
+	blocked     bool    // the trash can is dimmed: this one can't go
+	armed       bool    // the trash can was pressed once and asks again
+	workers     bool
+	portraits   []robotPortrait
+	page        int
+	pages       int
+	workerCount int
+	prevPage    golib.Rectangle
+	nextPage    golib.Rectangle
+}
+
+type robotPortrait struct {
+	robot Robot
+	area  golib.Rectangle
 }
 
 // tooltip is the picked cell's panel, laid out: where it stands on the
@@ -116,7 +136,19 @@ func tooltipLayoutForSelection(
 	expanded map[string]bool,
 	focusedThing string,
 ) tooltip {
-	t := tooltip{col: col, row: row, w: tooltipWidth}
+	return tooltipLayoutForPage(
+		s, camera, col, row, expanded, focusedThing, 0,
+	)
+}
+
+func tooltipLayoutForPage(
+	s *State,
+	camera *golib.Camera,
+	col, row int,
+	expanded map[string]bool,
+	focusedThing string,
+	page int,
+) tooltip {
 	things := thingsAt(s, col, row)
 	if focusedThing != "" {
 		for _, thing := range things {
@@ -126,6 +158,39 @@ func tooltipLayoutForSelection(
 			}
 		}
 	}
+	return tooltipLayoutForThings(
+		s, camera, col, row, expanded, things,
+		focusedThing == "", false, page,
+	)
+}
+
+func tooltipLayoutForRobot(
+	s *State,
+	camera *golib.Camera,
+	col, row int,
+	expanded map[string]bool,
+	robotID int64,
+) tooltip {
+	r, ok := s.Robots[robotID]
+	if !ok {
+		return tooltip{}
+	}
+	return tooltipLayoutForThings(
+		s, camera, col, row, expanded,
+		[]Thing{robotThing(s, r)}, false, true, 0,
+	)
+}
+
+func tooltipLayoutForThings(
+	s *State,
+	camera *golib.Camera,
+	col, row int,
+	expanded map[string]bool,
+	things []Thing,
+	showWorkers, remoteRobot bool,
+	page int,
+) tooltip {
+	t := tooltip{col: col, row: row, w: tooltipWidth}
 	tcol, trow := cellTile(col, row)
 	t.lone = len(things) == 1
 	t.rows = append(t.rows, tooltipRow{header: true})
@@ -146,6 +211,26 @@ func tooltipLayoutForSelection(
 		}
 		for _, detail := range info.Details(s, thing) {
 			t.rows = append(t.rows, tooltipRow{thing: thing, detail: detail})
+		}
+		if showWorkers && (thing.Type == TypeOil || thing.Type == TypeLilac) {
+			workers := postRobots(s, tcol, trow)
+			if len(workers) > 0 {
+				pages := (len(workers) + portraitPageSize - 1) / portraitPageSize
+				if page >= pages {
+					page = pages - 1
+				}
+				start := page * portraitPageSize
+				end := min(start+portraitPageSize, len(workers))
+				row := tooltipRow{
+					thing: thing, workers: true, page: page,
+					pages: pages, workerCount: len(workers),
+				}
+				for _, worker := range workers[start:end] {
+					row.portraits = append(row.portraits,
+						robotPortrait{robot: worker})
+				}
+				t.rows = append(t.rows, row)
+			}
 		}
 		if b, ok := s.Buildings[thing.Ref]; ok && b.Damage > 0 &&
 			buildingType(b.Kind) == thing.Type {
@@ -179,6 +264,19 @@ func tooltipLayoutForSelection(
 			}
 			continue
 		}
+		if thing.Type == TypeRobot {
+			if r, ok := s.Robots[thing.Ref]; ok && r.hasPost() {
+				t.rows = append(t.rows, tooltipRow{
+					thing: thing, button: buttonRecall,
+				})
+			}
+			if remoteRobot {
+				t.rows = append(t.rows, tooltipRow{
+					thing: thing, button: buttonBackToDeposit,
+				})
+			}
+			continue
+		}
 		if end, ok := pipeEndOf(s, thing); ok {
 			for _, p := range pipesOf(s, end) {
 				t.rows = append(t.rows, tooltipRow{
@@ -200,11 +298,11 @@ func tooltipLayoutForSelection(
 		if thing.Amount <= 0 {
 			continue // a dry deposit has nobody to send
 		}
-		label := buttonSend
-		if _, owned := postOwner(s, tcol, trow); owned {
-			label = buttonRecall
+		if pickRobot(s, tcol, trow) >= 0 {
+			t.rows = append(t.rows, tooltipRow{
+				thing: thing, button: buttonSend,
+			})
 		}
-		t.rows = append(t.rows, tooltipRow{thing: thing, button: label})
 		if d, ok := depositAt(tcol, trow); ok && thing.Type == TypeOil {
 			if pc, pr := pumpCell(d); canPlace(s, BuildingPump, pc, pr) &&
 				kindUnlocked(s, BuildingPump) && canAfford(s, BuildingPump) {
@@ -233,6 +331,29 @@ func tooltipLayoutForSelection(
 			r.bx, r.by = t.w-tooltipPad-trashWidth, y-1
 			r.bw, r.bh = trashWidth, trashHeight
 		}
+		if r.workers {
+			left := float32(tooltipPad + detailIndent)
+			top := y + 20
+			for j := range r.portraits {
+				column := j % portraitColumns
+				line := j / portraitColumns
+				r.portraits[j].area = golib.Rectangle{
+					X:     left + float32(column*(portraitWidth+portraitGap)),
+					Y:     top + float32(line*(portraitHeight+portraitGap)),
+					Width: portraitWidth, Height: portraitHeight,
+				}
+			}
+			if r.pages > 1 {
+				footerY := top + 2*(portraitHeight+portraitGap)
+				r.prevPage = golib.Rectangle{
+					X: left, Y: footerY, Width: 42, Height: 16,
+				}
+				r.nextPage = golib.Rectangle{
+					X: t.w - tooltipPad - 42,
+					Y: footerY, Width: 42, Height: 16,
+				}
+			}
+		}
 		y += rowHeight(r)
 	}
 	t.h = y + tooltipPad
@@ -249,6 +370,14 @@ func tooltipLayoutForSelection(
 	for i := range t.rows {
 		t.rows[i].bx += t.x
 		t.rows[i].by += t.y
+		for j := range t.rows[i].portraits {
+			t.rows[i].portraits[j].area.X += t.x
+			t.rows[i].portraits[j].area.Y += t.y
+		}
+		t.rows[i].prevPage.X += t.x
+		t.rows[i].prevPage.Y += t.y
+		t.rows[i].nextPage.X += t.x
+		t.rows[i].nextPage.Y += t.y
 	}
 	return t
 }
@@ -300,6 +429,8 @@ func (r *tooltipRow) trashHolds(x, y float32) bool {
 // rowHeight returns the line height of a panel row.
 func rowHeight(r *tooltipRow) float32 {
 	switch {
+	case r.workers:
+		return 20 + 2*(portraitHeight+portraitGap) + 20
 	case r.title:
 		return titleRow
 	case r.button != "":
@@ -348,6 +479,16 @@ func (t tooltip) buttonRowAt(x, y float32) *tooltipRow {
 	}
 	for i := range t.rows {
 		r := &t.rows[i]
+		if r.workers {
+			if r.page > 0 && r.prevPage.Contains(x, y) {
+				r.button = buttonPortraitPrev
+				return r
+			}
+			if r.page+1 < r.pages && r.nextPage.Contains(x, y) {
+				r.button = buttonPortraitNext
+				return r
+			}
+		}
 		if r.button == "" {
 			continue
 		}
@@ -356,6 +497,17 @@ func (t tooltip) buttonRowAt(x, y float32) *tooltipRow {
 		}
 	}
 	return nil
+}
+
+func (t tooltip) robotAt(x, y float32) (Robot, bool) {
+	for i := range t.rows {
+		for _, portrait := range t.rows[i].portraits {
+			if portrait.area.Contains(x, y) {
+				return portrait.robot, true
+			}
+		}
+	}
+	return Robot{}, false
 }
 
 // pipeEndOf returns the pipe end a card stands for: the core's tank, a
@@ -384,6 +536,8 @@ func drawTooltip(screen *golib.Screen, t tooltip, mx, my float32) {
 	for i := range t.rows {
 		r := &t.rows[i]
 		switch {
+		case r.workers:
+			drawRobotPortraits(screen, *r, mx, my)
 		case r.header:
 			drawMarkup(screen, fmt.Sprintf("[dim]cell %d, %d[/]", t.col, t.row),
 				x, y, textSize, panelTextColor)
@@ -443,6 +597,69 @@ func drawTooltip(screen *golib.Screen, t tooltip, mx, my float32) {
 	}
 }
 
+func drawRobotPortraits(
+	screen *golib.Screen,
+	row tooltipRow,
+	mx, my float32,
+) {
+	first := row.page*portraitPageSize + 1
+	last := min((row.page+1)*portraitPageSize, row.workerCount)
+	if len(row.portraits) > 0 {
+		screen.DrawText(
+			fmt.Sprintf("robots %d-%d of %d", first, last, row.workerCount),
+			row.portraits[0].area.X, row.portraits[0].area.Y-18,
+			textSize, panelDimColor, uiText,
+		)
+	}
+	for _, portrait := range row.portraits {
+		fill := buttonColor
+		if portrait.area.Contains(mx, my) {
+			fill = buttonHoverColor
+		}
+		screen.DrawRectangle(portrait.area, fill)
+		screen.DrawRectangleOutline(portrait.area, 1, buttonEdgeColor)
+		center := golib.Vector2{
+			X: portrait.area.X + portrait.area.Width/2,
+			Y: portrait.area.Y + 10,
+		}
+		drawUnitModel(
+			screen, portrait.robot.Kind, center, 7,
+			portrait.robot.Facing, 1, unitLamp(portrait.robot.Kind),
+		)
+		screen.DrawText(
+			fmt.Sprintf("#%d", portrait.robot.ID),
+			center.X, portrait.area.Y+19, 9, panelTextColor,
+			golib.TextOptions{Font: uiFont, Align: golib.AlignCenter},
+		)
+	}
+	if row.pages <= 1 {
+		return
+	}
+	for i, button := range []struct {
+		area golib.Rectangle
+		text string
+	}{
+		{row.prevPage, "prev"},
+		{row.nextPage, "next"},
+	} {
+		fill := buttonColor
+		enabled := (i == 0 && row.page > 0) ||
+			(i == 1 && row.page+1 < row.pages)
+		if !enabled {
+			fill = panelColor
+		} else if button.area.Contains(mx, my) {
+			fill = buttonHoverColor
+		}
+		screen.DrawRectangle(button.area, fill)
+		screen.DrawRectangleOutline(button.area, 1, buttonEdgeColor)
+		screen.DrawText(
+			button.text, button.area.X+button.area.Width/2,
+			button.area.Y+2, 10, panelTextColor,
+			golib.TextOptions{Font: uiFont, Align: golib.AlignCenter},
+		)
+	}
+}
+
 // drawTrashCan paints a trash can, trashWidth by trashHeight pixels
 // from its top left corner: a handle, a lid and a ribbed body.
 func drawTrashCan(screen *golib.Screen, x, y float32, color golib.Color) {
@@ -483,6 +700,8 @@ func (s *playScene) pickPumpAt(x, y float32) bool {
 		s.picked = true
 		s.pickedCol, s.pickedRow = b.Col, b.Row
 		s.pickedThing = buildingThing(b).ID
+		s.pickedRobot = 0
+		s.robotPage = 0
 		s.armed = ""
 		s.closeRadial()
 		return true
@@ -497,6 +716,8 @@ func (s *playScene) pickPumpAt(x, y float32) bool {
 		s.picked = true
 		s.pickedCol, s.pickedRow = job.Col, job.Row
 		s.pickedThing = siteThing(job).ID
+		s.pickedRobot = 0
+		s.robotPage = 0
 		s.armed = ""
 		s.closeRadial()
 		return true

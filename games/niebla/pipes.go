@@ -160,6 +160,8 @@ func (s *playScene) startLaying(from int64) {
 	s.laying = pipeLaying{on: true, from: from}
 	s.picked = false
 	s.pickedThing = ""
+	s.pickedRobot = 0
+	s.robotPage = 0
 	s.closeRadial()
 }
 

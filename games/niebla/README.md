@@ -50,17 +50,38 @@ A shot starts on the menu; `Enter@1` presses Play (or click it: `Mouse@5:640,390
 MouseLeft@6`). Inside the region:
 
 ```text
-./golib shot niebla 120 --input "Enter@1 Mouse@5:568,372 MouseLeft@6 Mouse@9:656,478 MouseLeft@10"
+./golib shot niebla 60 --input "Enter@1 Mouse@5:568,372 MouseLeft@6"
 ```
 
-The clicks pick a cell of the safe oil pool at tile (11, 14), whose card
-opens by itself, and press its send robot button: (568, 372) is the
-tile's center on screen and (656, 478) the button. The frame shows the
-card offering recall robot. The camera at rest centers
+The click picks a cell of the safe oil pool at tile (11, 14), whose card
+opens by itself and offers `send robot`. (568, 372) is the tile's center
+on screen. Sending a worker leaves the button available while another
+robot can be assigned; each assigned robot then appears as a clickable
+portrait on the deposit card. The camera at rest centers
 the view on world point (640, 372) — the middle of its bounds — so screen
 and world differ by (0, -12) at rest zoom; click targets in scripted shots
 aim at a tile's center (`projectTile` + half a tile, plus that offset),
 never its corner, whose tile depends on float rounding.
+
+To inspect two pages of portraits, write a state with ten robots assigned
+to the safe lilac vein and take a shot of its card:
+
+```text
+NIEBLA_ROBOT_SHOT_STATE=../../build/niebla/robots.json \
+  ./golib go -C games/niebla test \
+  -run TestWriteRobotPortraitShotState
+./golib shot niebla 60 120 180 \
+  --save build/niebla/robots.json \
+  --input "Enter@1 Mouse@5:616,372 MouseLeft@6 \
+  Mouse@61:887,570 MouseLeft@62 \
+  Mouse@121:682,502 MouseLeft@122"
+```
+
+The screenshots show the first page, the second page and the selected
+worker's card in order. Click a portrait to inspect that robot, including
+while it is on its way to the deposit, carrying a load or refueling. Its
+card offers `recall robot` for that worker alone and `back to deposit` to
+return.
 
 ## Dev tools
 
@@ -114,12 +135,12 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `menu.go` | The title screen: the game's name, the player's number, Play and Quit; the `menuButton` hit-testing both scenes' menus use |
 | `identity.go` | Who is playing: the machine's ID (registry value, platform UUID or `/etc/machine-id`), hashed with the game's salt into `player`, the number the menu shows and a later server hands tokens out by |
 | `store.go` | The local database (SQLite): players, saves and the machine table; `saveBase`/`resumeState`, the scenes' door into it; the DB path, `:memory:` under `golib shot` |
-| `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); the camera, the selection, the open cards, the pointer's modes (`laying` a pipe, `ordering` a squad), the schematics' click and open callout (`techCallout`) and the looks-only fields (`mites`, `fx`) live here, never serialized; the HUD's line with the rivals' doings (`threatWords`) and the `schematics at the core` call; a picked guard post's or artillery piece's reach; Esc saves and returns to the menu, autosave every `autosaveTicks` |
+| `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); the camera, selected cell, open cards, focused robot portrait, portrait page and pointer modes live here, never serialized; the schematics' callout, looks-only fields, rivals' HUD, reach overlays and autosave are view state too |
 | `radial.go` | The build menu: the two rings a click on empty ground opens - the build groups (industry, military, logistics), then the group's blueprints - laid out around the cell every frame, and `backRadial`/`closeRadial`/`openRadial` for the scene |
 | `glyphs.go` | The marks the build menu wears: a group's own glyph, and a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both |
 | `state.go` | The simulation's state and save-schema version: robots (core, built or combat) with their saved screen-facing octant, buildings with their tanks, reloads and damage, stock, what remains of each deposit, build jobs, piles, pipes, the fog, and the rivals' tables (`Enemies`, `Parties`, `Cities`, `Raids`, `Marks`, `Reports`, `Squads`, `Shots`, the PRNG's `Rolls`) plus the schematics' `Tech`; `newGame`, which deals the starting region |
-| `actions.go` | The actions (`Tick`, `SendRobot`, `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
-| `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, protector jobs before other build jobs, then the oldest damaged building and a section of pipe, pick up loose items, own post, a trooper's squad, rest by the core —, movement's saved facing octant, the claim on a section of pipe (`stepLayPipe`) and the idle ranks (`parkSlot`, `idleRank`) |
+| `actions.go` | The actions (`Tick`, `SendRobot`, ID-specific `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
+| `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, protector jobs before other build jobs, then the oldest damaged building and a section of pipe, pick up loose items, own post, a trooper's squad, rest by the core —, `postRobots` and `pickRobot` for shared deposits, movement's saved facing octant, pipe-section claims and idle ranks |
 | `sim_piles.go` | Demolition, unit wrecks and loose items: `canDemolish`, the 25% unit recovery (`dropRobotWreck`), the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, protector upkeep and radius fade, storage caps, refuel spots, and the two factories' works (`robotWorks`: what each builds, for how much, how long) |
 | `sim_oil.go` | Oil's spendable tanks and dedicated protector reserves: `oilTotal`, `oilCap`, `payOil`, all physical tank capacity, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
@@ -141,7 +162,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `things.go` | What a cell holds, the unit the player picks by: `Thing` snapshots out of layout plus state (a deposit's card spans its patch, while buildings and sites stay on their own cell; rival vehicles and bases standing on the cell have cards too), the robots' captions, troopers' and menders' among them, `tileAtWorld`, the SI quantities; pure Go, no drawing |
 | `catalog.go` | The entity database: per thing type its name, color, unit and card lines, plus the stable-color fallback |
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
-| `inspect.go` | The inspection panel: layout, hit testing, painting, the cards' buttons (a war factory's `build trooper` and `give order` among them) and the integrity line of a damaged building; the cell's outline (`cellDiamond`) |
+| `inspect.go` | The inspection panel: layout, hit testing, painting, clickable paginated worker portraits, remotely opened robot cards, individual recall and return buttons, other card actions and the integrity line of a damaged building; the cell's outline (`cellDiamond`) |
 | `mites.go` | The fog's wear, for looks only: mites of darkness orbiting whatever stands in the mist, by its volume, trailing walkers and closing in on what stands still; view, never state |
 | `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, the blobs of oil by the state's tick) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
 | `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset/new world, next arrival, create city, finish one city building, finish/send a battalion, fast-forward and next schematics —; view only, acting through `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
@@ -150,12 +171,12 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and crystal pings, gunfire and shell impacts, and interface clicks; world emitters fade with their distance in meters to the camera's ground center, whose altitude rises with zoom-out. Individual shell whistles track their own positions through the descending half of flight. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |
 | `tools/soundgen/` | The maker of the wind, oil and mineral ambience loops: stdlib Go renders the noise beds as WAV for conversion to OGG, and the mineral ring as a seamless WAV with irregular pitch drift of at most one semitone; run it only when a loop changes |
 | `draw.go` | The region painter: the core's monolith, buildings with their damage bars, the bubbles' rings, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
-| `units.go` | The colony's three directional chassis (`drawUnitModel`): narrow core scout, teal factory carrier with a tank and rails, broad trooper with tracks and turret; `drawRobots` places them in the world, and `drawTrooperModel` also paints the squad strip's screen-space icon at its own size |
+| `units.go` | The colony's three directional chassis (`drawUnitModel`): narrow core scout, teal factory carrier with a tank and rails, broad trooper with tracks and turret; `drawRobots` places them in the world, deposit portraits and the squad strip draw the same models at icon size |
 | `orientation.go` | The screen-space eight-way facing derived from an isometric movement vector, and the point/polygon transforms used by directional units |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `guides_test.go` | Offscreen arrow placement and direction, hiding for visible targets, current-report timing, pending schematics and spacing; can write the optional visual fixture with `NIEBLA_GUIDE_SHOT_STATE` |
-| `markup_test.go` | Markup parser and tooltip layout/button tests |
-| `world_test.go` | The simulation driven directly: starting robots, hauling, picking, priority, recall, dry deposits, determinism, JSON round trip |
+| `markup_test.go` | Markup parser, tooltip layout/button, portrait hit-testing, remote robot card and page-layout tests |
+| `world_test.go` | The simulation driven directly: starting robots, hauling, multiple workers sharing a deposit, individual recall, priority, dry deposits, determinism, JSON round trip |
 | `economy_test.go` | The deterministic economy probe: safe harvesting, worker growth and a protected oil outpost over three seeds, sampled each minute into an opt-in CSV report with protector fuel separated from spendable oil |
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
 | `pipes_test.go` | Pumps and pipes driven directly: a pump stands on a pool and a pool takes one, pump and site cards stay on the pump cell while the deposit card spans its patch, the pump body is clickable, pipes are paid by section and laid by robots, who claim a section each - the nearest free one - and stand by it until it is laid, a half-laid pipe from an old save keeps its work, a laid pipe carries the pool into its tank and stops at a full one or a dry pool, oil has a place and pipes move it between tanks (shares, ports, payments, a demolished tank's oil), robots carry oil to a tank with room and refill where there is oil, what `LayPipe` refuses, a pipe leaves with its ends and its cost falls as a pile, the curve passes through its bends, pipes survive a save |
@@ -625,11 +646,12 @@ A vein is one thing however many tiles it reaches into. The generator
 tiles that hold enough of it: `land.deposits` and `land.bodies` (static
 data of the seed, never state), and `depositAt` maps any tile to its
 deposit. `State.Drain` holds one entry per deposit, keyed by its heart's
-tile; a robot's post is one tile of the deposit, it loads by the heart
-(`postSpot`), and working it drains the whole deposit — one robot, one
-card, and a scar where the heart was when it runs dry. `ground.go`
-paints each deposit cell by cell, and a worked one wears from the rim
-in.
+tile. Every worker assigned from any patch tile shares that amount and
+loads beside the heart (`postSpot`), with a slight offset to keep small
+groups of robots visible. A patch remains one deposit and one card regardless
+of how many workers it has; the state keeps no per-robot copy of its ore.
+`ground.go` paints each deposit cell by cell, and a worked one wears from
+the rim in.
 
 ### The generated region
 
@@ -656,7 +678,11 @@ beside it. Clicking a pump's visible body picks its own cell, and its
 card replaces the deposit card there; the deposit remains one functional
 patch, but its pump and site are not selectable from the other cells.
 Deposits still show their whole card from any of their cells, as does the
-core from any cell of its pad. Deposits stay tile-shaped, so the scene
+core from any cell of its pad. A worker assigned to a deposit is listed
+there even while physically away from it. Clicking its portrait focuses
+that robot's card at the deposit's panel anchor; `pickedRobot` is view
+state, and the card is built from the robot ID instead of the robots
+currently on the selected cell. Deposits stay tile-shaped, so the scene
 hands their actions the cell's tile (`cellTile`).
 
 `tileAtWorld` undoes `project`: a tile's diamond on the screen is the square
@@ -681,12 +707,15 @@ core, buildings — `Primary` in the catalog) and, on a cell with a single
 thing, that thing. A click on a title folds or opens from where the card
 stands (`cardOpen` gives the default, the scene's `expanded` map stores
 the click). Clicking a cell selects it — unless it is free buildable
-ground, which opens the build menu instead —
-an expanded deposit card carries a send robot / recall robot button, a
-factory card a build robot button; the panel wins over what sits under
-it, so its buttons work even where it covers buildable ground; a right
-click that never moved more than 4 px deselects (a drag is a pan, not a
-cancel). The
+ground, which opens the build menu instead. An expanded deposit card
+offers `send robot` while another eligible worker exists, and lists
+assigned robots as clickable portraits, eight per page. Clicking a
+portrait opens that worker's card without moving the panel from the
+deposit; `recall robot` clears only its post, and `back to deposit`
+returns to the worker list. The factory card offers `build robot`. The
+panel wins over what sits under it, so buttons work even where it covers
+buildable ground; a right click that never moved more than 4 px deselects
+(a drag is a pan, not a cancel). The
 camera rests centered on world point (640, 372) — screen and world
 differ by (0, -12) at rest zoom; click targets in scripted shots aim
 at a tile's center (`projectTile` + half a tile), never its corner, whose
@@ -697,13 +726,14 @@ tile depends on float rounding.
 `region_test.go` pins the layout's placement rules, the deposit patches
 (shape and spread), the projection's round trip, the things a cell holds,
 the SI formatter and the catalog's stability. `markup_test.go` covers the
-parser (nesting, unknown tags, unclosed color), the tooltip layout's rows
-and hit testing, and the cards' robot buttons. `world_test.go` drives the
+parser (nesting, unknown tags, unclosed color), the tooltip layout's rows,
+portrait selection and pagination, and the remote robot card and buttons.
+`world_test.go` drives the
 simulation with no window: the starting robots, the idle ranks by the
 core and how they close up, a haul's conservation
-(store + patch remaining = patch full), the patch law (one robot per
-vein, sends on its other tiles change nothing), who takes a post,
-build-job and protector-job priority, recall, dry patches, replay
+(store + patch remaining = patch full), several workers sharing a patch's
+remaining amount, who takes and retasks a post, individual recall,
+build-job and protector-job priority, dry release, replay
 determinism and the JSON
 round trip. `buildings_test.go` does the same for the buildings slice: a
 marking pays and its building rises, the fog refuses ground but not a

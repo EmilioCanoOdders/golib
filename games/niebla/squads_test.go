@@ -73,7 +73,7 @@ func TestAWarFactoryBuildsItsSquadAndNoMore(t *testing.T) {
 		t.Errorf("%d jobs and %d piles left, want the troopers to touch neither",
 			len(s.Jobs), len(s.Piles))
 	}
-	if _, owned := postOwner(s, oilCol, oilRow); owned {
+	if len(postRobots(s, oilCol, oilRow)) > 0 {
 		t.Errorf("a trooper took a post")
 	}
 }

@@ -27,6 +27,8 @@ const (
 	parkSpacing  = 7.0  // u between two parked robots: one, and a bit
 	parkFromCore = 10.0 // u from the core's middle to the first rank
 
+	postSpreadRadius = 9.0 // u around the shared loading spot
+
 	tankFullSlack = 0.001 // L short of the brim that still count as a full tank
 
 	goldenAngle = 2.399963229728653 // spreads robots around what they work at
@@ -286,23 +288,25 @@ func (r *Robot) posted(s *State) bool {
 }
 
 func (r *Robot) stepPost(s *State) {
-	cx, cy := postSpot(r.PostCol, r.PostRow)
+	cx, cy := postSpot(r.PostCol, r.PostRow, r.ID)
 	if r.walkTowards(s, cx, cy) {
 		r.WorkTicks = robotLoadTicks
 		r.Pile = 0
 	}
 }
 
-// postSpot returns where a robot loads at its post: by the heart of the
-// tile's deposit, where the ore is richest, a cell to the side the pump
-// leaves free. Whatever tile of the deposit the robot was sent to, the
-// deposit is one thing and is worked at one place.
-func postSpot(col, row int) (x, y float64) {
+// postSpot returns a worker's loading place beside the deposit's richest
+// cell, on the side the pump leaves free. Workers spread around that spot
+// so several sent to the same vein are easier to see.
+func postSpot(col, row int, robotID int64) (x, y float64) {
 	d, ok := depositAt(col, row)
 	if !ok {
 		return tileCenterUnits(col, row)
 	}
-	return cellCenterUnits(d.HeartCol+1, d.HeartRow)
+	x, y = cellCenterUnits(d.HeartCol+1, d.HeartRow)
+	angle := float64(robotID) * goldenAngle
+	return x + math.Cos(angle)*postSpreadRadius,
+		y + math.Sin(angle)*postSpreadRadius
 }
 
 func (r *Robot) idling(s *State) bool {
@@ -538,33 +542,45 @@ func remainingAt(s *State, col, row int) float64 {
 	return s.Drain[depositKey(d)]
 }
 
-// postOwner returns the robot whose post is a tile of the deposit patch
-// the given tile belongs to: a patch has one robot.
-func postOwner(s *State, col, row int) (Robot, bool) {
+// postRobots returns the workers assigned to the deposit patch the given
+// tile belongs to, in ID order.
+func postRobots(s *State, col, row int) []Robot {
 	want, ok := depositAt(col, row)
 	if !ok {
-		return Robot{}, false
+		return nil
 	}
+	var robots []Robot
 	for _, id := range sortedRobotIDs(s) {
-		if r := s.Robots[id]; r.hasPost() {
-			if d, ok := depositAt(r.PostCol, r.PostRow); ok && d == want {
-				return r, true
-			}
+		r := s.Robots[id]
+		if !r.hasPost() {
+			continue
+		}
+		if d, ok := depositAt(r.PostCol, r.PostRow); ok && d == want {
+			robots = append(robots, r)
 		}
 	}
-	return Robot{}, false
+	return robots
 }
 
-// pickRobot chooses who takes a post: a free robot if there is one,
-// else the one whose walk is shortest; IDs break ties.
+// pickRobot chooses a worker not already assigned to this deposit: a free
+// robot if there is one, else the one whose walk is shortest; IDs break ties.
 func pickRobot(s *State, col, row int) int64 {
 	cx, cy := tileCenterUnits(col, row)
+	want, ok := depositAt(col, row)
+	if !ok {
+		return -1
+	}
 	best := int64(-1)
 	bestFree, bestDist := false, 0.0
 	for _, id := range sortedRobotIDs(s) {
 		r := s.Robots[id]
 		if r.Kind == RobotCombat {
 			continue
+		}
+		if r.hasPost() {
+			if d, found := depositAt(r.PostCol, r.PostRow); found && d == want {
+				continue
+			}
 		}
 		free := !r.hasPost()
 		d := math.Hypot(r.X-cx, r.Y-cy)
