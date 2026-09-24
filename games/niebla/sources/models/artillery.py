@@ -6,8 +6,8 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from studio import (
-    beam, box, cylinder, hull, init_scene, material, render_sheet,
-    root, save_blend,
+    beam, box, cylinder, hull, init_scene, material, render_shadow_sheet,
+    render_sheet, root, save_blend,
 )
 
 
@@ -77,6 +77,10 @@ def create_scene():
 
 
 if __name__ == "__main__":
-    if "--create" in sys.argv:
-        create_scene()
-    render_sheet("Artillery", "rival-artillery")
+    if "--shadows-only" in sys.argv:
+        render_shadow_sheet("Artillery", "rival-artillery")
+    else:
+        if "--create" in sys.argv:
+            create_scene()
+        render_sheet("Artillery", "rival-artillery")
+        render_shadow_sheet("Artillery", "rival-artillery")

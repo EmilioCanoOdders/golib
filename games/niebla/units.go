@@ -23,10 +23,13 @@ func drawRobots(
 	sort.Slice(spots, func(i, j int) bool { return spots[i].p.Y < spots[j].p.Y })
 	for _, sp := range spots {
 		r := s.Robots[sp.id]
+		model := robotModel(r.Kind)
+		model.drawShadow(screen, camera, sp.p, r.Facing, zoom)
+	}
+	for _, sp := range spots {
+		r := s.Robots[sp.id]
 		p := sp.p
 		radius := dotRadius(3, zoom, 3)
-		screen.DrawCircle(p.X, p.Y+radius*0.5, radius*1.1,
-			robotShadowColor)
 		model := robotModel(r.Kind)
 		model.draw(screen, camera, p, r.Facing, zoom)
 		if r.tanked() && chargeStatus(s, r) == "refueling" &&

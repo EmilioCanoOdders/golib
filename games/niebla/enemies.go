@@ -93,6 +93,14 @@ func drawEnemies(
 	}
 	sort.SliceStable(spots, func(i, j int) bool { return spots[i].y < spots[j].y })
 	for _, sp := range spots {
+		if sp.e.Kind == EnemyBase || (sp.e.City != 0 && sp.e.Party == 0) {
+			continue
+		}
+		model, _ := rivalVehicleModel(sp.e.Kind)
+		center := golib.Vector2{X: sp.x, Y: sp.y}
+		model.drawShadow(screen, camera, center, sp.e.Facing, zoom)
+	}
+	for _, sp := range spots {
 		if sp.e.Kind == EnemyBase {
 			drawCityBuilding(s, screen, sp.e, sp.x, sp.y, zoom)
 			continue
@@ -203,15 +211,7 @@ func drawVehicle(
 	screen *golib.Screen, camera *golib.Camera,
 	e Enemy, gx, gy, zoom float32,
 ) {
-	model, across := rivalRaiderModel, float32(8)
-	switch e.Kind {
-	case EnemyArtillery:
-		model, across = rivalArtilleryModel, 16
-	case EnemyCrawler:
-		model, across = rivalCrawlerModel, 16
-	case EnemyScout:
-		model, across = rivalScoutModel, 6
-	}
+	model, across := rivalVehicleModel(e.Kind)
 	center := golib.Vector2{X: gx, Y: gy}
 	model.draw(screen, camera, center, e.Facing, zoom)
 	if e.Kind == EnemyRaider && e.Oil > 0 {
@@ -222,6 +222,19 @@ func drawVehicle(
 	}
 	drawHealthBar(screen, gx, gy, across, zoom, e.Health,
 		enemySpecOf(e.Kind).health, dangerColor)
+}
+
+func rivalVehicleModel(kind EnemyKind) (worldSprite, float32) {
+	model, across := rivalRaiderModel, float32(8)
+	switch kind {
+	case EnemyArtillery:
+		model, across = rivalArtilleryModel, 16
+	case EnemyCrawler:
+		model, across = rivalCrawlerModel, 16
+	case EnemyScout:
+		model, across = rivalScoutModel, 6
+	}
+	return model, across
 }
 
 // compassWord names the way from the core to a spot as the screen shows

@@ -86,7 +86,7 @@ var (
 	scarColor        = golib.Color{R: 54, G: 60, B: 72, A: 255}
 	robotColor       = golib.Color{R: 208, G: 216, B: 228, A: 255}
 	robotDarkColor   = golib.Color{R: 58, G: 66, B: 80, A: 255}
-	robotShadowColor = golib.Color{R: 40, G: 46, B: 58, A: 90}
+	unitShadowTint   = golib.Color{R: 40, G: 46, B: 58, A: 110}
 	coreColor        = golib.Color{R: 32, G: 36, B: 46, A: 255}
 	coreFaceColor    = golib.Color{R: 60, G: 66, B: 84, A: 255}
 	coreShadeColor   = golib.Color{R: 14, G: 16, B: 22, A: 255}
@@ -106,9 +106,9 @@ var (
 	warehouseColor = golib.Color{R: 168, G: 156, B: 208, A: 255}
 	warehouseDark  = golib.Color{R: 104, G: 96, B: 140, A: 255}
 
-	protectorColor       = golib.Color{R: 150, G: 202, B: 246, A: 255}
-	protectorDark        = golib.Color{R: 80, G: 120, B: 168, A: 255}
-	protectorEdgeColor   = golib.Color{R: 168, G: 216, B: 255, A: 90}
+	protectorColor     = golib.Color{R: 150, G: 202, B: 246, A: 255}
+	protectorDark      = golib.Color{R: 80, G: 120, B: 168, A: 255}
+	protectorEdgeColor = golib.Color{R: 168, G: 216, B: 255, A: 90}
 
 	// The pump wears the oil's trade in a darker rust, and its pipes a
 	// cold steel inside a dark casing, so they read over the dark ground
@@ -143,16 +143,16 @@ var (
 	// the colony's turned warm, and their scouts spray in a pink nothing
 	// else in the region has. The guard post is field green, and its shot
 	// bright enough for the monitor's glow.
-	enemyColor       = golib.Color{R: 196, G: 84, B: 66, A: 255}
-	enemyDark        = golib.Color{R: 104, G: 40, B: 36, A: 255}
-	enemyLampColor   = golib.Color{R: 255, G: 120, B: 96, A: 255}
-	enemyEdgeColor   = golib.Color{R: 255, G: 150, B: 120, A: 120}
-	markColor        = golib.Color{R: 255, G: 70, B: 170, A: 255}
-	guardColor       = golib.Color{R: 156, G: 176, B: 122, A: 255}
-	guardDark        = golib.Color{R: 86, G: 102, B: 66, A: 255}
-	shotColor        = golib.Color{R: 255, G: 244, B: 210, A: 255}
-	warFactoryColor  = golib.Color{R: 132, G: 150, B: 104, A: 255}
-	warFactoryDark   = golib.Color{R: 70, G: 84, B: 54, A: 255}
+	enemyColor      = golib.Color{R: 196, G: 84, B: 66, A: 255}
+	enemyDark       = golib.Color{R: 104, G: 40, B: 36, A: 255}
+	enemyLampColor  = golib.Color{R: 255, G: 120, B: 96, A: 255}
+	enemyEdgeColor  = golib.Color{R: 255, G: 150, B: 120, A: 120}
+	markColor       = golib.Color{R: 255, G: 70, B: 170, A: 255}
+	guardColor      = golib.Color{R: 156, G: 176, B: 122, A: 255}
+	guardDark       = golib.Color{R: 86, G: 102, B: 66, A: 255}
+	shotColor       = golib.Color{R: 255, G: 244, B: 210, A: 255}
+	warFactoryColor = golib.Color{R: 132, G: 150, B: 104, A: 255}
+	warFactoryDark  = golib.Color{R: 70, G: 84, B: 54, A: 255}
 
 	// A site reads in the scaffold's pale steel, and loose items in the
 	// crates' worn wood.

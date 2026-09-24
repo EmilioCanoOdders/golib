@@ -305,10 +305,14 @@ Blender renders.
 
 All eight moving chassis have editable Blender models, rendered into eight
 transparent PNG frames apiece with the same 2:1 orthographic camera and
-lighting. The three colony silhouettes stay distinct: narrow ivory core
-scouts with warm rear lights, teal carriers with a raised tank and rails,
-and broad olive troopers with a turret and forward gun. A mechanic has a
-service chassis, amber tool deck and raised repair crane, with no weapon.
+lighting. Each also has an eight-frame shadow mask rendered from its 3D
+geometry on a flat ground plane, with soft daylight from the model's light
+direction. The game paints that mask beneath its matching unit sprite; it is
+view-only and never enters the simulation. The colony silhouettes stay
+distinct: narrow ivory core scouts with warm rear lights, teal carriers with
+a raised tank and rails, and broad olive troopers with a turret and forward
+gun. A mechanic has a service chassis, amber tool deck and raised repair
+crane, with no weapon.
 Rival scouts are small and red, raiders carry an oil drum, crawlers carry
 a repulsor mast, and mobile artillery has its cannon raised above its
 turret. Their wheels and shaded sides have real 3D geometry. Portraits
@@ -317,11 +321,12 @@ world. Cargo, refuel blink, damage and oil carried remain view overlays;
 the simulation and saved facing do not change.
 
 The single `studio.py` makes the geometry primitives, materials, light,
-camera, world-yaw conversion and eight-view sheet for all models. GoLib
-draws each PNG at its projected ground point in screen pixels, scaled to
-the camera's zoom; rounding a sprite in world pixels before zoom would
-make it jump by tens of screen pixels. Blender is only for editing and
-rendering the art, never for building or playing the game.
+camera, world-yaw conversion, model sheet and shadow mask for all models.
+GoLib draws each mask and its model at the same projected ground point in
+screen pixels, scaled to the camera's zoom; rounding a sprite in world
+pixels before zoom would make it jump by tens of screen pixels. Blender is
+only for editing and rendering the art, never for building or playing the
+game.
 
 ## Sounds
 Mix adjustment (2026-09-24): the crystal ping is four times quieter and
@@ -490,6 +495,9 @@ The prototype is done when these five have landed, on top of the debts under [La
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-24: unit and rival vehicle shadows now come from separate Blender
+  renders of their 3D models, drawn beneath the matching sprites instead of
+  using the colony robots' flat circle.
 - 2026-09-24: crystal pings are four times quieter and pulse at 6 Hz;
   the vein resonance is down to 0.05. Ordinary world sounds now fade
   against the view's on-screen radius, so sources beyond it are nearly

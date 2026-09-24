@@ -153,7 +153,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right with a trooper icon, unit count and key (`drawSquadStrip`, `drawTrooperIcon`, `squadBoxRect`, `squadBoxAt`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the marks that pick a squad where it stands (`squadMarkAt`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
 | `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), vulnerable colony units, building health and oil-paid mechanic repairs, what the colony sees (`seen`) and its artillery (`stepArtillery`) |
 | `shots.go` | Shots on the screen and their light, for looks only: bullets as streaks, shells on their arc over a shadow, pools of light added over the ground and what stands on it (`lightPool`), guns' flashes, and bursts of sparks that cool from yellow to red, embers and smoke; the field (`fxField`) learns of fired and landed shots by comparing the state's with the ones it saw last; view, never state |
-| `enemies.go` | The rivals on the screen: the scouts' marks on the ground, eight-view PNG models for all four moving rival chassis, damage bars and the words the player is told (`threatWords` for the HUD, `reportWords` and `drawReport` for the news) |
+| `enemies.go` | The rivals on the screen: the scouts' marks on the ground, shadows and eight-view PNG models for all four moving rival chassis, damage bars and the words the player is told (`threatWords` for the HUD, `reportWords` and `drawReport` for the news) |
 | `mist.go` | The fog on the screen: a haze outside every repulsor's circle and `mistLayers` layers that thicken it past the line, each the region minus the clear circles (`clearDiscs`: the core's, the protectors', the rivals'), cut in strips whose gaps join into quads (`drawMist`, `mistGaps`), so the circles are round at every zoom and the air inside them is clear |
 | `swell.go` | How a pressing swell looks, by its pressure: waves of shade rolling in to the line, stopping at the clear circles, and one-pixel static over the mist; a pure picture of the state |
 | `region.go` | The region's measures, `land` (the generated ground of the seed in hand) and `useRegion`, the isometric `project` that lifts by the relief and its inverse `unproject`, tile helpers, `Deposit` and `depositAt`; pure Go, no drawing |
@@ -171,12 +171,12 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and amplitude-modulated crystal pings, gunfire and shell impacts, low interface clicks, a site-marking thump and a low fanfare for new rival reports. Ordinary world emitters fade steeply with distance and become quiet beyond the view; cannon reports keep their longer, gentler range. Individual shell whistles track their own positions through the descending half of flight. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |
 | `tools/soundgen/` | The maker of the wind, oil and mineral sounds and `assets/sounds/alert.wav`: stdlib Go renders the noise beds as WAV for conversion to OGG, the mineral ring as a seamless WAV with irregular pitch drift of at most one semitone, the crystal ping with amplitude modulation, and the low alert fanfare with `--alert`; run it only when a sound changes |
 | `draw.go` | The region painter: the core's monolith, buildings with their damage bars, the bubbles' rings, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
-| `units.go` | The colony's four unit models on the ground, with shadows, cargo, charge feedback and combat-unit health bars |
-| `worldsprites.go` | The eight eight-direction sheets in the world and their scaled UI icons; converts the world ground point to a screen pixel before drawing so moving sprites do not jump by the camera's zoom |
+| `units.go` | The colony's four unit models on the ground, with Blender-rendered shadows, cargo, charge feedback and combat-unit health bars |
+| `worldsprites.go` | The eight eight-direction model and shadow sheets in the world and the scaled model icons; converts the world ground point to a screen pixel before drawing so moving sprites do not jump by the camera's zoom |
 | `orientation.go` | The screen-space eight-way facing derived from an isometric movement vector, and the ground-plane yaw used for world details |
-| `sources/models/studio.py` | One shared Blender authoring toolkit: geometry primitives, materials, 2:1 camera, light, world-yaw conversion and eight-view `render_sheet` |
+| `sources/models/studio.py` | One shared Blender authoring toolkit: geometry primitives, materials, 2:1 camera, light, world-yaw conversion, eight-view model sheets and isolated shadow masks |
 | `sources/models/artillery.py`, `other_units.py`, `*.blend` | Geometry for the eight distinct mobile chassis and their editable Blender sources; not shipped with the game |
-| `assets/sprites/*.png` | Eight transparent eight-frame sheets rendered from the Blender models; loaded on desktop (the PNGs are web-compatible, but Niebla's SQLite driver does not build for web) |
+| `assets/sprites/*.png`, `assets/sprites/shadows/*.png` | Eight transparent eight-frame model sheets and their matching Blender-rendered shadow masks; loaded on desktop (the PNGs are web-compatible, but Niebla's SQLite driver does not build for web) |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `guides_test.go` | Offscreen arrow placement and direction, hiding for visible targets, current-report timing, pending schematics and spacing; can write the optional visual fixture with `NIEBLA_GUIDE_SHOT_STATE` |
 | `markup_test.go` | Markup parser, tooltip layout/button, portrait hit-testing, remote robot card and page-layout tests |
@@ -668,9 +668,14 @@ top of `things.go`.
 ### Blender mobile units
 
 Each of the eight mobile chassis has its own editable `.blend` in
-`sources/models/` and an eight-frame transparent PNG in `assets/sprites/`.
-`studio.py` supplies the geometry primitives, material setup, light,
-isometric camera, direction conversion and the **one** `render_sheet()`.
+`sources/models/`, an eight-frame transparent PNG in `assets/sprites/`, and
+an eight-frame shadow mask in `assets/sprites/shadows/`. `studio.py` supplies
+the geometry primitives, material setup, light, isometric camera, direction
+conversion, `render_sheet()` and `render_shadow_sheet()`. The shadow mask is
+isolated from an EEVEE render of the model over a matte floor, by comparing
+the floor with and without the shadow-casting daylight; the model's own
+sprite alpha removes its silhouette from the mask. It is tinted and drawn
+under the unit, not saved in game state.
 `artillery.py` holds only the artillery model; `other_units.py` holds the
 seven other models, including `worker-mechanic`: an armored service rover
 with an amber tool deck and raised crane, without a weapon. After editing
@@ -684,6 +689,18 @@ blender -b games/niebla/sources/models/worker-core.blend \
   -P games/niebla/sources/models/other_units.py
 blender -b games/niebla/sources/models/worker-mechanic.blend \
   -P games/niebla/sources/models/other_units.py
+```
+
+Those commands refresh both the model and shadow sheets. To refresh only a
+shadow mask while preserving its existing model PNG, pass `--shadows-only`:
+
+```text
+blender -b games/niebla/sources/models/worker-core.blend \
+  -P games/niebla/sources/models/other_units.py \
+  -- --shadows-only
+blender -b games/niebla/sources/models/artillery.blend \
+  -P games/niebla/sources/models/artillery.py \
+  -- --shadows-only
 ```
 
 To **discard manual edits** and recreate the `.blend` and PNG from Python,
@@ -704,11 +721,12 @@ blender -b -P games/niebla/sources/models/other_units.py \
 The shared camera matches the ground's 2:1 projection at 30 degrees;
 each 128x192 frame puts its foot at (64, 160). The eight *screen* headings
 become world yaws before rendering at reference zoom 32. `worldsprites.go`
-scales the result at every zoom, down to a readable icon minimum, and
-draws it in screen pixels after projecting the ground point: GoLib rounds
-sprites before camera zoom, which otherwise caused 32-pixel jumps.
-Portraits and squad boxes reuse the same PNGs at UI size. Building and
-shipping the game need neither Blender nor the `.blend` files.
+scales both the model and its shadow at every zoom, down to a readable icon
+minimum, and draws them in screen pixels after projecting the ground point:
+GoLib rounds sprites before camera zoom, which otherwise caused 32-pixel
+jumps. Portraits and squad boxes reuse the model PNGs at UI size, without
+their world shadows. Building and shipping the game need neither Blender
+nor the `.blend` files.
 
 ### Deposit patches
 

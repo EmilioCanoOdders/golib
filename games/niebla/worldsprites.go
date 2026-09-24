@@ -12,27 +12,57 @@ const (
 
 type worldSprite struct {
 	sprite        *golib.Sprite
+	shadow        *golib.Sprite
 	visibleAcross float32
 	minPixels     float32
 }
 
-func newWorldSprite(name string, across, minimum float32) worldSprite {
+func newWorldSprite(
+	name, shadowName string, across, minimum float32,
+) worldSprite {
 	return worldSprite{
-		sprite: golib.NewSpriteSheet(name, modelFrameWidth, modelFrameHeight),
+		sprite: golib.NewSpriteSheet(
+			name, modelFrameWidth, modelFrameHeight,
+		),
+		shadow: golib.NewSpriteSheet(
+			shadowName, modelFrameWidth, modelFrameHeight,
+		),
 		visibleAcross: across, minPixels: minimum,
 	}
 }
 
 var (
-	coreWorkerModel     = newWorldSprite("sprites/worker-core.png", 4, 6)
-	carrierModel        = newWorldSprite("sprites/worker-carrier.png", 5, 6)
-	trooperModel        = newWorldSprite("sprites/worker-trooper.png", 5, 6)
-	mechanicModel       = newWorldSprite("sprites/worker-mechanic.png", 5, 6)
-	rivalScoutModel     = newWorldSprite("sprites/rival-scout.png", 3, 5)
-	rivalCrawlerModel   = newWorldSprite("sprites/rival-crawler.png", 8, 9)
-	rivalRaiderModel    = newWorldSprite("sprites/rival-raider.png", 4, 5)
+	coreWorkerModel = newWorldSprite(
+		"sprites/worker-core.png",
+		"sprites/shadows/worker-core.png", 4, 6,
+	)
+	carrierModel = newWorldSprite(
+		"sprites/worker-carrier.png",
+		"sprites/shadows/worker-carrier.png", 5, 6,
+	)
+	trooperModel = newWorldSprite(
+		"sprites/worker-trooper.png",
+		"sprites/shadows/worker-trooper.png", 5, 6,
+	)
+	mechanicModel = newWorldSprite(
+		"sprites/worker-mechanic.png",
+		"sprites/shadows/worker-mechanic.png", 5, 6,
+	)
+	rivalScoutModel = newWorldSprite(
+		"sprites/rival-scout.png",
+		"sprites/shadows/rival-scout.png", 3, 5,
+	)
+	rivalCrawlerModel = newWorldSprite(
+		"sprites/rival-crawler.png",
+		"sprites/shadows/rival-crawler.png", 8, 9,
+	)
+	rivalRaiderModel = newWorldSprite(
+		"sprites/rival-raider.png",
+		"sprites/shadows/rival-raider.png", 4, 5,
+	)
 	rivalArtilleryModel = newWorldSprite(
-		"sprites/rival-artillery.png", 12, 8,
+		"sprites/rival-artillery.png",
+		"sprites/shadows/rival-artillery.png", 12, 8,
 	)
 )
 
@@ -71,6 +101,23 @@ func (m worldSprite) draw(
 			OriginX: modelFootX,
 			OriginY: modelFootY,
 			Scale:   scale * zoom / modelRenderZoom,
+		})
+	screen.SetCamera(camera)
+}
+
+func (m worldSprite) drawShadow(
+	screen *golib.Screen, camera *golib.Camera,
+	position golib.Vector2, facing uint8, zoom float32,
+) {
+	at := modelScreenPosition(camera, position)
+	scale := m.iconScale(zoom) * zoom / modelRenderZoom
+	screen.SetCamera(nil)
+	screen.DrawSprite(m.shadow, int(facing%8), at.X, at.Y,
+		golib.DrawOptions{
+			OriginX: modelFootX,
+			OriginY: modelFootY,
+			Scale:   scale,
+			Tint:    unitShadowTint,
 		})
 	screen.SetCamera(camera)
 }

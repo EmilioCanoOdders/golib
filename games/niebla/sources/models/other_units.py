@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from studio import (
     beam, box, cylinder, hull, init_scene, loaded_model_name, material,
-    render_sheet, root, save_blend, wheels,
+    render_shadow_sheet, render_sheet, root, save_blend, wheels,
 )
 
 
@@ -237,7 +237,12 @@ MODELS = {
 
 
 if __name__ == "__main__":
-    if "--create" in sys.argv:
+    if "--shadows-only" in sys.argv:
+        name = loaded_model_name()
+        if name not in MODELS:
+            raise ValueError("load a unit .blend or pass -- --create")
+        render_shadow_sheet("Model", name)
+    elif "--create" in sys.argv:
         requested = sys.argv[sys.argv.index("--create") + 1:]
         for name in requested or MODELS.keys():
             if name not in MODELS:
@@ -246,8 +251,10 @@ if __name__ == "__main__":
             owner = MODELS[name]()
             save_blend(owner, name)
             render_sheet("Model", name)
+            render_shadow_sheet("Model", name)
     else:
         name = loaded_model_name()
         if name not in MODELS:
             raise ValueError("load a unit .blend or pass -- --create")
         render_sheet("Model", name)
+        render_shadow_sheet("Model", name)

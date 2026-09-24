@@ -17,6 +17,14 @@ UNIT_W = 48 / 200
 UNIT_H = 24 / 200
 ELEVATION = math.radians(30)
 VERTICAL_SCALE = math.sqrt(2 / 3)
+SHADOW_SUPERSAMPLE = 4
+SHADOW_PLANE_SIZE = 80
+SHADOW_ALPHA_GAIN = 1.5
+SHADOW_RESOLUTION_SCALE = 4
+SHADOW_RENDER_SAMPLES = 64
+SHADOW_LIGHT_ENERGY = 2
+SHADOW_LIGHT_ANGLE = math.radians(8)
+SHADOW_LIGHT_DIRECTION = (1, -30, 55)
 
 
 def material(name, color, metallic=0.0, roughness=0.75):
@@ -224,3 +232,141 @@ def render_sheet(owner_name, sheet_name):
     sheet.save()
     print(f"Rendered {sheet.filepath_raw}")
     bpy.data.images.remove(sheet)
+
+
+def render_pixels(scene, filepath):
+    scene.render.filepath = str(filepath)
+    bpy.ops.render.render(write_still=True)
+    image = bpy.data.images.load(str(filepath), check_existing=False)
+    pixels = array("f", [0]) * (
+        int(image.size[0]) * int(image.size[1]) * 4
+    )
+    image.pixels.foreach_get(pixels)
+    bpy.data.images.remove(image)
+    return pixels
+
+
+def render_shadow_sheet(owner_name, sheet_name):
+    scene = bpy.context.scene
+    scene.render.engine = "BLENDER_EEVEE"
+    scene.render.resolution_x = FRAME_WIDTH * SHADOW_SUPERSAMPLE
+    scene.render.resolution_y = FRAME_HEIGHT * SHADOW_SUPERSAMPLE
+    scene.render.resolution_percentage = 100
+    scene.render.film_transparent = False
+    scene.render.image_settings.file_format = "PNG"
+    scene.render.image_settings.color_mode = "RGBA"
+    scene.render.image_settings.color_depth = "8"
+    scene.view_settings.view_transform = "Standard"
+    scene.view_settings.look = "Medium High Contrast"
+    scene.eevee.use_shadows = True
+    scene.eevee.shadow_resolution_scale = SHADOW_RESOLUTION_SCALE
+    scene.eevee.taa_render_samples = SHADOW_RENDER_SAMPLES
+
+    owner = bpy.data.objects[owner_name]
+    source = bpy.data.images.load(
+        str(GAME / "assets/sprites" / (sheet_name + ".png")),
+        check_existing=False,
+    )
+    source_width = int(source.size[0])
+    source_pixels = array("f", [0]) * (
+        source_width * FRAME_HEIGHT * 4
+    )
+    source.pixels.foreach_get(source_pixels)
+
+    bpy.ops.mesh.primitive_plane_add(
+        size=SHADOW_PLANE_SIZE, location=(0, 0, 0),
+    )
+    floor = bpy.context.object
+    floor.name = "Shadow render floor"
+    floor_mesh = floor.data
+    floor_material = bpy.data.materials.new("Shadow render floor")
+    floor_material.use_nodes = True
+    surface = floor_material.node_tree.nodes.get("Principled BSDF")
+    surface.inputs["Base Color"].default_value = (1, 1, 1, 1)
+    surface.inputs["Roughness"].default_value = 1
+    floor.data.materials.append(floor_material)
+
+    sun_data = bpy.data.lights.new("Shadow daylight", "SUN")
+    sun_data.energy = SHADOW_LIGHT_ENERGY
+    sun_data.angle = SHADOW_LIGHT_ANGLE
+    sun = bpy.data.objects.new("Shadow daylight", sun_data)
+    scene.collection.objects.link(sun)
+    direction = Vector(SHADOW_LIGHT_DIRECTION)
+    sun.rotation_euler = (-direction).to_track_quat("-Z", "Y").to_euler()
+
+    width = FRAME_WIDTH * 8
+    height = FRAME_HEIGHT
+    pixels = array("f", [0]) * (width * height * 4)
+    render_width = FRAME_WIDTH * SHADOW_SUPERSAMPLE
+    cache = GAME.parents[1] / "build/niebla"
+    cache.mkdir(parents=True, exist_ok=True)
+    shadow_dir = GAME / "assets/sprites/shadows"
+    shadow_dir.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory(dir=cache) as tmp:
+        for facing in range(8):
+            owner.rotation_euler.z = yaw_for_screen_octant(facing)
+            # Subtract paired renders, then use the model alpha to remove its
+            # silhouette from the resulting shadow mask.
+            sun_data.use_shadow = True
+            shadowed = render_pixels(
+                scene, Path(tmp) / f"shadow-{facing}.png",
+            )
+            sun_data.use_shadow = False
+            lit = render_pixels(scene, Path(tmp) / f"lit-{facing}.png")
+
+            for row in range(height):
+                for column in range(FRAME_WIDTH):
+                    source_index = (
+                        (row * source_width + facing * FRAME_WIDTH + column) * 4
+                    )
+                    opacity = 0
+                    for sub_y in range(SHADOW_SUPERSAMPLE):
+                        for sub_x in range(SHADOW_SUPERSAMPLE):
+                            render_index = (
+                                (row * SHADOW_SUPERSAMPLE + sub_y) *
+                                render_width +
+                                column * SHADOW_SUPERSAMPLE + sub_x
+                            ) * 4
+                            red = lit[render_index] - shadowed[render_index]
+                            green = lit[render_index + 1] - shadowed[
+                                render_index + 1
+                            ]
+                            blue = lit[render_index + 2] - shadowed[
+                                render_index + 2
+                            ]
+                            difference = max(
+                                0,
+                                red * 0.2126 + green * 0.7152 +
+                                blue * 0.0722,
+                            )
+                            body_alpha = source_pixels[source_index + 3]
+                            opacity += min(
+                                1, difference * SHADOW_ALPHA_GAIN,
+                            ) * (1 - body_alpha)
+                    target_index = (
+                        row * width + facing * FRAME_WIDTH + column
+                    ) * 4
+                    pixels[target_index] = 1
+                    pixels[target_index + 1] = 1
+                    pixels[target_index + 2] = 1
+                    pixels[target_index + 3] = opacity / (
+                        SHADOW_SUPERSAMPLE ** 2
+                    )
+
+    sheet = bpy.data.images.new(
+        sheet_name + " shadow", width, height, alpha=True,
+    )
+    sheet.pixels.foreach_set(pixels)
+    sheet.filepath_raw = str(shadow_dir / (sheet_name + ".png"))
+    sheet.file_format = "PNG"
+    sheet.save()
+    print(f"Rendered {sheet.filepath_raw}")
+
+    bpy.data.images.remove(sheet)
+    bpy.data.images.remove(source)
+    bpy.data.objects.remove(floor, do_unlink=True)
+    bpy.data.objects.remove(sun, do_unlink=True)
+    bpy.data.meshes.remove(floor_mesh)
+    bpy.data.materials.remove(floor_material)
+    bpy.data.lights.remove(sun_data)

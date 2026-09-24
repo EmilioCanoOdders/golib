@@ -23,6 +23,9 @@ func TestWorldSpritesHaveEveryFacing(t *testing.T) {
 		if got := model.sprite.Frames(); got != 8 {
 			t.Errorf("%s sprite has %d facings, want 8", name, got)
 		}
+		if got := model.shadow.Frames(); got != 8 {
+			t.Errorf("%s shadow has %d facings, want 8", name, got)
+		}
 	}
 }
 

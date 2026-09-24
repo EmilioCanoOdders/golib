@@ -15,9 +15,10 @@ Files in this folder that were not made for GoLib. Keep this file with them: a
 
 ## Sprites
 
-All eight PNG sheets in `sprites/` are rendered for this game from their
-matching `.blend` files in `sources/models/` using the scripts there. They
-need no third-party attribution.
+All eight PNG sheets in `sprites/` and their eight shadow masks in
+`sprites/shadows/` are rendered for this game from their matching `.blend`
+files in `sources/models/` using the scripts there. They need no third-party
+attribution.
 
 ## Sounds
 
