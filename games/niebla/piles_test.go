@@ -77,6 +77,25 @@ func TestDemolishingLeavesTheCostAsAPileAndTheRobotsHaulItHome(t *testing.T) {
 	}
 }
 
+func TestDemolishingAFactoryRefundsItsMechanicInProgress(t *testing.T) {
+	s := newGame()
+	s.Stock = Stock{Oil: 1000, Lilac: 2500}
+	col, row := groundNearCore()
+	home := raised(t, s, BuildingWarFactory, col, row)
+	Apply(s, QueueMechanic{Building: home.ID})
+	Apply(s, Demolish{Building: home.ID})
+	pile, found := pileAt(s, col, row)
+	if !found {
+		t.Fatal("the demolished factory left no pile")
+	}
+	if want := warFactoryCostLilac + mechanicCostLilac; pile.Lilac != want {
+		t.Errorf("the pile holds %v kg, want %v", pile.Lilac, want)
+	}
+	if want := warFactoryCostOil + mechanicCostOil; pile.Oil != want {
+		t.Errorf("the pile holds %v L, want %v", pile.Oil, want)
+	}
+}
+
 func TestDemolishingAFactoryCancelsItsRobot(t *testing.T) {
 	s := newGame()
 	col, row := groundNearCore()

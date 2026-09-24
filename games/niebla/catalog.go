@@ -100,17 +100,26 @@ var catalog = map[ThingType]ThingInfo{
 			model := "core"
 			switch r.Kind {
 			case RobotBuilt:
-				model = "factory"
+				model = "worker"
 			case RobotCombat:
 				model = "trooper"
+			case RobotRepair:
+				model = "mechanic"
 			}
 			details := []Detail{
 				{"task", robotCaption(s, r)},
 				{"model", model},
 			}
-			if r.Kind == RobotCombat {
+			health, healthName := 0.0, "health"
+			switch r.Kind {
+			case RobotCombat:
+				health = trooperHealth
+			case RobotRepair:
+				health, healthName = mechanicHealth, "hull"
+			}
+			if health > 0 {
 				details = append(details, Detail{
-					"health", fmt.Sprintf("%.0f / %.0f", math.Max(0, r.Health), trooperHealth),
+					healthName, fmt.Sprintf("%.0f / %.0f", math.Max(0, r.Health), health),
 				})
 			}
 			if r.tanked() {
@@ -254,7 +263,7 @@ var catalog = map[ThingType]ThingInfo{
 		Color:   warFactoryColor,
 		Primary: true,
 		Summary: func(amount float64) string {
-			return "builds troopers"
+			return "builds troopers and mechanics"
 		},
 		Details: func(s *State, thing Thing) []Detail {
 			return []Detail{
@@ -267,6 +276,14 @@ var catalog = map[ThingType]ThingInfo{
 					trooperHealth, si(trooperRangeUnits, "m"))},
 				{"shot", fmt.Sprintf("%.0f damage every %.1f s, [oil]%s[/] of its tank",
 					trooperShotDamage, trooperReloadTicks/60.0, si(trooperShotOil, "L"))},
+				{"mechanic cost", costWords(mechanicCostLilac, mechanicCostOil)},
+				{"mechanic pace", "one per " + si(mechanicBuildTicks/60, "s")},
+				{"mechanic", fmt.Sprintf("%.0f hull, repairs %.0f damage/s",
+					mechanicHealth, repairPerSecond)},
+				{"repair fuel", fmt.Sprintf("[oil]%s[/] per damage repaired",
+					si(repairOilPerPoint, "L"))},
+				{"mechanics", fmt.Sprintf("%d / %d",
+					mechanicCount(s, thing.Ref), mechanicPerFactory)},
 			}
 		},
 	},

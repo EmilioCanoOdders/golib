@@ -318,23 +318,81 @@ func robotWorks(kind BuildingKind) (robot RobotKind, lilac, oil float64, ticks i
 	return "", 0, 0, 0, false
 }
 
-// stepFactories moves every factory's robot build one tick forward; done,
-// the new robot rolls out of the works with its tank full - a war
-// factory's into its squad.
+func robotProduction(kind RobotKind) (lilac, oil float64, ticks int64, ok bool) {
+	switch kind {
+	case RobotBuilt:
+		return robotCostLilac, robotCostOil, factoryRobotTicks, true
+	case RobotCombat:
+		return trooperCostLilac, trooperCostOil, trooperBuildTicks, true
+	case RobotRepair:
+		return mechanicCostLilac, mechanicCostOil, mechanicBuildTicks, true
+	}
+	return 0, 0, 0, false
+}
+
+func canProduce(b Building, kind RobotKind) bool {
+	switch b.Kind {
+	case BuildingFactory:
+		return kind == RobotBuilt
+	case BuildingWarFactory:
+		return kind == RobotCombat || kind == RobotRepair
+	}
+	return false
+}
+
+func robotWorkKind(b Building) RobotKind {
+	if canProduce(b, b.WorkKind) {
+		return b.WorkKind
+	}
+	kind, _, _, _, ok := robotWorks(b.Kind)
+	if !ok {
+		return ""
+	}
+	return kind
+}
+
+func mechanicCount(s *State, factory int64) int {
+	count := 0
+	for _, id := range sortedRobotIDs(s) {
+		r := s.Robots[id]
+		if r.Kind == RobotRepair && r.Factory == factory {
+			count++
+		}
+	}
+	return count
+}
+
+func mechanicRoom(s *State, b Building) bool {
+	if b.Work > 0 && robotWorkKind(b) == RobotRepair {
+		return false
+	}
+	return mechanicCount(s, b.ID) < mechanicPerFactory
+}
+
+// stepFactories moves every factory's unit build one tick forward; done,
+// the new unit rolls out of the works with its tank full. Troopers join
+// their war factory's squad; mechanics remember their producing factory.
 func stepFactories(s *State) {
 	for _, id := range sortedBuildingIDs(s) {
 		b := s.Buildings[id]
-		robot, _, _, _, builds := robotWorks(b.Kind)
-		if !builds || b.Work <= 0 {
+		kind := robotWorkKind(b)
+		if !canProduce(b, kind) || b.Work <= 0 {
 			continue
 		}
 		b.Work--
+		if b.Work == 0 {
+			b.WorkKind = ""
+		}
 		s.Buildings[id] = b
 		if b.Work == 0 {
 			x, y := cellCenterUnits(b.Col, b.Row)
-			r := s.Robots[s.spawnRobot(robot, x, y)]
-			if robot == RobotCombat {
+			r := s.Robots[s.spawnRobot(kind, x, y)]
+			if kind == RobotCombat {
 				r.Squad = b.ID
+				s.Robots[r.ID] = r
+			}
+			if kind == RobotRepair {
+				r.Factory = b.ID
 				s.Robots[r.ID] = r
 			}
 		}

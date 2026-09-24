@@ -49,14 +49,23 @@ func drawRobots(
 				3*unitW*scale, r.Facing)
 			screen.DrawCircle(pack.X, pack.Y, radius*0.32, cargo)
 		}
-		if r.Kind == RobotCombat && r.Health < trooperHealth {
+		maxHealth := 0.0
+		healthColor := guardColor
+		switch r.Kind {
+		case RobotCombat:
+			maxHealth = trooperHealth
+		case RobotRepair:
+			maxHealth = mechanicHealth
+			healthColor = factoryColor
+		}
+		if maxHealth > 0 && r.Health < maxHealth {
 			bar := golib.Rectangle{
 				X: p.X - radius, Y: p.Y + radius*1.5,
 				Width: 2 * radius, Height: 2 / zoom,
 			}
 			screen.DrawRectangle(bar, fillBarColor)
-			bar.Width *= float32(math.Max(0, r.Health) / trooperHealth)
-			screen.DrawRectangle(bar, guardColor)
+			bar.Width *= float32(math.Max(0, r.Health) / maxHealth)
+			screen.DrawRectangle(bar, healthColor)
 		}
 	}
 }

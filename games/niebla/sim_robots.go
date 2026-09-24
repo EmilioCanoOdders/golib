@@ -52,7 +52,7 @@ func stepSim(s *State) {
 	stepShots(s)
 	for _, id := range sortedRobotIDs(s) {
 		r := s.Robots[id]
-		// A trooper the rivals shot this tick is gone already.
+		// A defender the rivals shot this tick is gone already.
 		if _, alive := s.Robots[id]; !alive {
 			continue
 		}
@@ -87,8 +87,9 @@ type robotTask struct {
 const (
 	taskHaul    = "haul"    // bring home what it carries
 	taskRefuel  = "refuel"  // mind its tank
+	taskRepair  = "repair"  // mechanics mend damaged buildings
 	taskLoad    = "load"    // finish loading, at its post or at a pile
-	taskBuild   = "build"   // build sites, mend buildings, lay pipe
+	taskBuild   = "build"   // build sites and lay pipe
 	taskCollect = "collect" // pick up loose items
 	taskPost    = "post"    // work its own post
 	taskSquad   = "squad"   // troopers: follow the squad's order
@@ -97,12 +98,11 @@ const (
 
 // robotDay is the robot's day, in priority order: the first line that
 // claims the robot owns its tick. It brings home what it carries, minds
-// its tank — a built robot low on oil walks to the nearest charger or
-// the core —, finishes loading, raises protector jobs before other
-// build jobs, picks up what lies on the ground before digging more,
-// works its own post, and with nothing of all that idles by the core.
-// A robot arriving home builds first and returns to its own task after,
-// exactly as the design asks.
+// its tank, gives mechanics their repair work, finishes loading, raises
+// protector jobs before other build jobs, picks up what lies on the
+// ground before digging more, works its own post, and otherwise idles by
+// the core. A robot arriving home builds first and returns to its own
+// task after, exactly as the design asks.
 var robotDay []robotTask
 
 // Idling asks what the other robots are at, which reads the day back:
@@ -111,6 +111,7 @@ func init() {
 	robotDay = []robotTask{
 		{taskHaul, (*Robot).hauling, (*Robot).stepHaul},
 		{taskRefuel, (*Robot).refueling, (*Robot).stepRefuel},
+		{taskRepair, (*Robot).repairing, (*Robot).stepRepair},
 		{taskLoad, (*Robot).loading, (*Robot).stepLoad},
 		{taskBuild, (*Robot).building, (*Robot).stepBuild},
 		{taskCollect, (*Robot).collecting, (*Robot).stepCollect},
@@ -178,6 +179,35 @@ func (r *Robot) stepRefuel(s *State) {
 	}
 }
 
+func (r *Robot) repairing(s *State) bool {
+	return r.Kind == RobotRepair
+}
+
+func (r *Robot) stepRepair(s *State) {
+	if building, damaged := damagedBuilding(s); damaged {
+		cx, cy := cellCenterUnits(building.Col, building.Row)
+		angle := float64(r.ID) * goldenAngle
+		x := cx + math.Cos(angle)*11
+		y := cy + math.Sin(angle)*11
+		if r.walkTowards(s, x, y) {
+			s.mend(building.ID, r)
+		}
+		return
+	}
+	x, y := repairStandbySpot(s, *r)
+	r.walkTowards(s, x, y)
+}
+
+func repairStandbySpot(s *State, r Robot) (x, y float64) {
+	if factory, ok := s.Buildings[r.Factory]; ok &&
+		factory.Kind == BuildingWarFactory {
+		x, y = cellCenterUnits(factory.Col, factory.Row)
+		angle := float64(r.ID) * goldenAngle
+		return x + math.Cos(angle)*18, y + math.Sin(angle)*18
+	}
+	return parkSlot(parkSlots - 1)
+}
+
 func (r *Robot) loading(s *State) bool {
 	return r.WorkTicks > 0
 }
@@ -195,13 +225,10 @@ func (r *Robot) stepLoad(s *State) {
 }
 
 func (r *Robot) building(s *State) bool {
-	if r.Kind == RobotCombat {
+	if r.Kind == RobotCombat || r.Kind == RobotRepair {
 		return false
 	}
 	if _, _, hasJob := priorityJob(s); hasJob {
-		return true
-	}
-	if _, damaged := damagedBuilding(s); damaged {
 		return true
 	}
 	if claimStands(s, *r) {
@@ -215,15 +242,6 @@ func (r *Robot) building(s *State) bool {
 // doesn't swallow them. With no site left to raise, they lay pipe.
 func (r *Robot) stepBuild(s *State) {
 	job, index, hasJob := priorityJob(s)
-	if b, damaged := damagedBuilding(s); !hasJob && damaged {
-		r.Pipe, r.Section = 0, 0
-		cx, cy := cellCenterUnits(b.Col, b.Row)
-		angle := float64(r.ID) * goldenAngle
-		if r.walkTowards(s, cx+math.Cos(angle)*11, cy+math.Sin(angle)*11) {
-			s.mend(b.ID)
-		}
-		return
-	}
 	if !hasJob {
 		r.stepLayPipe(s)
 		return
@@ -267,7 +285,7 @@ func (r *Robot) stepLayPipe(s *State) {
 }
 
 func (r *Robot) collecting(s *State) bool {
-	if r.Kind == RobotCombat {
+	if r.Kind == RobotCombat || r.Kind == RobotRepair {
 		return false
 	}
 	_, found := nearestPile(s, *r)
@@ -574,7 +592,7 @@ func pickRobot(s *State, col, row int) int64 {
 	bestFree, bestDist := false, 0.0
 	for _, id := range sortedRobotIDs(s) {
 		r := s.Robots[id]
-		if r.Kind == RobotCombat {
+		if r.Kind == RobotCombat || r.Kind == RobotRepair {
 			continue
 		}
 		if r.hasPost() {

@@ -106,19 +106,42 @@ type QueueRobot struct {
 
 func (a QueueRobot) apply(s *State) {
 	b, ok := s.Buildings[a.Building]
-	_, lilac, oil, ticks, builds := robotWorks(b.Kind)
-	if !ok || !builds || b.Work > 0 {
+	kind, _, _, _, builds := robotWorks(b.Kind)
+	if !ok || !builds {
 		return
 	}
-	if b.Kind == BuildingWarFactory && !squadRoom(s, b) {
+	queueUnit(s, b.ID, kind)
+}
+
+// QueueMechanic puts a war factory to work on its one repair unit, paying
+// its cost at once. A factory already building or with a mechanic leaves
+// the action unanswered.
+type QueueMechanic struct {
+	Building int64
+}
+
+func (a QueueMechanic) apply(s *State) {
+	queueUnit(s, a.Building, RobotRepair)
+}
+
+func queueUnit(s *State, id int64, kind RobotKind) {
+	b, ok := s.Buildings[id]
+	if !ok || !canProduce(b, kind) || b.Work > 0 {
 		return
 	}
-	if s.Stock.Lilac < lilac || oilTotal(s) < oil {
+	if kind == RobotCombat && !squadRoom(s, b) {
+		return
+	}
+	if kind == RobotRepair && !mechanicRoom(s, b) {
+		return
+	}
+	lilac, oil, ticks, builds := robotProduction(kind)
+	if !builds || s.Stock.Lilac < lilac || oilTotal(s) < oil {
 		return
 	}
 	s.Stock.Lilac -= lilac
 	s.payOil(oil)
-	b.Work = ticks
+	b.Work, b.WorkKind = ticks, kind
 	s.Buildings[b.ID] = b
 }
 
@@ -180,9 +203,11 @@ func (s *State) takeDown(b Building, refund float64) {
 	lilac *= refund
 	oil -= initialBuildingOil(b.Kind)
 	oil *= refund
-	if _, robotLilac, robotOil, _, builds := robotWorks(b.Kind); builds && b.Work > 0 {
-		lilac += robotLilac * refund
-		oil += robotOil * refund
+	if b.Work > 0 {
+		if robotLilac, robotOil, _, builds := robotProduction(robotWorkKind(b)); builds {
+			lilac += robotLilac * refund
+			oil += robotOil * refund
+		}
 	}
 	lilac += s.takePipesOf(b.ID) * refund
 	s.dropPile(b.Col, b.Row, oil+b.Oil, lilac)

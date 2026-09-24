@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
 )
@@ -92,18 +93,183 @@ func TestSettledCityDoesNotFireByItself(t *testing.T) {
 	}
 }
 
-func TestRobotsMendADamagedBuilding(t *testing.T) {
+func TestOnlyAMechanicRepairsAndSpendsOil(t *testing.T) {
 	s := newGame()
 	noRivals(s)
 	col, row := groundNearCore()
 	silo := raised(t, s, BuildingSilo, col, row)
 	s.hurtBuilding(silo.ID, 120)
-	if !tickUntil(s, 60*60, func() bool { return s.Buildings[silo.ID].Damage == 0 }) {
-		t.Fatalf("the robots left the silo at %v damage", s.Buildings[silo.ID].Damage)
+	runTicks(s, 60*30)
+	if got := s.Buildings[silo.ID].Damage; got != 120 {
+		t.Fatalf("ordinary workers repaired the silo to %v damage", got)
 	}
 	if got := robotCaption(s, s.Robots[1]); got == "repairing" {
-		t.Errorf("a robot still says %q with nothing to mend", got)
+		t.Errorf("an ordinary worker still says %q", got)
 	}
+
+	home := raised(t, s, BuildingWarFactory, col+2, row)
+	s.Stock = Stock{Oil: 1000, Lilac: 2500}
+	Apply(s, QueueMechanic{Building: home.ID})
+	work := s.Buildings[home.ID]
+	if work.Work != mechanicBuildTicks || work.WorkKind != RobotRepair {
+		t.Fatalf("the war factory queued %+v, want a mechanic", work)
+	}
+	if s.Stock.Lilac != 2500-mechanicCostLilac ||
+		s.Stock.Oil != 1000-mechanicCostOil {
+		t.Fatalf("the mechanic cost left %+v in the stores", s.Stock)
+	}
+	runTicks(s, mechanicBuildTicks)
+	mechanic, found := mechanicForFactory(s, home.ID)
+	if !found || mechanic.Health != mechanicHealth || mechanic.Tank != robotTankLiters {
+		t.Fatalf("the war factory produced mechanic %+v, found %v", mechanic, found)
+	}
+	if !tickUntil(s, 60*60, func() bool {
+		return s.Buildings[silo.ID].Damage == 0
+	}) {
+		t.Fatalf("the mechanic left the silo at %v damage",
+			s.Buildings[silo.ID].Damage)
+	}
+	mechanic = s.Robots[mechanic.ID]
+	wantTank := robotTankLiters - 120*repairOilPerPoint
+	if math.Abs(mechanic.Tank-wantTank) > 0.001 {
+		t.Errorf("the mechanic has %v L left, want %v after repairs",
+			mechanic.Tank, wantTank)
+	}
+}
+
+func TestOneMechanicCannotOutrepairContinuousArtillery(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	col, row := groundNearCore()
+	silo := raised(t, s, BuildingSilo, col, row)
+	cx, cy := cellCenterUnits(col, row)
+	id := s.spawnRobot(RobotRepair, cx, cy)
+	r := s.Robots[id]
+	r.Tank = robotTankLiters
+	s.Robots[id] = r
+	s.hurtBuilding(silo.ID, cityArtilleryDamage)
+	for i := 0; i < 5; i++ {
+		r = s.Robots[id]
+		angle := float64(id) * goldenAngle
+		r.X = cx + math.Cos(angle)*11
+		r.Y = cy + math.Sin(angle)*11
+		s.Robots[id] = r
+		runTicks(s, cityArtilleryReload)
+		s.hurtBuilding(silo.ID, cityArtilleryDamage)
+	}
+	if got := s.Buildings[silo.ID].Damage; got <= cityArtilleryDamage {
+		t.Errorf("the mechanic held damage to %v under continuous fire", got)
+	}
+}
+
+func TestRivalShotsDamageMechanicsButNotWorkers(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	worker := s.Robots[1]
+	col, row := groundNearCore()
+	home := raised(t, s, BuildingWarFactory, col, row)
+	cx, cy := cellCenterUnits(col, row)
+	id := s.spawnRobot(RobotRepair, cx, cy)
+	mechanic := s.Robots[id]
+	mechanic.Factory = home.ID
+	mechanic.Tank = 80
+	s.Robots[id] = mechanic
+
+	s.fire(Shot{
+		Kind: ShotBullet, FromX: cx - 1, FromY: cy,
+		ToX: cx, ToY: cy, Robot: id, Damage: 15, Rival: true,
+	})
+	runTicks(s, 2)
+	if got := s.Robots[id].Health; got != mechanicHealth-15 {
+		t.Fatalf("the rival bullet left the mechanic at %v health", got)
+	}
+	if got := s.Robots[worker.ID].Health; got != 0 {
+		t.Errorf("a worker gained health from a shot: %v", got)
+	}
+
+	s.fire(Shot{
+		Kind: ShotShell, FromX: cx, FromY: cy,
+		ToX: cx, ToY: cy, Damage: 30, Rival: true,
+	})
+	runTicks(s, 1)
+	if got := s.Robots[id].Health; got != mechanicHealth-45 {
+		t.Fatalf("the rival shell left the mechanic at %v health", got)
+	}
+	wreckCol, wreckRow := robotCell(s.Robots[id])
+	s.hurtColonyUnit(id, mechanicHealth-45)
+	if _, alive := s.Robots[id]; alive {
+		t.Fatal("the mechanic survived lethal damage")
+	}
+	pile, found := pileAt(s, wreckCol, wreckRow)
+	if !found {
+		t.Fatal("the fallen mechanic left no wreck")
+	}
+	if want := mechanicCostLilac * unitWreckRefund; pile.Lilac != want {
+		t.Errorf("the mechanic wreck holds %v kg, want %v", pile.Lilac, want)
+	}
+	if want := (mechanicCostOil + 80) * unitWreckRefund; pile.Oil != want {
+		t.Errorf("the mechanic wreck holds %v L, want %v", pile.Oil, want)
+	}
+}
+
+func TestOldWarFactoryWorkStillFinishesAsATrooper(t *testing.T) {
+	s := newGame()
+	col, row := groundNearCore()
+	home := raised(t, s, BuildingWarFactory, col, row)
+	home.Work = 5
+	s.Buildings[home.ID] = home
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var save map[string]json.RawMessage
+	if err := json.Unmarshal(data, &save); err != nil {
+		t.Fatal(err)
+	}
+	var buildings map[string]json.RawMessage
+	if err := json.Unmarshal(save["Buildings"], &buildings); err != nil {
+		t.Fatal(err)
+	}
+	for id, encoded := range buildings {
+		var building map[string]json.RawMessage
+		if err := json.Unmarshal(encoded, &building); err != nil {
+			t.Fatal(err)
+		}
+		delete(building, "WorkKind")
+		buildings[id], err = json.Marshal(building)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	save["Buildings"], err = json.Marshal(buildings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err = json.Marshal(save)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var loaded State
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatal(err)
+	}
+	runTicks(&loaded, 5)
+	if got := len(squadMembers(&loaded, home.ID)); got != 1 {
+		t.Fatalf("an old save's factory produced %d troopers, want one", got)
+	}
+	if got := mechanicCount(&loaded, home.ID); got != 0 {
+		t.Errorf("an old save's factory produced %d mechanics", got)
+	}
+}
+
+func mechanicForFactory(s *State, factory int64) (Robot, bool) {
+	for _, id := range sortedRobotIDs(s) {
+		r := s.Robots[id]
+		if r.Kind == RobotRepair && r.Factory == factory {
+			return r, true
+		}
+	}
+	return Robot{}, false
 }
 
 func TestArtilleryShellsWhatTheColonySeesAndCityNexusFalls(t *testing.T) {

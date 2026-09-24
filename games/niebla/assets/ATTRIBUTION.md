@@ -15,7 +15,7 @@ Files in this folder that were not made for GoLib. Keep this file with them: a
 
 ## Sprites
 
-All seven PNG sheets in `sprites/` are rendered for this game from their
+All eight PNG sheets in `sprites/` are rendered for this game from their
 matching `.blend` files in `sources/models/` using the scripts there. They
 need no third-party attribution.
 

@@ -64,6 +64,8 @@ func (s *State) dropRobotWreck(r Robot) {
 		lilac, oil = robotCostLilac, robotCostOil
 	case RobotCombat:
 		lilac, oil = trooperCostLilac, trooperCostOil
+	case RobotRepair:
+		lilac, oil = mechanicCostLilac, mechanicCostOil
 	}
 
 	oil += r.Tank

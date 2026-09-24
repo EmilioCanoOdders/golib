@@ -20,7 +20,7 @@ const (
 	titleRow         = 24 // line height of a card's title
 	textRow          = 17 // line height of the header and of a detail line
 	buttonRow        = 22 // line height of a button, with air around it
-	buttonWidth      = 96
+	buttonWidth      = 112
 	barWidth         = 3  // the color bar on a card's left
 	detailLabelW     = 80 // where a detail's value starts, past its label
 	detailIndent     = 12 // how far details sit inside their card
@@ -50,6 +50,7 @@ const (
 	buttonRecall        = "recall robot"
 	buttonBuildRobot    = "build robot"
 	buttonTrooper       = "build trooper"
+	buttonMechanic      = "build mechanic"
 	buttonOrder         = "give order"
 	buttonBuildPump     = "build pump"
 	buttonLayPipe       = "lay pipe"
@@ -236,7 +237,7 @@ func tooltipLayoutForThings(
 			buildingType(b.Kind) == thing.Type {
 			left := 100 * (1 - b.Damage/buildingHealth(b.Kind))
 			t.rows = append(t.rows, tooltipRow{thing: thing, detail: Detail{
-				"integrity", fmt.Sprintf("[danger]%.0f%%[/], robots will mend it", left),
+				"integrity", fmt.Sprintf("[danger]%.0f%%[/], mechanics can repair it", left),
 			}})
 		}
 		if thing.Type == TypeFactory {
@@ -247,6 +248,13 @@ func tooltipLayoutForThings(
 		}
 		if thing.Type == TypeWarFactory {
 			if b, ok := s.Buildings[thing.Ref]; ok {
+				if b.Work <= 0 && mechanicRoom(s, b) &&
+					s.Stock.Lilac >= mechanicCostLilac &&
+					oilTotal(s) >= mechanicCostOil {
+					t.rows = append(t.rows, tooltipRow{
+						thing: thing, button: buttonMechanic,
+					})
+				}
 				if b.Work <= 0 && squadRoom(s, b) &&
 					s.Stock.Lilac >= trooperCostLilac &&
 					oilTotal(s) >= trooperCostOil {

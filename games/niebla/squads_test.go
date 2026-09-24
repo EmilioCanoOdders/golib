@@ -78,6 +78,73 @@ func TestAWarFactoryBuildsItsSquadAndNoMore(t *testing.T) {
 	}
 }
 
+func TestWarFactoryBuildsOneMechanicSeparatelyFromItsSquad(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	s.Stock = Stock{Oil: 1000, Lilac: 2500}
+	col, row := groundNearCore()
+	home := raised(t, s, BuildingWarFactory, col, row)
+	Apply(s, QueueMechanic{Building: home.ID})
+	if b := s.Buildings[home.ID]; b.WorkKind != RobotRepair ||
+		b.Work != mechanicBuildTicks {
+		t.Fatalf("the war factory has queued %+v, want a mechanic", b)
+	}
+	if !squadRoom(s, s.Buildings[home.ID]) {
+		t.Fatal("building a mechanic used a slot in the trooper squad")
+	}
+	runTicks(s, mechanicBuildTicks)
+	mechanic, found := mechanicForFactory(s, home.ID)
+	if !found || mechanic.Kind != RobotRepair || mechanic.Factory != home.ID {
+		t.Fatalf("the mechanic is %+v, found %v", mechanic, found)
+	}
+	if len(squadMembers(s, home.ID)) != 0 {
+		t.Fatal("the mechanic joined its factory's combat squad")
+	}
+	if mechanicRoom(s, s.Buildings[home.ID]) {
+		t.Fatal("the war factory offered a second mechanic")
+	}
+
+	stock := s.Stock
+	Apply(s, QueueMechanic{Building: home.ID})
+	if s.Stock != stock || s.Buildings[home.ID].Work > 0 {
+		t.Fatal("a full mechanic slot accepted another mechanic")
+	}
+	Apply(s, QueueRobot{Building: home.ID})
+	if b := s.Buildings[home.ID]; b.WorkKind != RobotCombat ||
+		b.Work != trooperBuildTicks {
+		t.Fatalf("the war factory could not queue a trooper: %+v", b)
+	}
+}
+
+func TestRivalGunsCanChooseMechanicsButIgnoreWorkers(t *testing.T) {
+	s := newGame()
+	col, row := groundNearCore()
+	home := raised(t, s, BuildingWarFactory, col, row)
+	x, y := cellCenterUnits(col, row)
+	mechanicID := s.spawnRobot(RobotRepair, x, y)
+	mechanic := s.Robots[mechanicID]
+	mechanic.Factory = home.ID
+	s.Robots[mechanicID] = mechanic
+	s.Enemies[900] = Enemy{
+		ID: 900, Kind: EnemyRaider, X: x + 40, Y: y,
+		Health: enemySpecOf(EnemyRaider).health,
+	}
+	stepEnemyGuns(s)
+	shotFound := false
+	for _, shot := range s.Shots {
+		if shot.Robot == mechanicID {
+			shotFound = true
+		}
+	}
+	if !shotFound {
+		t.Fatal("the raider did not target the exposed mechanic")
+	}
+	if target, found := nearestColonyUnit(s, x+40, y, 110); !found ||
+		target.Kind != RobotRepair {
+		t.Fatalf("nearest combat target is %+v, found %v", target, found)
+	}
+}
+
 func TestASquadGuardsWhereItIsToldAndMendsUnderABubble(t *testing.T) {
 	s := newGame()
 	noRivals(s)
@@ -189,7 +256,7 @@ func TestAFallenTrooperLeavesAQuarterOfItsResources(t *testing.T) {
 	r.Tank = 80
 	s.Robots[id] = r
 
-	s.hurtTrooper(id, trooperHealth)
+	s.hurtColonyUnit(id, trooperHealth)
 	col, row := robotCell(r)
 	p, ok := pileAt(s, col, row)
 	if !ok {

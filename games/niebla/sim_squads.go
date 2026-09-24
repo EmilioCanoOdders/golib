@@ -2,14 +2,12 @@ package main
 
 import "math"
 
-// Squads: the colony's arm. A war factory builds troopers - robots on a
-// combat chassis, which do no work - and the troopers it builds are its
-// squad: one unit, ordered as one. A squad guards a spot or attacks a
-// rival party, a vehicle of it first; nobody places a trooper by hand.
-// A trooper shoots whatever rival comes in its reach, whatever it is
-// doing, and pays each shot out of its own tank. The rivals' guns shoot
-// back, at troopers and at guard posts and at nothing else; their shells
-// are another matter (sim_shots.go).
+// Military units: a war factory builds troopers, up to six in its squad,
+// and one mechanic. A squad guards a spot or attacks a rival party, a
+// vehicle of it first; nobody places a trooper by hand. Mechanics work
+// alone, repairing buildings for oil. Troopers shoot rivals in reach and
+// pay each shot from their tanks. The rivals' guns shoot back at troopers,
+// mechanics and guard posts; their shells can also damage buildings.
 
 // Tuning: the squads' numbers, with units in the name.
 const (
@@ -25,6 +23,12 @@ const (
 	trooperReloadTicks = 30    // ticks between two shots
 	trooperShotDamage  = 6.0
 	trooperShotOil     = 0.2 // L a shot burns, out of the trooper's own tank
+
+	mechanicCostLilac  = 100.0 // kg
+	mechanicCostOil    = 50.0  // L
+	mechanicBuildTicks = 900   // ticks to build one: 15 s
+	mechanicPerFactory = 1
+	mechanicHealth     = 60.0
 
 	trooperHealPerSecond = 2.0 // health a trooper mends resting at its spot, under a bubble
 	squadStandoff        = 0.8 // the share of its reach an attacker closes to
@@ -77,7 +81,7 @@ func squadMembers(s *State, home int64) []Robot {
 // squadRoom reports whether a war factory may build one more trooper.
 func squadRoom(s *State, b Building) bool {
 	building := 0
-	if b.Work > 0 {
+	if b.Work > 0 && robotWorkKind(b) == RobotCombat {
 		building = 1
 	}
 	return len(squadMembers(s, b.ID))+building < squadSize
@@ -177,8 +181,8 @@ func (r *Robot) shoot(s *State) {
 }
 
 // stepEnemyGuns is the rivals shooting back: a vehicle with a gun fires
-// at the nearest trooper or guard post in its reach, whichever stands
-// closer, and at nothing else.
+// at the nearest trooper, mechanic or guard post in its reach, whichever
+// stands closer, and at nothing else.
 func stepEnemyGuns(s *State) {
 	for _, id := range sortedEnemyIDs(s) {
 		e := s.Enemies[id]
@@ -195,19 +199,19 @@ func stepEnemyGuns(s *State) {
 			s.Enemies[id] = e
 			continue
 		}
-		trooper, trooperIn := nearestTrooper(s, e.X, e.Y, spec.gunRange)
+		defender, defenderIn := nearestColonyUnit(s, e.X, e.Y, spec.gunRange)
 		post, postIn := nearestGuard(s, e.X, e.Y, spec.gunRange)
 		ptx, pty := cellCenterUnits(post.Col, post.Row)
 		switch {
-		case trooperIn && (!postIn ||
-			math.Hypot(trooper.X-e.X, trooper.Y-e.Y) <=
+		case defenderIn && (!postIn ||
+			math.Hypot(defender.X-e.X, defender.Y-e.Y) <=
 				math.Hypot(ptx-e.X, pty-e.Y)):
-			e.Reload, e.Aim = spec.reload, trooper.ID
+			e.Reload, e.Aim = spec.reload, defender.ID
 			s.Enemies[id] = e
 			s.fire(Shot{
 				Kind: ShotBullet, FromX: e.X, FromY: e.Y,
-				ToX: trooper.X, ToY: trooper.Y,
-				Robot: trooper.ID, Damage: spec.damage, Rival: true,
+				ToX: defender.X, ToY: defender.Y,
+				Robot: defender.ID, Damage: spec.damage, Rival: true,
 			})
 		case postIn:
 			e.Reload, e.Aim = spec.reload, post.ID
@@ -224,14 +228,14 @@ func stepEnemyGuns(s *State) {
 	}
 }
 
-// nearestTrooper returns the trooper closest to a spot, within a reach;
+// nearestColonyUnit returns the nearest trooper or mechanic within reach;
 // IDs break ties.
-func nearestTrooper(s *State, x, y, reach float64) (Robot, bool) {
+func nearestColonyUnit(s *State, x, y, reach float64) (Robot, bool) {
 	var best Robot
 	found, bestGap := false, reach
 	for _, id := range sortedRobotIDs(s) {
 		r := s.Robots[id]
-		if r.Kind != RobotCombat {
+		if r.Kind != RobotCombat && r.Kind != RobotRepair {
 			continue
 		}
 		if gap := math.Hypot(r.X-x, r.Y-y); gap <= bestGap && (!found || gap < bestGap) {

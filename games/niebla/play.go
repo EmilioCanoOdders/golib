@@ -561,6 +561,8 @@ func (s *playScene) pressButton(row tooltipRow) {
 		}
 	case buttonBuildRobot, buttonTrooper:
 		Apply(s.state, QueueRobot{Building: thing.Ref})
+	case buttonMechanic:
+		Apply(s.state, QueueMechanic{Building: thing.Ref})
 	case buttonOrder:
 		s.ordering = thing.Ref
 	case buttonBuildPump:

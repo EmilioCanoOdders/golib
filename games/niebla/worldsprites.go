@@ -27,6 +27,7 @@ var (
 	coreWorkerModel     = newWorldSprite("sprites/worker-core.png", 4, 6)
 	carrierModel        = newWorldSprite("sprites/worker-carrier.png", 5, 6)
 	trooperModel        = newWorldSprite("sprites/worker-trooper.png", 5, 6)
+	mechanicModel       = newWorldSprite("sprites/worker-mechanic.png", 5, 6)
 	rivalScoutModel     = newWorldSprite("sprites/rival-scout.png", 3, 5)
 	rivalCrawlerModel   = newWorldSprite("sprites/rival-crawler.png", 8, 9)
 	rivalRaiderModel    = newWorldSprite("sprites/rival-raider.png", 4, 5)
@@ -41,6 +42,8 @@ func robotModel(kind RobotKind) worldSprite {
 		return carrierModel
 	case RobotCombat:
 		return trooperModel
+	case RobotRepair:
+		return mechanicModel
 	default:
 		return coreWorkerModel
 	}

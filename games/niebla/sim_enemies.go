@@ -67,7 +67,7 @@ type enemySpec struct {
 	oilCap    float64 // L it can steal
 	lootOil   float64 // L its wreck drops, besides what it stole
 	lootLilac float64 // kg its wreck drops
-	damage    float64 // a shot of its gun, at troopers only; 0 carries none
+	damage    float64 // a shot at defenders and guard posts; 0 means no gun
 	reload    int64   // ticks between two shots
 	gunRange  float64 // u
 }

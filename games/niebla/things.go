@@ -277,11 +277,15 @@ func buildingThing(b Building) Thing {
 		ID:   fmt.Sprintf("%s-%d", kind, b.ID),
 		Ref:  b.ID,
 	}
-	if b.Kind == BuildingFactory && b.Work > 0 {
-		thing.Caption = fmt.Sprintf("building robot, %d s", b.Work/60)
-	}
-	if b.Kind == BuildingWarFactory && b.Work > 0 {
-		thing.Caption = fmt.Sprintf("building trooper, %d s", b.Work/60)
+	if b.Work > 0 {
+		unit := "robot"
+		switch robotWorkKind(b) {
+		case RobotCombat:
+			unit = "trooper"
+		case RobotRepair:
+			unit = "mechanic"
+		}
+		thing.Caption = fmt.Sprintf("building %s, %d s", unit, b.Work/60)
 	}
 	return thing
 }
@@ -367,10 +371,12 @@ func robotCaption(s *State, r Robot) string {
 		if _, _, hasJob := priorityJob(s); hasJob {
 			return "building"
 		}
+		return "laying pipe"
+	case taskRepair:
 		if _, damaged := damagedBuilding(s); damaged {
 			return "repairing"
 		}
-		return "laying pipe"
+		return "standing by"
 	case taskCollect:
 		return "fetching loose items"
 	case taskPost:

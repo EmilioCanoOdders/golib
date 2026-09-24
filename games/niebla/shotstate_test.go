@@ -54,6 +54,15 @@ func TestWriteShotUnitState(t *testing.T) {
 	x, y := parkCenter()
 	s.spawnRobot(RobotBuilt, x+20, y+12)
 	s.spawnRobot(RobotCombat, x+40, y+24)
+	col, row := groundNearCore()
+	home := raised(t, s, BuildingWarFactory, col, row)
+	silo := raised(t, s, BuildingSilo, col+2, row)
+	s.hurtBuilding(silo.ID, 120)
+	mechanicID := s.spawnRobot(RobotRepair, x+60, y+36)
+	mechanic := s.Robots[mechanicID]
+	mechanic.Factory = home.ID
+	mechanic.Health = mechanicHealth * 0.6
+	s.Robots[mechanicID] = mechanic
 	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
 	if err != nil {
 		t.Fatal(err)

@@ -9,13 +9,17 @@ The fog breathes in cycles: every so often it swells, pressing its line in, then
 2. Send charged robots out to harvest oil and lilac, and back before their charge runs out - a robot that stalls in the fog is digested.
 3. Mark build jobs (protectors, pumps and their pipes, silos); robots build them.
 4. A real protector widens or holds the safe ground, but it drinks oil from a dedicated tank. Robots or pipes can refill it; when its tank gets low, its radius fades to nothing. The core is free of tension; the need for resources outside is what pushes you out.
-5. Spend on war what the rivals make you spend: a guard post near a threatened tank, squads against a city sortie, and artillery against its mobile artillery. Oil is every shot and lilac every shell, so war and growth draw on the same stores (see [The rivals](#the-rivals)).
+5. Spend on war what the rivals make you spend: a guard post near a
+   threatened tank, squads against a city sortie, mechanics to restore
+   buildings, and artillery against mobile artillery. Oil is every shot
+   and every repair, lilac every shell, so war and growth draw on the
+   same stores (see [The rivals](#the-rivals)).
 
 ## Resources
 | Resource | What it is | What it is for |
 | --- | --- | --- |
-| Oil | Pumped from pools | Dedicated protector fuel; robot charge ("food"); every shot of a guard post and of a trooper, and a part of every shell; what the rivals come to steal |
-| Lilac mineral | Mined from veins (StarCraft vespene / Dune spice vibe) | Every construction and upgrade; troopers; every artillery shell |
+| Oil | Pumped from pools | Dedicated protector fuel; robot charge ("food"); every shot of a guard post and of a trooper; mechanic repairs; a part of every shell; what the rivals come to steal |
+| Lilac mineral | Mined from veins (StarCraft vespene / Dune spice vibe) | Every construction and upgrade; troopers and mechanics; every artillery shell |
 
 There is no food and no people in the colony: the colonists are robots, and an uncharged robot outside a bubble dies to the fog. The only people in the region so far are the rivals, and they ride.
 
@@ -108,7 +112,14 @@ Once the factory and stores are ready, the first battalion assembles at the city
 
 The scout and introduction party are the only normal visits scheduled independently of cities. After the introduction, the city clock schedules arrivals only; raids are produced by factories. Rivals' small arms can answer colony fire at their vehicles, but the city and its buildings do not automatically shoot back. Rival structures are gray and subdued to distinguish them from the colony at every zoom. Wrecks still drop their own salvage and stolen oil as a pile for the colony's robots to haul.
 
-The colony's guard post remains its short-range oil-paid answer; squads remain direct orders through the war factory and keys 1-9. The player's artillery remains an unlocked blueprint that shells visible rival targets for lilac and oil. Bullets and shells stay in the serialized state, with existing hit, damage, wreck, repair and visual-effect rules. City structures can be selected and attacked by guard posts, squads and artillery like other rival targets.
+The colony's guard post remains its short-range oil-paid answer; squads
+remain direct orders through the war factory and keys 1-9. The player's
+artillery remains an unlocked blueprint that shells visible rival targets
+for lilac and oil. A war factory can also build a vulnerable mechanic,
+which repairs damaged colony buildings with oil from its own tank. Bullets
+and shells stay in the serialized state with hit, damage, wreck and
+visual-effect rules. City structures can be selected and attacked by
+guard posts, squads and artillery like other rival targets.
 
 Open: independent city choices and production strategies, pathfinding, cities sending more than one sortie at once, the city's response to a completely guarded oil supply, and city graphics beyond gray versions of the existing silhouettes.
 
@@ -116,11 +127,22 @@ Open: independent city choices and production strategies, pathfinding, cities se
 The game is a deterministic simulation first, and a picture of it second. These rules are law; every feature bends around them.
 
 1. **One serializable state.** The whole game is a single value (`State`) that serializes to JSON with no pointers, no channels, no functions. `State.Version` identifies its save schema; `enterRegion` migrates old protector records once. Entities live in ID-keyed tables (`map[int64]Entity`-style, with fixed field structs); every reference between things is an ID, like a relational database. Saving = the state's JSON into the local database (SQLite, the schema a server keeps; `golib shot --save` feeds the same value through the shot channel). Loading the state = loading the game, exactly.
-2. **Actions in, state out (flux/redux).** Nothing mutates the state except reducers. An action is a serializable struct (MarkJob, SetPriority, Tick...). `Apply(state, action) -> state` is pure and total: the same action on the same state always gives the same result. `Tick` is just the action the loop sends 60 times per second of game time.
+2. **Actions in, state out (flux/redux).** Nothing mutates the state
+   except reducers. Actions are serializable structs (`MarkBuilding`,
+   `QueueMechanic`, `OrderSquad`, `Tick`...). `Apply(state, action) ->
+   state` is deterministic: the same action on the same state gives the
+   same result. `Tick` is the action the loop sends 60 times per second.
 3. **The game is a visualization.** `Update` reads input and produces actions; `Draw` renders the current state and changes nothing. All rules live in the simulation files, free of `golib.Input` and `golib.Screen`, so tests drive them directly.
 4. **Determinism.** The simulation never reads the clock (dt is 1/60), never reads globals, and iterates entities in sorted ID order. Gameplay randomness comes from the state's own PRNG (a seed plus counter inside `State`), so a save reproduces its future; `golib.RandomInt`/`RandomFloat` are for looks only (cosmetic particles, menu clouds). A seed plus an action log replays any game - which is also the future multiplayer server: one authoritative sim, clients send actions, receive states.
 
-Consequence for file layout: `state.go` (types), `actions.go` (action types + `Apply`), `sim_*.go` (rules per domain), `world_test.go` (tests call the sim directly); `play.go`/`draw.go` are views. The simulation has landed for robots and deposits: `state.go` holds the state (`State`: robots, stock, what remains of each deposit tile, build jobs), `actions.go` the actions (`Tick`, `SendRobot`, `RecallRobot` and the rest, `OrderSquad` among them) and `Apply`, `sim_robots.go` the robots' rules, and the war its own three files - `sim_enemies.go` (the rivals), `sim_squads.go` (troopers and their orders) and `sim_shots.go` (bullets, shells, what they hurt, artillery) - with their views beside them (`enemies.go`, `squads.go`, `shots.go`); deposits are still terrain-shaped (a remaining amount keyed by the deposit's heart tile, not entities), and the ground is static data generated from `State.Seed`, never state. Apply mutates the state it is given - the state has one owner, and purity here means determinism. `region.go`/`things.go` hold the world's static side, and `catalog.go` (the entity database), `markup.go` (colored text) and `inspect.go` (the inspection panel) are view-side metadata, never state. [README.md](./README.md) is the technical map of the code.
+The file layout follows that law: `state.go` holds the serializable
+entities, including workers, troopers, mechanics and their production;
+`actions.go` and `Apply` are the simulation's entry point; and `sim_*.go`
+files, with their views beside them. Deposits remain terrain-shaped (one
+remaining amount keyed by each deposit's heart tile), and the ground is
+static data generated from `State.Seed`, never state. `play.go` and
+`draw.go` only read and display the state. The technical map is in
+[README.md](./README.md).
 
 ## Screens
 - **Menu:** the game's name over the fog, the player's number under it (`player #30E99076` - the machine's identity, hashed), Play and Quit. Play carries the player to their base as they left it, or deals a new region when there is none. Esc quits; it is the only screen where it does.
@@ -153,9 +175,10 @@ Consequence for file layout: `state.go` (types), `actions.go` (action types + `A
     west, level 2`). A news plate under the HUD, for `reportShowTicks`
     15 s, reports their theft, camp, raid, return, new base, razed
     building or fallen base. Rival vehicles and bases have cards too.
-    A war factory's card builds troopers and gives its squad orders;
-    damaged things show their remaining health; picked guard posts and
-    artillery show their reach; bullets and shells fly with their light.
+    A war factory's card builds troopers, offers one mechanic and gives
+    its squad orders; damaged things show their remaining health and say
+    mechanics can repair them; picked guard posts and artillery show
+    their reach; bullets and shells fly with their light.
   - Esc saves and returns to the menu.
 The current rival HUD reports an approaching city crawler, construction,
 an assembling battalion or a force on the move. City-building reports
@@ -218,17 +241,49 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - One generated region, a pure function of `State.Seed` (`worldgen.go`): a gentle relief with great plains, ground cover in zones, oil pools and lilac veins that thin out toward their rims, fog everywhere else. Buildings ask for a flat cell.
 - The core starts with two robots, free of charge: one can watch the oil, the other the lilac. Robots built later will cost oil each cycle.
 - Sending is by card: expand an oil or lilac card and press send robot; the nearest free robot takes the whole deposit as its post (all busy, the nearest worker from another deposit is retasked). Repeat to assign more workers; a worker already at that deposit is never assigned twice. A vein is one thing however many tiles it spans: one card, many workers, one shared amount. Its card shows up to eight clickable robot portraits per page; each opens that worker's card, where recall removes only that robot's post. A dry deposit releases every worker still assigned to it.
-- A robot's day has its priority built in: bring home what it carries, mind its tank, finish loading, raise protectors before other build jobs (oldest first within each group), mend the oldest damaged building, lay pipe, clear piles, work its own post, rest by the core. A trooper's day is its tank and its squad's order. Idle robots go home: they line up in ranks before the core's broad face, five to a rank, and close the ranks up when one leaves; past ten the rest stand inside the first ones and a label says how many are idle. A post that runs dry releases its robot. Clearing piles of loose items sits between raising jobs and working the post, and every load ends its walk at the nearest store of its kind (warehouse or core for lilac, silo or core for oil).
+- A worker's day has its priority built in: bring home what it carries,
+  mind its tank, finish loading, raise protectors before other build jobs
+  (oldest first within each group), lay pipe, clear piles, work its own
+  post, rest by the core. A mechanic instead repairs the oldest damaged
+  building, then waits by its war factory. A trooper's day is its tank
+  and its squad's order. Idle workers go home: they line up in ranks
+  before the core's broad face, five to a rank, and close the ranks up
+  when one leaves; past ten the rest stand inside the first ones and a
+  label says how many are idle. A post that runs dry releases its worker.
+  Clearing piles of loose items sits between raising jobs and working the
+  post, and every load ends its walk at the nearest store of its kind
+  (warehouse or core for lilac, silo or core for oil).
 - Any building but the core can be demolished from its card, and a site cancelled. Its tasks die with it, and its whole cost, plus what the stores lose the roof for, falls on its cell as one pile of loose items that the robots haul back to the stores. A protector can't go while its current bubble is the only one over another building.
 - Rivals come for the oil, one moving party at a time: a scout four minutes in, which siphons 25 L and leaves its mark, then an introductory raid from the scout's bearing. Thirty cycles after the raid leaves, a crawler arrives and establishes a city that builds a repulsor, extractors and a war factory. The factory sends raiders first without artillery, then mobile artillery. Cities do not attack by themselves; their mobile forces do. Structures can be destroyed, wrecks drop loot, and the colony's artillery shells visible rival targets for lilac and oil (see [The rivals](#the-rivals)).
-- A war factory builds troopers, up to six, and they are its squad: one click orders it to guard a spot or to attack a rival party, a chosen vehicle first. Troopers do no work, shoot out of their own tanks, and a guard post's fire is answered: the rivals shoot troopers and guard posts, and nothing else, and a post they bring down falls into a pile like any building.
+- A war factory builds troopers, up to six, and they are its squad: one
+  click orders them to guard a spot or attack a rival party, a chosen
+  vehicle first. It can also build one mechanic. The mechanic is not in
+  the squad and takes no orders: it seeks damaged buildings automatically.
+  Troopers do no work and shoot from their own tanks. Rivals shoot
+  troopers, mechanics and guard posts; a post they bring down falls into
+  a pile like any building.
 - Lose nothing at the start: the core is indestructible and its bubble has no upkeep. Protector reserves are not part of the oil rivals can steal. The rivals take oil, never the game.
-- Lose robots: any built robot or trooper outside a bubble with an empty tank is digested by the fog, and rival small arms or artillery shells kill troopers. A lost unit leaves a pile with 25% of each: its build cost, cargo and tank contents. Working robots are nobody's target.
-- Lose buildings: rival mobile artillery brings buildings down into a pile of half their cost, the core excepted; robots mend the damaged ones for nothing.
+- Lose units: any built worker, trooper or mechanic outside a bubble with
+  an empty tank is digested by the fog. Rival bullets and artillery
+  blasts can kill troopers and mechanics; ordinary workers are not
+  targets. A lost unit leaves 25% of its build cost and remaining tank
+  in a pile, plus 25% of any cargo.
+- Lose buildings: rival mobile artillery brings buildings down into a
+  pile of half their cost, the core excepted. Only a mechanic repairs
+  damage: 6 points a second, spending 0.2 L per point from its own tank.
+  Mechanics have 60 hull; an isolated one cannot out-repair continuous
+  artillery fire. They must be built, fueled and kept alive.
 - The safe zone feeds you: an oil pool and a lilac vein, the region's smallest, sit whole inside the bubble, off the core, so at least one resource of each type is minable in comfort whatever the fog does outside.
 - Guard posts, the war factory and artillery are the colony's arms, all three under a bubble like any building, all three paid in the stores the colony grows on: a post's shot in oil, a trooper in both and its shots out of its own tank, a shell in both.
 - Buildings grow the colony out of the bubble: the oil-fed shadow protector holds a small bubble of its own, and only under an active bubble may any other building stand. Silos and warehouses give the stores a bigger roof; the charger refills built robots' tanks away from the core; the factory turns lilac and oil into new robots.
-- Three kinds of robot: the war factory's troopers, which do no work, and the two that do - the core's two, slow and free of upkeep, and the factory's, paid in lilac and oil — more robots, more hauling in parallel, the way collection scales. A built robot burns oil from its tank **while it carries something, and at no other time** - walking out, loading and resting are free -; low, it walks to the nearest charger or the core to refill; at zero outside a bubble the fog digests it. Both kinds feel the fog: it drags at every walker's pace, and the bubbles cancel it.
+- Four unit roles: core workers are slow and free; factory workers
+  harvest and haul; war-factory troopers fight as squads; mechanics repair
+  buildings alone. Factory workers, troopers and mechanics are paid for
+  in lilac and oil. A built unit burns oil from its tank **while it
+  carries something, and at no other time** - walking out, loading and
+  resting are free -; low, it walks to the nearest charger or the core to
+  refill; at zero outside a bubble the fog digests it. The fog drags at
+  every walker's pace, and the bubbles cancel it.
 - The stores have a roof (the core's own room, plus every silo and warehouse); a robot hauling into a full store waits at the core with the cargo in its arms.
 - Lose the region (later): when oil hits zero inside the bubble and no robot can reach fuel, the bubble collapses; that ends the run.
 - Difficulty grows with the fog's swells: they press harder and come more often, but never take ground for good. The quiet pressure is depletion - the near patches drain first, so haul distances grow on their own.
@@ -248,17 +303,18 @@ projected to the screen and rounded to eight directions, 45 degrees apart
 to right; those screen headings become nonuniform world yaws in the
 Blender renders.
 
-All seven moving chassis have editable Blender models, rendered into eight
+All eight moving chassis have editable Blender models, rendered into eight
 transparent PNG frames apiece with the same 2:1 orthographic camera and
 lighting. The three colony silhouettes stay distinct: narrow ivory core
 scouts with warm rear lights, teal carriers with a raised tank and rails,
-and broad olive troopers with a turret and forward gun. Rival scouts are
-small and red, raiders carry an oil drum, crawlers carry a repulsor mast,
-and mobile artillery has its cannon raised above its turret. Their wheels
-and shaded sides have real 3D geometry. Portraits and squad icons show
-these same models, scaled for the UI rather than the world. Cargo, refuel
-blink, damage and oil carried remain view overlays; the simulation and
-saved facing do not change.
+and broad olive troopers with a turret and forward gun. A mechanic has a
+service chassis, amber tool deck and raised repair crane, with no weapon.
+Rival scouts are small and red, raiders carry an oil drum, crawlers carry
+a repulsor mast, and mobile artillery has its cannon raised above its
+turret. Their wheels and shaded sides have real 3D geometry. Portraits
+and squad icons show these same models, scaled for the UI rather than the
+world. Cargo, refuel blink, damage and oil carried remain view overlays;
+the simulation and saved facing do not change.
 
 The single `studio.py` makes the geometry primitives, materials, light,
 camera, world-yaw conversion and eight-view sheet for all models. GoLib
@@ -314,8 +370,12 @@ Landed (2026-09-22), in `audio.go`, all of it view: the world speaks where it ha
 ## Tuning
 Lost colony units leave `unitWreckRefund` 0.25 of each resource: build
 cost, cargo and remaining tank. The wreck is a pile on their cell
-(`sim_piles.go`).
-Fog-digested workers and fallen troopers use the same rule.
+(`sim_piles.go`). Fog-digested workers and fallen combat units use the
+same rule. A mechanic costs `mechanicCostLilac` 100 kg and
+`mechanicCostOil` 50 L, takes `mechanicBuildTicks` 900 ticks to build,
+has `mechanicHealth` 60 health and repairs at `repairPerSecond` 6
+damage/s for `repairOilPerPoint` 0.2 L per damage (`sim_squads.go`,
+`sim_shots.go`).
 
 Pinned as code lands, all at the top of the sim files with units in the name: `fogCycleTicks`, `protectorOilPerSecond`, `robotChargeSeconds`, `robotMoveSpeed` (units/s), `oilPerPoolUnit`, `lilacPerVeinUnit`, blueprint costs. Pinned so far, in `region.go`: `regionCols`/`regionRows` (25x25 tiles), `tileW`/`tileH` (48x24 px at 2K/2), `unitsPerTile` 200 (the world's unit is a meter: a tile is 200 m across, the region 5 km; a robot is 6 u across, the core's monolith 16 u, a future building 40 u, a deposit patch of four tiles is 400 m aside), `coreBubbleRadius` 4 tiles, `fogLineRadius` 10.5 tiles, `fogFadeTiles` 2.4 tiles. In `play.go`: `zoomOut`/`zoomIn`, the wheel's stops, each twice the last: 1, 2, 4, 8, 16, 32 (stop 0 shows the whole region as icons, stop 5 about 80 m of ground; at 32 a robot's 6 u is about 46 screen px), `zoomGlide` 0.1 s (the zoom glides from stop to stop instead of jumping, keeping the point under the cursor under it; only at rest is the zoom a whole power of two), `panSpeed` 480 screen px/s, constant on the screen at every zoom; the right button drags the view, grab style. The camera is view, not state: it lives in the play scene and never serializes. In `draw.go`: `propZoom` 4, the zoom from which the rocks and bushes are drawn; they are world-sized (6 u across), so zooming in grows them from pebbles to boulders. Robots draw at their world size but never under about 3 screen px (`dotRadius`): far out, everything alive is a point, R.U.S.E.-style. The core draws as a dark monolith on its tile's middle (`drawCore`), broad face to the right, a seam of light down it and a top in the core's warm white, the part the glow filter picks; it obeys the buildings' icon law and sorts by depth among them, and its pad, the whole tile, lies on the ground under the robots. Deposits draw as one continuous body per patch - a pool as one sheet of oil, a vein as one shelf with crystal clusters over its tiles - shrinking as the patch drains, one big scar when dry. The fog's shape and speed are the feel of the game: their section is [The fog](#the-fog), and their dials are pinned, in `sim_fog.go`: `fogCycleTicks` 1800 (30 s a cycle), `fogSwellPeriod` 18 cycles (the first swell at 9 min), `fogSwellQuickener` 0.90 (each swell shortens the next calm; `fogSwellMinPeriod` 4 cycles), `fogSwellTicks` 900 (15 s) growing `fogSwellTicksGrowth` 180 apiece to `fogSwellTicksMax` 3600 (a minute), `fogSwellReach` 2.0 tiles growing `fogSwellGrowth` 0.35 apiece, capped by `fogSwellMargin` 0.75 tiles the line never takes off the bubble, `fogSwellSpeedFactor` 0.25 in the pushed band (fog that was already there keeps `fogSpeedFactor` 0.5) and `fogSwellBurn` 1.5x outside the bubbles.
 
@@ -343,7 +403,7 @@ the old proportions, 1 by 4 by 9 - `coreSlabDeep` 4 m, `coreSlabWide`
 Each thing type gets its color from `catalog.go`, which falls back to a
 stable hash of the type name; `markup.go` colors text with `[name]...[/]`.
 In `inspect.go`, `tooltipWidth` is 290 px, `titleSize`/`textSize` are
-15/13, and `buttonWidth`/`buttonRow` are 96/22. Worker portraits use a
+15/13, and `buttonWidth`/`buttonRow` are 112/22. Worker portraits use a
 four-column grid, eight per page, and the panel stays anchored to the
 selected cell's projected middle.
 
@@ -376,7 +436,7 @@ The prototype is done when these five have landed, on top of the debts under [La
 ## Later
 - **Debt - turrets must trade, not hold forever** (2026-09-23): guard
   posts already have 200 health, take rival bullets, show their damage
-  and fall into a wreck; the rivals currently target troopers and guard
+  and fall into a wreck; the rivals target troopers, mechanics and guard
   posts, but not artillery with their small arms (artillery can still
   take shell damage like any building). Let nearby rivals target an
   artillery piece too. Balance and test an unassisted guard post against
@@ -403,6 +463,17 @@ The prototype is done when these five have landed, on top of the debts under [La
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-24: repairs now belong to a military mechanic, not the colony's
+  ordinary workers. A war factory builds one for 100 kg of lilac and 50 L
+  of oil in 15 s; the 60-health unit seeks the oldest damaged building,
+  repairs 6 damage/s and spends 0.2 L per point from its own tank. It is
+  outside the squad, cannot harvest or build, and can be killed by rival
+  fire or the fog. Rivals can target mechanics as well as troopers and
+  guard posts. An isolated mechanic loses ground to continuous artillery
+  fire. Old saves with a war factory's untyped work still finish a
+  trooper. Blender's `worker-mechanic` model and eight-view sheet give it
+  a crane silhouette instead of a weapon. Pinned by repair, production,
+  combat, wreck, refund, and old-save tests.
 - 2026-09-24: deposits can employ several robots. Each send assigns a
   different worker, preferring an idle one and otherwise retasking the
   nearest worker from another patch; all workers share the deposit's one

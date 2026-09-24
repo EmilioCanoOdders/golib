@@ -14,6 +14,7 @@ func TestWorldSpritesHaveEveryFacing(t *testing.T) {
 		"core":      coreWorkerModel,
 		"carrier":   carrierModel,
 		"trooper":   trooperModel,
+		"mechanic":  mechanicModel,
 		"scout":     rivalScoutModel,
 		"crawler":   rivalCrawlerModel,
 		"raider":    rivalRaiderModel,

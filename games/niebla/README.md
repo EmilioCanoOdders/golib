@@ -138,20 +138,20 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); the camera, selected cell, open cards, focused robot portrait, portrait page and pointer modes live here, never serialized; the schematics' callout, looks-only fields, rivals' HUD, reach overlays and autosave are view state too |
 | `radial.go` | The build menu: the two rings a click on empty ground opens - the build groups (industry, military, logistics), then the group's blueprints - laid out around the cell every frame, and `backRadial`/`closeRadial`/`openRadial` for the scene |
 | `glyphs.go` | The marks the build menu wears: a group's own glyph, and a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both |
-| `state.go` | The simulation's state and save-schema version: robots (core, built or combat) with their saved screen-facing octant, buildings with their tanks, reloads and damage, stock, what remains of each deposit, build jobs, piles, pipes, the fog, and the rivals' tables (`Enemies`, `Parties`, `Cities`, `Raids`, `Marks`, `Reports`, `Squads`, `Shots`, the PRNG's `Rolls`) plus the schematics' `Tech`; `newGame`, which deals the starting region |
-| `actions.go` | The actions (`Tick`, `SendRobot`, ID-specific `RecallRobot`, `MarkBuilding`, `QueueRobot`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
-| `sim_robots.go` | The robots' rules and tuning: `robotDay`, the lines of a robot's day in priority order — carry home, mind the tank, finish loading, protector jobs before other build jobs, then the oldest damaged building and a section of pipe, pick up loose items, own post, a trooper's squad, rest by the core —, `postRobots` and `pickRobot` for shared deposits, movement's saved facing octant, pipe-section claims and idle ranks |
+| `state.go` | The simulation's state and save-schema version: robots (core, built, combat or repair) with their saved screen-facing octant, buildings with their tanks, production type, reloads and damage, stock, what remains of each deposit, build jobs, piles, pipes, the fog and the rivals' tables (`Enemies`, `Parties`, `Cities`, `Raids`, `Marks`, `Reports`, `Squads`, `Shots`, the PRNG's `Rolls`) plus the schematics' `Tech`; `newGame`, which deals the starting region |
+| `actions.go` | The actions (`Tick`, `SendRobot`, ID-specific `RecallRobot`, `MarkBuilding`, `QueueRobot`, `QueueMechanic`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
+| `sim_robots.go` | The workers' rules and tuning: `robotDay`, the task priorities — haul, refuel, mechanic repairs, loading, protector jobs before other construction, pipe, piles, post, squad or idle —, `postRobots` and `pickRobot` for shared deposits, movement's saved facing octant, pipe-section claims and idle ranks |
 | `sim_piles.go` | Demolition, unit wrecks and loose items: `canDemolish`, the 25% unit recovery (`dropRobotWreck`), the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
-| `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, protector upkeep and radius fade, storage caps, refuel spots, and the two factories' works (`robotWorks`: what each builds, for how much, how long) |
+| `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, protector upkeep and radius fade, storage caps, refuel spots, production costs and duration for workers, troopers and mechanics |
 | `sim_oil.go` | Oil's spendable tanks and dedicated protector reserves: `oilTotal`, `oilCap`, `payOil`, all physical tank capacity, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
 | `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus` |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
 | `sim_enemies.go` | The introduction and rival movement: `Enemy` with its saved facing octant, `Party`, `Raids`, `Mark` and `Report`; scout and introductory raid, saved entry bearing, timed city arrivals, party stages, siphoning and return, fog exposure, wrecks, guard posts and the state's PRNG |
 | `sim_cities.go` | Rival cities: serializable production, deterministic building order, finite local oil/mineral reserves, city arrival and old-save migration, city-produced sorties and mobile artillery |
 | `sim_tech.go` | The schematics: the ladder of drops that brings the buildings in little by little, each with its trigger (first delivery, the scout's theft, clocks, the first raid, a city factory) - `techLadder`, `stepTech`, `kindUnlocked`, `dropArrived`, `techPending`; arrival is derived from the state, only "opened" is kept (`State.Tech`, an old save wakes with what it earned) |
-| `sim_squads.go` | The squads' law and tuning: troopers (`RobotCombat`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), the war factory's room (`squadRoom`), and the rivals shooting back (`stepEnemyGuns`) |
+| `sim_squads.go` | The military units' law and tuning: troopers (`RobotCombat`) and mechanics (`RobotRepair`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), the war factory's capacity (`squadRoom`, `mechanicRoom`), and rivals targeting defenders (`stepEnemyGuns`) |
 | `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right with a trooper icon, unit count and key (`drawSquadStrip`, `drawTrooperIcon`, `squadBoxRect`, `squadBoxAt`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the marks that pick a squad where it stands (`squadMarkAt`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
-| `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), who they hurt, the buildings' health and the robots' mending, what the colony sees (`seen`) and its artillery (`stepArtillery`) |
+| `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), vulnerable colony units, building health and oil-paid mechanic repairs, what the colony sees (`seen`) and its artillery (`stepArtillery`) |
 | `shots.go` | Shots on the screen and their light, for looks only: bullets as streaks, shells on their arc over a shadow, pools of light added over the ground and what stands on it (`lightPool`), guns' flashes, and bursts of sparks that cool from yellow to red, embers and smoke; the field (`fxField`) learns of fired and landed shots by comparing the state's with the ones it saw last; view, never state |
 | `enemies.go` | The rivals on the screen: the scouts' marks on the ground, eight-view PNG models for all four moving rival chassis, damage bars and the words the player is told (`threatWords` for the HUD, `reportWords` and `drawReport` for the news) |
 | `mist.go` | The fog on the screen: a haze outside every repulsor's circle and `mistLayers` layers that thicken it past the line, each the region minus the clear circles (`clearDiscs`: the core's, the protectors', the rivals'), cut in strips whose gaps join into quads (`drawMist`, `mistGaps`), so the circles are round at every zoom and the air inside them is clear |
@@ -159,7 +159,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `region.go` | The region's measures, `land` (the generated ground of the seed in hand) and `useRegion`, the isometric `project` that lifts by the relief and its inverse `unproject`, tile helpers, `Deposit` and `depositAt`; pure Go, no drawing |
 | `worldgen.go` | The generator, a pure function of the seed: relief by wave function collapse, ground cover, deposits as fields of richness; its own PRNG and noise; pure Go, no drawing |
 | `ground.go` | The ground's painter: relief as lit slopes, cover colors with a grain, blocks sized to the zoom and culled to the view, rocks, bushes, tufts, and the deposits cell by cell (`oreCut` wears them from the rim in) |
-| `things.go` | What a cell holds, the unit the player picks by: `Thing` snapshots out of layout plus state (a deposit's card spans its patch, while buildings and sites stay on their own cell; rival vehicles and bases standing on the cell have cards too), the robots' captions, troopers' and menders' among them, `tileAtWorld`, the SI quantities; pure Go, no drawing |
+| `things.go` | What a cell holds, the unit the player picks by: `Thing` snapshots out of layout plus state (a deposit's card spans its patch, while buildings and sites stay on their own cell; rival vehicles and bases standing on the cell have cards too), the workers', troopers' and mechanics' captions, `tileAtWorld`, the SI quantities; pure Go, no drawing |
 | `catalog.go` | The entity database: per thing type its name, color, unit and card lines, plus the stable-color fallback |
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
 | `inspect.go` | The inspection panel: layout, hit testing, painting, clickable paginated worker portraits, remotely opened robot cards, individual recall and return buttons, other card actions and the integrity line of a damaged building; the cell's outline (`cellDiamond`) |
@@ -171,15 +171,17 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and crystal pings, gunfire and shell impacts, and interface clicks; world emitters fade with their distance in meters to the camera's ground center, whose altitude rises with zoom-out. Individual shell whistles track their own positions through the descending half of flight. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |
 | `tools/soundgen/` | The maker of the wind, oil and mineral ambience loops: stdlib Go renders the noise beds as WAV for conversion to OGG, and the mineral ring as a seamless WAV with irregular pitch drift of at most one semitone; run it only when a loop changes |
 | `draw.go` | The region painter: the core's monolith, buildings with their damage bars, the bubbles' rings, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
-| `units.go` | The colony's three robot models on the ground, with shadows, cargo, charge feedback and trooper health bars |
-| `worldsprites.go` | The seven eight-direction sheets in the world and their scaled UI icons; converts the world ground point to a screen pixel before drawing so moving sprites do not jump by the camera's zoom |
+| `units.go` | The colony's four unit models on the ground, with shadows, cargo, charge feedback and combat-unit health bars |
+| `worldsprites.go` | The eight eight-direction sheets in the world and their scaled UI icons; converts the world ground point to a screen pixel before drawing so moving sprites do not jump by the camera's zoom |
 | `orientation.go` | The screen-space eight-way facing derived from an isometric movement vector, and the ground-plane yaw used for world details |
 | `sources/models/studio.py` | One shared Blender authoring toolkit: geometry primitives, materials, 2:1 camera, light, world-yaw conversion and eight-view `render_sheet` |
-| `sources/models/artillery.py`, `other_units.py`, `*.blend` | Geometry for the seven distinct mobile chassis and their editable Blender sources; not shipped with the game |
-| `assets/sprites/*.png` | Seven transparent eight-frame sheets rendered from the Blender models; loaded on desktop (the PNGs are web-compatible, but Niebla's SQLite driver does not build for web) |
+| `sources/models/artillery.py`, `other_units.py`, `*.blend` | Geometry for the eight distinct mobile chassis and their editable Blender sources; not shipped with the game |
+| `assets/sprites/*.png` | Eight transparent eight-frame sheets rendered from the Blender models; loaded on desktop (the PNGs are web-compatible, but Niebla's SQLite driver does not build for web) |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `guides_test.go` | Offscreen arrow placement and direction, hiding for visible targets, current-report timing, pending schematics and spacing; can write the optional visual fixture with `NIEBLA_GUIDE_SHOT_STATE` |
 | `markup_test.go` | Markup parser, tooltip layout/button, portrait hit-testing, remote robot card and page-layout tests |
+| `shots_test.go` | Bullet and shell impacts, building damage, mechanic repair rate and oil, defender damage and wrecks, and old war-factory saves |
+| `squads_test.go` | Trooper production and squad behavior, mechanic limits, target selection, health and wrecks |
 | `world_test.go` | The simulation driven directly: starting robots, hauling, multiple workers sharing a deposit, individual recall, priority, dry deposits, determinism, JSON round trip |
 | `economy_test.go` | The deterministic economy probe: safe harvesting, worker growth and a protected oil outpost over three seeds, sampled each minute into an opt-in CSV report with protector fuel separated from spendable oil |
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
@@ -205,17 +207,18 @@ robot-sized form:
   The ground itself is generated from `State.Seed` and never enters the
   state. It has no pointers, channels or functions, so it serializes as it
   is.
-- Actions (`actions.go`) are structs (`Tick`, `SendRobot`, `RecallRobot`);
+- Actions (`actions.go`) are structs (`Tick`, `SendRobot`, `RecallRobot`,
+  `QueueRobot`, `QueueMechanic`);
   `Apply` mutates the state it is given — one owner, no copies — and is
   total and deterministic, so a seed plus an action log replays a game.
-- The robots carry no plan: `stepRobot` (`sim_robots.go`) derives each
+- The workers carry no plan: `stepRobot` (`sim_robots.go`) derives each
   tick what one does from `robotDay`, a list of tasks in priority order
-  (carry home, mind the tank, finish loading, protector jobs before other
-  build jobs, pick up
-  loose items, own post, idle by the core): the first task that claims
-  the robot owns its tick, and the robot's caption reads the same list
-  (`Robot.taskNow`). A per-robot task list, when it comes, is a filter
-  over it.
+  (carry home, mind the tank, mechanic repairs, finish loading, protector
+  jobs before other build jobs, lay pipe, pick up loose items, own post,
+  idle by the core): the first task that claims the worker owns its tick.
+  The worker's caption reads the same list (`Robot.taskNow`). A per-worker
+  task list, when it comes, is a filter over it. Mechanics and troopers
+  use their own task lines instead.
   Anything that iterates entities iterates them in sorted ID order.
 - `Facing` is the last screen-space movement octant on robots and rival
   vehicles. It affects only their drawing, stays unchanged while still,
@@ -394,21 +397,31 @@ leave clear ground (`fogSwellSpeedFactor`), and built robots outside a
 bubble burn their tanks 1.5x (`fogSwellBurn`). Nothing else changes:
 placement (`canPlace`) and the bubbles never read the swell.
 
-Two kinds of robot (`RobotKind`): the core's own, free and tankless, and
-the factory's, paid in lilac and oil. A built one burns oil while it
-carries something and at no other time (troopers carry nothing: they pay
-for their shots); under the low line (`robotLowTankAt`) the tank claims its
-day and walks it to the nearest charger or the core, where it stands
-until the tank is full — even past the low line, so it doesn't dance
-between post and work; full is `tankFullSlack` short of the brim, and a
-dry post holds nobody with oil left in its tank — and outside a bubble, a tank at zero means the
-fog digests the robot. Both the burn and the drag are dials at the top
-of `sim_buildings.go`.
+`RobotKind` has four roles: core workers (`RobotCore`) are free and
+tankless; factory workers (`RobotBuilt`) harvest and haul; troopers
+(`RobotCombat`) fight in squads; and mechanics (`RobotRepair`) repair
+buildings independently. Built units cost lilac and oil. They burn oil
+while carrying something and at no other time (troopers carry nothing:
+they pay for their shots); under the low line (`robotLowTankAt`) the tank
+claims its day and walks the unit to the nearest charger or the core,
+where it stands until full — even past the low line, so it does not dance
+between post and work. Full is `tankFullSlack` short of the brim, and a
+dry post holds nobody with oil left in its tank. Outside a bubble, a tank
+at zero means the fog digests the unit. Burn and drag are dials in
+`sim_buildings.go`.
 
-When the fog digests a built robot, `stepSim` leaves a wreck with
+When the fog digests a built unit, `stepSim` leaves a wreck with
 `unitWreckRefund` 0.25 of each resource: build cost, cargo and remaining
-tank oil. Troopers falling to enemy fire use the same recovery in
-`dropRobotWreck`.
+tank oil. Troopers and mechanics killed by enemy fire use the same
+recovery in `dropRobotWreck`; ordinary workers cannot be targeted.
+
+The war factory can queue troopers with `QueueRobot` or one mechanic with
+`QueueMechanic`. A mechanic costs 100 kg and 50 L, takes 15 seconds to
+build, has 60 health, and repairs at 6 damage/s for 0.2 L per point. It
+chooses the oldest damaged building on its own, repairs only while it has
+oil and can be hit by the same rival bullets and shells as a trooper. Its
+repair task replaces harvesting, construction, pipe and pile work; when
+there is nothing damaged it waits by its factory.
 
 The stores have a roof: `oilCap`/`lilacCap` is the core's own room plus
 every silo and warehouse. A robot hauling into a full store stands at
@@ -419,10 +432,10 @@ warehouse or the core for lilac, a silo, a charger or the core for oil.
 The core is a store like the others: a robot unloads `storeStandoff`
 from its middle, never out at a parking spot.
 
-Idle robots rest by the core, in ranks before the monolith's broad face
+Idle workers rest by the core, in ranks before the monolith's broad face
 (`parkSlot`: `parkSlots` 10 places, `parkRankSize` 5 to a rank,
-`parkSpacing` 7 u). A robot's place is its `idleRank`, how many idle
-robots come before it by ID, so the ranks close up when one leaves; past
+`parkSpacing` 7 u). A worker's place is its `idleRank`, how many idle
+workers come before it by ID, so the ranks close up when one leaves; past
 ten the rest stand inside the first ones and the view writes how many
 there are (`drawIdleCount`, also while the view is so far out that the
 ranks are one dot).
@@ -430,7 +443,7 @@ ranks are one dot).
 Demolition (`sim_piles.go`): `Demolish` takes a building out of the
 state at once and `CancelJob` a site out of the queue. What it was made
 of falls on its cell as one `Pile` (`State.Piles`, by ID): the
-blueprint's cost times `demolishRefund`, the cost of the robot a factory
+blueprint's cost times `demolishRefund`, the cost of the unit a factory
 was building, and what the stores lose the roof for (`spillOverflow`).
 A pile holds its cell against `canPlace` until its last item leaves,
 which deletes it. A protector can't go while it alone shelters another
@@ -500,14 +513,16 @@ in `State.Shots` and `stepShots` flies it - a bullet at `bulletSpeed`
 after its target, which it hurts on arrival if it still stands, a shell
 at `shellSpeed` to the spot it was aimed at, where `land` hurts
 everybody of the other side within `shellBlastUnits`: rival vehicles
-for the colony's shells, troopers and buildings for the rivals'
-(`hurtEnemy`, `hurtTrooper`, `hurtBuilding`). Guard posts, troopers and
+for the colony's shells, and troopers, mechanics and buildings for the
+rivals' (`hurtEnemy`, `hurtColonyUnit`, `hurtBuilding`). Guard posts,
+troopers and
 the rivals' guns fire bullets. A building counts what it has taken in
 `Building.Damage`; at `buildingHealth` it goes through `takeDown`, the
 door `Demolish` uses too, with `wreckRefund` of its cost, and
-`ReportRazed` says so. The robots mend the oldest damaged building as
-part of their build line, after the sites and before the pipes
-(`damagedBuilding`, `mend`). The core is no building and takes nothing.
+`ReportRazed` says so. Only a war-factory mechanic mends the oldest
+damaged building (`damagedBuilding`, `mend`), at `repairPerSecond` 6
+damage/s and `repairOilPerPoint` 0.2 L per point. Ordinary workers never
+repair; the core is no building and takes nothing.
 
 The arriving crawler keeps its ID as the city's construction rig. The
 city first raises its pylon, then a Nexus. Old saves with a `StageSettled`
@@ -524,26 +539,32 @@ lilac and oil. The mobile rival artillery (`EnemyArtillery`) uses
 never the core. Its shots are rival shells, so existing `land` and
 `hurtBuilding` apply.
 
-Squads (`sim_squads.go`). A war factory (`BuildingWarFactory`) builds
-troopers through the same `QueueRobot` the factory answers, while
-`squadRoom` says it may; `robotWorks` holds what each of the two builds,
-for how much and how long. A trooper is a `Robot` of kind `RobotCombat`
-whose `Squad` is its war factory's ID. `tanked()` is every robot but the
-core's, so the tank's laws - the burn, the refuel line, the fog's
-digestion - cover troopers with no case of their own. The working lines
-of the day refuse a trooper, and its own line, `taskSquad`, comes after
-the tank's: `stepSquad` walks it to its place around the guarded spot
-(`formationOffset`, where it mends under a bubble) or after the squad's
-focus, to `squadStandoff` of its reach. `shoot` runs every tick before
-the day, so a trooper fires on the move: the focus when in reach, else
-the nearest, each shot paid from its own tank. Orders are
+Squads and mechanics (`sim_squads.go`). A war factory
+(`BuildingWarFactory`) builds troopers through `QueueRobot`, while
+`QueueMechanic` builds one repair unit per factory; `squadRoom` and
+`mechanicRoom` enforce their separate limits. `robotProduction` holds
+each unit's cost and build time. A trooper is a `Robot` of kind
+`RobotCombat` whose `Squad` is its war factory's ID. A mechanic is kind
+`RobotRepair`, remembers its producing factory and has health like a
+trooper, but is not in a squad. `tanked()` is every robot but the core's,
+so the tank's laws - the burn, the refuel line, the fog's digestion -
+cover both. The working lines of the day refuse both combat units. The
+trooper's own line, `taskSquad`, comes after the tank's: `stepSquad`
+walks it to its place around the guarded spot (`formationOffset`, where
+it mends under a bubble) or after the squad's focus, to `squadStandoff`
+of its reach. A mechanic's `taskRepair` seeks damaged buildings, repairs
+only with oil in its tank, and waits by its factory when there is nothing
+to mend. `shoot` runs every tick before the day, so a trooper fires on
+the move: the focus when in reach, else the nearest, each shot paid from
+its own tank. Orders are
 `State.Squads`, by war factory ID, written by `OrderSquad` alone;
 `squadOf` gives a squad with no entry the order of guarding its door,
 and `stepSquads` drops an attack whose party is gone and passes a fallen
 focus on to the party's leader. `stepEnemyGuns` is the rivals' side:
-vehicles whose `enemySpec` has a gun fire a bullet at the nearest
-trooper or guard post in reach; `hurtTrooper` (`sim_shots.go`) is where a
-trooper falls and leaves 25% of its cost and remaining tank in a pile, and
+vehicles whose `enemySpec` has a gun fire a bullet at the nearest trooper,
+mechanic or guard post in reach; `hurtColonyUnit` (`sim_shots.go`) is
+where a trooper or mechanic falls and leaves 25% of its cost and remaining
+tank in a pile, and
 a bullet aimed at a building
 (`Shot.Building`) lands in `hurtBuilding` like a shell's blast does. The
 robots' loop in `stepSim` skips a robot
@@ -646,23 +667,27 @@ top of `things.go`.
 
 ### Blender mobile units
 
-Each of the seven mobile chassis has its own editable `.blend` in
+Each of the eight mobile chassis has its own editable `.blend` in
 `sources/models/` and an eight-frame transparent PNG in `assets/sprites/`.
 `studio.py` supplies the geometry primitives, material setup, light,
 isometric camera, direction conversion and the **one** `render_sheet()`.
 `artillery.py` holds only the artillery model; `other_units.py` holds the
-six other models. After editing a `.blend` in Blender, render it from the
-project root with its matching script:
+seven other models, including `worker-mechanic`: an armored service rover
+with an amber tool deck and raised crane, without a weapon. After editing
+a `.blend` in Blender, render it from the project root with its matching
+script:
 
 ```text
 blender -b games/niebla/sources/models/artillery.blend \
   -P games/niebla/sources/models/artillery.py
 blender -b games/niebla/sources/models/worker-core.blend \
   -P games/niebla/sources/models/other_units.py
+blender -b games/niebla/sources/models/worker-mechanic.blend \
+  -P games/niebla/sources/models/other_units.py
 ```
 
 To **discard manual edits** and recreate the `.blend` and PNG from Python,
-use `--create`. This generates all six other units at once, or only the
+use `--create`. This generates all seven other units at once, or only the
 named model if you pass its basename:
 
 ```text
@@ -672,6 +697,8 @@ blender -b -P games/niebla/sources/models/other_units.py \
   -- --create
 blender -b -P games/niebla/sources/models/other_units.py \
   -- --create worker-core
+blender -b -P games/niebla/sources/models/other_units.py \
+  -- --create worker-mechanic
 ```
 
 The shared camera matches the ground's 2:1 projection at 30 degrees;
@@ -790,7 +817,8 @@ oil, deep fog
 halves every walker's pace and a
 protector's pocket cancels it, and full stores hold the cargo until a
 silo opens room. `piles_test.go` pins the demolition: the cost falls as
-a pile and comes home whole, a factory's robot is cancelled and refunded,
+a pile and comes home whole, a factory's pending unit (trooper or mechanic)
+is cancelled and refunded,
 a silo spills what loses its roof and the oil waits for room with nobody
 holding it, a cancelled site drops its cost, a protector stays while it
 alone shelters a building, a load goes to the nearest store of its kind,
@@ -817,21 +845,25 @@ replay and JSON persistence.
 facing for workers and rival vehicles, and the JSON round trip plus the
 right-facing default for older saves.
 `noRivals` keeps them out of a test that is about something else.
-`shots_test.go` pins the shots and what came with them: a bullet is in
-the air before it hurts; a settled Nexus has no passive gun; robots mend
-a damaged building; the colony's artillery holds its fire at a Nexus
-nobody sees, fires once a spotter stands within sight, pays its shells,
-hurts the Nexus after shell flight and brings it down, after which the
-garrison leaves; and a shell misses who moved on. `squads_test.go`
-pins the squads: a war factory charges for a trooper,
-rolls it out whole into its squad and stops at `squadSize`, and troopers
-touch no job, pile or post; a squad walks to the spot it is told to
-guard and mends there, and an order for anything but a war factory is
-none; a squad sent after a camped crawler brings it down with every
-raider still standing, burns its tanks and gets shot at, and goes back
-to its door when the party is gone; a lone trooper falls and leaves 25% of
-its cost and remaining tank in its wreck, and a demolished war factory's
-trooper rests by the core.
+`shots_test.go` pins the shots and repair rules: a bullet is in the air
+before it hurts; ordinary workers never mend buildings; a mechanic repairs
+at a cost in oil but cannot out-repair continuing artillery fire; rival
+bullets and shells can damage and kill it, leaving a wreck; and a war
+factory in an old save still finishes its pending trooper. It also pins
+that a settled Nexus has no passive gun, the colony's artillery holds its
+fire at a Nexus nobody sees, fires once a spotter stands within sight,
+pays its shells, brings the Nexus down after shell flight and sends the
+garrison away; and a shell misses who moved on. `squads_test.go` pins the
+trooper squad and mechanic limits: the war factory charges for each unit,
+rolls a trooper out whole into its squad and stops at `squadSize`, and a
+mechanic stays outside the squad with one allowed per factory. Troopers
+touch no job, pile or post; a squad walks to its guard spot and heals
+under a bubble; enemy guns can target a mechanic but not a worker; a
+squad sent after a camped crawler brings it down with every raider still
+standing, burns its tanks and gets shot at, and returns to its door when
+the party is gone. A lone trooper falls and leaves 25% of its cost and
+remaining tank in its wreck, and a demolished war factory's trooper
+rests by the core.
 `TestTheNumberKeysCallTheWarFactoriesOldestFirst` pins the keys' order
 (`squadSlots`), `TestASquadsMarkPicksItsSquad` the pennant's and the
 ring's picking (`squadMarkAt`), and `TestTheSquadsBoxesLieApartAndPickTheirSquad`

@@ -12,10 +12,9 @@ import (
 // aimed at somebody who moved on is a shell wasted. Shots are state, so a
 // save keeps what is in the air.
 //
-// Buildings can be hurt now, by shells alone: a building's Damage counts
-// what it has taken, a building that has taken its health falls into a
-// wreck's pile, and the robots mend the damaged ones as part of their
-// build line. The core takes nothing.
+// Rival fire can hurt buildings and defenders: a building falls into a
+// wreck's pile when its damage reaches its health, and only mechanics
+// repair one, spending oil from their tanks. The core takes nothing.
 
 // Tuning: the shots' numbers, with units in the name.
 const (
@@ -39,8 +38,9 @@ const (
 	// What a building stands before it falls, and how it comes back.
 	buildingHealthPoints  = 200.0
 	protectorHealthPoints = 300.0
-	repairPerSecond       = 30.0 // damage a robot mends, for nothing
-	wreckRefund           = 0.5  // the part of its cost a destroyed building leaves
+	repairPerSecond       = 6.0 // damage a mechanic repairs
+	repairOilPerPoint     = 0.2 // L a mechanic spends per point repaired
+	wreckRefund           = 0.5 // the part of its cost a destroyed building leaves
 )
 
 // ShotKind names what flies.
@@ -60,7 +60,7 @@ type Shot struct {
 	FromX, FromY float64
 	ToX, ToY     float64
 	Enemy        int64 // bullets: the rival vehicle it flies to
-	Robot        int64 // bullets: the trooper it flies to
+	Robot        int64 // bullets: the defender it flies to
 	Building     int64 // bullets: the guard post it flies to
 	Damage       float64
 	Rival        bool // the rivals fired it: a shell's blast hurts the other side
@@ -120,12 +120,12 @@ func stepShots(s *State) {
 
 // land is a shot arriving: a bullet hurts its target if it still stands,
 // a shell hurts everybody of the other side within its blast - rival
-// vehicles or city structures for the colony's, troopers or buildings
-// for the rivals'.
+// vehicles or city structures for the colony's, troopers, mechanics or
+// buildings for the rivals'.
 func (s *State) land(shot Shot) {
 	if shot.Kind == ShotBullet {
 		s.hurtEnemy(shot.Enemy, shot.Damage)
-		s.hurtTrooper(shot.Robot, shot.Damage)
+		s.hurtColonyUnit(shot.Robot, shot.Damage)
 		s.hurtBuilding(shot.Building, shot.Damage)
 		return
 	}
@@ -142,7 +142,7 @@ func (s *State) land(shot Shot) {
 	}
 	for _, id := range sortedRobotIDs(s) {
 		if r := s.Robots[id]; near(r.X, r.Y) {
-			s.hurtTrooper(id, shot.Damage)
+			s.hurtColonyUnit(id, shot.Damage)
 		}
 	}
 	for _, id := range sortedBuildingIDs(s) {
@@ -167,12 +167,12 @@ func (s *State) hurtEnemy(id int64, damage float64) {
 	}
 }
 
-// hurtTrooper takes health off a trooper; one that falls leaves a quarter
-// of each resource in a wreck: its cost and onboard resources. Robots that
-// work have no health to take.
-func (s *State) hurtTrooper(id int64, damage float64) {
+// hurtColonyUnit damages a trooper or mechanic; one that falls leaves a
+// quarter of its cost and onboard resources in a wreck. Workers have no
+// health to take.
+func (s *State) hurtColonyUnit(id int64, damage float64) {
 	r, ok := s.Robots[id]
-	if !ok || r.Kind != RobotCombat {
+	if !ok || (r.Kind != RobotCombat && r.Kind != RobotRepair) {
 		return
 	}
 	r.Health -= damage
@@ -208,8 +208,7 @@ func (s *State) hurtBuilding(id int64, damage float64) {
 	s.report(ReportRazed, 0, x, y)
 }
 
-// damagedBuilding returns the building the robots mend next: the oldest
-// that has taken damage.
+// damagedBuilding returns the oldest damaged building for the mechanics.
 func damagedBuilding(s *State) (Building, bool) {
 	for _, id := range sortedBuildingIDs(s) {
 		if b := s.Buildings[id]; b.Damage > 0 {
@@ -219,10 +218,17 @@ func damagedBuilding(s *State) (Building, bool) {
 	return Building{}, false
 }
 
-// mend takes a tick of a robot's work off a building's damage.
-func (s *State) mend(id int64) {
+// mend repairs a building for one mechanic tick, spending its tank's oil.
+func (s *State) mend(id int64, mechanic *Robot) {
 	if b, ok := s.Buildings[id]; ok {
-		b.Damage = math.Max(0, b.Damage-repairPerSecond/60)
+		repair := math.Min(repairPerSecond/60, b.Damage)
+		repair = math.Min(repair, mechanic.Tank/repairOilPerPoint)
+		if repair <= 0 {
+			return
+		}
+		b.Damage = math.Max(0, b.Damage-repair)
+		mechanic.Tank = math.Max(0,
+			mechanic.Tank-repair*repairOilPerPoint)
 		s.Buildings[id] = b
 	}
 }

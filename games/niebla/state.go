@@ -75,6 +75,9 @@ const (
 	// RobotCombat is a trooper, a war factory's: a built robot on a combat
 	// chassis, which does no work and follows its squad (sim_squads.go).
 	RobotCombat RobotKind = "combat"
+	// RobotRepair is a war factory's mechanic: a vulnerable unit that
+	// repairs damaged colony buildings (sim_robots.go).
+	RobotRepair RobotKind = "repair"
 )
 
 // Robot is one worker. It carries no plan: every tick the rules (see
@@ -97,7 +100,8 @@ type Robot struct {
 	Pipe      int64     // the pipe whose section it claimed to lay; 0 with no claim
 	Section   int64     // the claimed section, from the pipe's source out
 	Squad     int64     // troopers: the war factory whose squad it is in
-	Health    float64   // troopers: what is left of it
+	Factory   int64     // mechanics: the war factory that built it
+	Health    float64   // troopers and mechanics: what is left of it
 	Reload    int64     // troopers: ticks until the next shot
 	Aim       int64     // troopers: the vehicle the last shot went to
 }
@@ -122,23 +126,24 @@ const (
 	BuildingPump      BuildingKind = "pump"      // draws a pool's oil into a pipe
 	BuildingGuard     BuildingKind = "guard"     // shoots the rivals in its reach
 
-	BuildingWarFactory BuildingKind = "warfactory" // builds troopers, its squad
+	BuildingWarFactory BuildingKind = "warfactory" // builds troopers and mechanics
 	BuildingArtillery  BuildingKind = "artillery"  // shells the rivals the colony sees
 )
 
 // Building is one raised structure. Its Col, Row are cell coordinates
 // (the tile grid's last subdivision, a 40 u footprint — sim_buildings.go),
 // so a tile may hold several buildings. Its Work counts down while a
-// factory builds a robot; every other kind leaves it at zero.
+// factory builds a unit; every other kind leaves it at zero.
 type Building struct {
 	ID       int64
 	Kind     BuildingKind
-	Col, Row int // the cell it stands on
-	Work     int64
-	Oil      float64 // liters in its tank: stores and protectors (sim_oil.go)
-	Reload   int64   // guard posts: ticks until the next shot (sim_enemies.go)
-	Aim      int64   // guard posts: the vehicle the last shot went to
-	Damage   float64 // what it has taken; at its health it falls (sim_shots.go)
+	Col, Row int       // the cell it stands on
+	Work     int64     // ticks until the factory's unit is built
+	WorkKind RobotKind // the unit being built; unset when idle or in old saves
+	Oil      float64   // liters in its tank: stores and protectors (sim_oil.go)
+	Reload   int64     // guard posts: ticks until the next shot (sim_enemies.go)
+	Aim      int64     // guard posts: the vehicle the last shot went to
+	Damage   float64   // what it has taken; at its health it falls (sim_shots.go)
 }
 
 // Job is one build job: what to raise, on which cell, and the ticks of
@@ -258,6 +263,9 @@ func (s *State) spawnRobot(kind RobotKind, x, y float64) int64 {
 	}
 	if kind == RobotCombat {
 		r.Health = trooperHealth
+	}
+	if kind == RobotRepair {
+		r.Health = mechanicHealth
 	}
 	s.Robots[id] = r
 	return id

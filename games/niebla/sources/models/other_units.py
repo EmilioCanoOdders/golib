@@ -110,6 +110,45 @@ def worker_trooper():
     return unit
 
 
+def worker_mechanic():
+    p = palette("Field mechanic", (0.38, 0.47, 0.48),
+                (0.62, 0.64, 0.54), (0.16, 0.23, 0.25),
+                (1.0, 0.67, 0.22))
+    unit = root("Model")
+    body = [
+        (4.0, 0), (3.1, 2.25), (-3.25, 2.3), (-4.0, 1.45),
+        (-4.0, -1.45), (-3.25, -2.3), (3.1, -2.25),
+    ]
+    hull("Mechanic service chassis", unit, body, 1.35, 4.7,
+         p["top"], p["dark"])
+    wheels(unit, (-2.55, 2.45), 2.65, 1.0, p["rubber"], p["hub"])
+    box("Tool deck", unit, (-1.0, 0, 4.9),
+        (4.7, 3.45, 0.4), p["body"], 0.18)
+    box("Armored cab", unit, (2.05, 0, 5.4),
+        (2.1, 2.65, 1.8), p["body"], 0.24)
+    box("Amber service panel", unit, (-1.15, 0, 5.25),
+        (2.1, 2.2, 0.38), p["glow"], 0.12)
+
+    beam("Crane base", unit, (-2.05, 0, 5.2),
+         (-2.05, 0, 7.0), 0.58, p["steel"])
+    beam("Crane lower arm", unit, (-2.05, 0, 6.7),
+         (-0.7, 0, 9.2), 0.48, p["body"])
+    beam("Crane upper arm", unit, (-0.7, 0, 9.2),
+         (-2.45, 0, 11.5), 0.38, p["steel"])
+    beam("Tool cable", unit, (-2.45, 0, 11.5),
+         (-2.45, 0, 10.15), 0.16, p["dark"])
+    box("Repair tool", unit, (-2.45, 0, 9.85),
+        (0.85, 1.15, 0.55), p["glow"], 0.14)
+    for side in (-1, 1):
+        box(f"Tool case {side}", unit,
+            (-1.55, side * 2.0, 5.35),
+            (1.7, 0.48, 0.72), p["dark"], 0.12)
+        box(f"Cab lamp {side}", unit,
+            (3.0, side * 1.2, 4.65),
+            (0.42, 0.38, 0.52), p["glow"], 0.1)
+    return unit
+
+
 def rival_scout():
     p = palette("Rival scout", (0.58, 0.17, 0.13),
                 (0.75, 0.28, 0.19), (0.24, 0.075, 0.055),
@@ -190,6 +229,7 @@ MODELS = {
     "worker-core": worker_core,
     "worker-carrier": worker_carrier,
     "worker-trooper": worker_trooper,
+    "worker-mechanic": worker_mechanic,
     "rival-scout": rival_scout,
     "rival-crawler": rival_crawler,
     "rival-raider": rival_raider,

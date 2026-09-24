@@ -257,3 +257,32 @@ func TestTooltipOffersRobotButtons(t *testing.T) {
 		t.Error("a dry deposit still offers a robot button")
 	}
 }
+
+func TestWarFactoryCardOffersMechanicOnlyWhenItCanBuildOne(t *testing.T) {
+	s := newGame()
+	s.Stock = Stock{Oil: 1000, Lilac: 2500}
+	col, row := groundNearCore()
+	home := raised(t, s, BuildingWarFactory, col, row)
+	camera := golib.NewCamera(screenWidth, screenHeight)
+	panel := tooltipLayout(s, camera, col, row, map[string]bool{})
+	if panel.findButton(buttonMechanic) == nil {
+		t.Fatal("the war factory offers no mechanic while it has room and resources")
+	}
+
+	s.Stock.Lilac = mechanicCostLilac - 1
+	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
+	if panel.findButton(buttonMechanic) != nil {
+		t.Fatal("the war factory offers a mechanic the stores cannot pay for")
+	}
+	s.Stock.Lilac = 2500
+	Apply(s, QueueMechanic{Building: home.ID})
+	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
+	if panel.findButton(buttonMechanic) != nil {
+		t.Fatal("the war factory offers a second job while building a mechanic")
+	}
+	runTicks(s, mechanicBuildTicks)
+	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
+	if panel.findButton(buttonMechanic) != nil {
+		t.Fatal("the war factory offers a second mechanic after filling its slot")
+	}
+}
