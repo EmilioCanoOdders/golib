@@ -908,6 +908,17 @@ NIEBLA_MOVING_ARTILLERY_SHOT_STATE=../../build/niebla/moving-artillery.json \
   --input "Enter@1 Mouse@2:640,357 MouseWheel@3:5"
 ```
 
+`TestWriteShellTrailShotState` writes a shell just leaving an artillery
+piece, for checking the muzzle, the growing trail and its smoke:
+
+```text
+NIEBLA_SHELL_SHOT_STATE=../../build/niebla/shell.json \
+  ./golib go -C games/niebla test -run TestWriteShellTrailShotState
+./golib shot niebla 1 8 16 36 \
+  --save build/niebla/shell.json \
+  --input "Enter@1 Mouse@2:640,357 MouseWheel@3:4"
+```
+
 `identity_test.go` pins the identity: stable for a machine, distinct
 between machines, 64 hex characters, and the three parsers of what the
 systems report. `store_test.go` pins the database: an identity (and a

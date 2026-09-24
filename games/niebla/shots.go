@@ -16,12 +16,16 @@ import (
 // new one was fired, a missing one has landed.
 
 const (
-	fxGravity   = 320.0 // u/s2 on a spark
-	fxMaxSparks = 1600
+	fxGravity    = 320.0 // u/s2 on a spark
+	fxMaxSparks  = 1600
 	fxLightRings = 14 // ellipses a pool of light is stacked from
 	fxSparkRings = 3  // and a spark's own little pool
 
-	shellArc = 0.3 // a shell's top, as a part of the ground it covers
+	shellArc              = 0.3 // fraction of ground range at the arc's top
+	shellTrailStepUnits   = 9.0
+	shellTrailLengthUnits = 54.0
+	shellSmokeStepUnits   = 30.0
+	shellSmokeOpacity     = 0.14
 )
 
 var (
@@ -43,6 +47,7 @@ type spark struct {
 	vx, vy, vz float64
 	age, life  float32
 	size       float32 // u
+	opacity    float32
 	color      golib.Color
 	smoke      bool
 }
@@ -58,13 +63,17 @@ type flash struct {
 }
 
 type fxField struct {
-	known   map[int64]Shot
-	sparks  []spark
-	flashes []flash
+	known         map[int64]Shot
+	smokeDistance map[int64]float64
+	sparks        []spark
+	flashes       []flash
 }
 
 func newFxField() *fxField {
-	return &fxField{known: map[int64]Shot{}}
+	return &fxField{
+		known:         map[int64]Shot{},
+		smokeDistance: map[int64]float64{},
+	}
 }
 
 func spread(low, high float64) float64 {
@@ -94,10 +103,24 @@ func (f *fxField) smoke(x, y, z float64, n int, reach float64) {
 		f.sparks = append(f.sparks, spark{
 			x: x + spread(-reach, reach), y: y + spread(-reach, reach), z: z,
 			vx: spread(-6, 6), vy: spread(-6, 6), vz: spread(10, 28),
-			life: float32(spread(1.2, 2.6)), size: float32(spread(4, 9)),
+			life: float32(spread(1.2, 2.6)),
+			size: float32(spread(4, 9)), opacity: 0.32,
 			color: smokeColor, smoke: true,
 		})
 	}
+}
+
+func (f *fxField) shellSmoke(x, y, z float64) {
+	if len(f.sparks) >= fxMaxSparks {
+		return
+	}
+	f.sparks = append(f.sparks, spark{
+		x: x + spread(-2, 2), y: y + spread(-2, 2), z: z,
+		vx: spread(-2, 2), vy: spread(-2, 2), vz: spread(8, 16),
+		life: float32(spread(0.7, 1.1)),
+		size: float32(spread(2.5, 4.5)), opacity: shellSmokeOpacity,
+		color: smokeColor, smoke: true,
+	})
 }
 
 // update compares the state's shots with the ones seen last, lights what
@@ -123,6 +146,7 @@ func (f *fxField) update(s *State, dt float32) {
 			x: shot.FromX, y: shot.FromY, reach: 22, life: 0.07, color: color,
 		})
 	}
+	f.updateShellSmoke(s)
 	for id, shot := range f.known {
 		if _, flying := s.Shots[id]; flying {
 			continue
@@ -177,6 +201,35 @@ func (f *fxField) update(s *State, dt float32) {
 	f.flashes = flashes
 }
 
+func (f *fxField) updateShellSmoke(s *State) {
+	for _, id := range sortedShotIDs(s) {
+		shot := s.Shots[id]
+		if shot.Kind != ShotShell {
+			continue
+		}
+		distance := shotTravelled(shot)
+		previous, found := f.smokeDistance[id]
+		if !found {
+			f.smokeDistance[id] = distance
+			continue
+		}
+		for next := previous + shellSmokeStepUnits;
+			next <= distance;
+			next += shellSmokeStepUnits {
+			progress := next / distance
+			x := shot.FromX + (shot.X-shot.FromX)*progress
+			y := shot.FromY + (shot.Y-shot.FromY)*progress
+			f.shellSmoke(x, y, shellHeightAt(shot, next))
+		}
+		f.smokeDistance[id] = distance
+	}
+	for id := range f.smokeDistance {
+		if _, flying := s.Shots[id]; !flying {
+			delete(f.smokeDistance, id)
+		}
+	}
+}
+
 // lightPool adds a soft pool of light on the ground around a spot: a
 // stack of ellipses, each smaller and as bright again, so the middle
 // burns and the rim fades to nothing. Call it under BlendAdd.
@@ -220,11 +273,28 @@ func shotHeight(shot Shot) float64 {
 	if shot.Kind != ShotShell {
 		return 4
 	}
+	return shellHeightAt(shot, shotTravelled(shot))
+}
+
+func shotTravelled(shot Shot) float64 {
+	return math.Hypot(shot.X-shot.FromX, shot.Y-shot.FromY)
+}
+
+func shellTrailSteps(shot Shot) int {
+	steps := int(shotTravelled(shot) / shellTrailStepUnits)
+	maximum := int(shellTrailLengthUnits / shellTrailStepUnits)
+	if steps > maximum {
+		return maximum
+	}
+	return steps
+}
+
+func shellHeightAt(shot Shot, distance float64) float64 {
 	whole := math.Hypot(shot.ToX-shot.FromX, shot.ToY-shot.FromY)
 	if whole <= 0 {
 		return 0
 	}
-	done := 1 - math.Hypot(shot.ToX-shot.X, shot.ToY-shot.Y)/whole
+	done := distance / whole
 	return 4 * shellArc * whole * done * (1 - done)
 }
 
@@ -245,7 +315,7 @@ func (f *fxField) draw(s *State, screen *golib.Screen, zoom float32) {
 		px, py := project(float32(p.x), float32(p.y))
 		fade := 1 - p.age/p.life
 		screen.DrawCircle(px, py-float32(p.z)*unitH, dotRadius(p.size, zoom, 1.5),
-			golib.WithOpacity(p.color, 0.32*fade))
+			golib.WithOpacity(p.color, p.opacity*fade))
 	}
 
 	screen.SetBlendMode(golib.BlendAdd)
@@ -283,10 +353,10 @@ func (f *fxField) draw(s *State, screen *golib.Screen, zoom float32) {
 		lift := shotHeight(shot)
 		lightPool(screen, shot.X, shot.Y, 60+lift*0.5, shellLight,
 			float32(0.55/(1+lift/150)), fxLightRings)
-		for k := 1; k <= 6; k++ {
+		for k := 1; k <= shellTrailSteps(shot); k++ {
 			back := shot
-			back.X -= dx * float64(k) * 9
-			back.Y -= dy * float64(k) * 9
+			back.X -= dx * float64(k) * shellTrailStepUnits
+			back.Y -= dy * float64(k) * shellTrailStepUnits
 			bx, by := project(float32(back.X), float32(back.Y))
 			screen.DrawCircle(bx, by-float32(shotHeight(back))*unitH,
 				dotRadius(2.2, zoom, 1.5)*(1-float32(k)/8),

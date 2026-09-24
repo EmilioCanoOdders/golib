@@ -6,6 +6,71 @@ import (
 	"testing"
 )
 
+func TestShellLaunchPointStartsAtTheMuzzle(t *testing.T) {
+	fromX, fromY := 80.0, 120.0
+	toX, toY := 380.0, 520.0
+	muzzleX, muzzleY := shellLaunchPoint(fromX, fromY, toX, toY)
+	got := math.Hypot(muzzleX-fromX, muzzleY-fromY)
+	if math.Abs(got-shellMuzzleOffsetUnits) > 0.0001 {
+		t.Fatalf("the shell starts %v u ahead of the gun, want %v",
+			got, shellMuzzleOffsetUnits)
+	}
+	remaining := math.Hypot(toX-muzzleX, toY-muzzleY)
+	original := math.Hypot(toX-fromX, toY-fromY)
+	if remaining >= original {
+		t.Fatal("the muzzle point did not move toward the target")
+	}
+	closeX, closeY := shellLaunchPoint(fromX, fromY, fromX+10, fromY)
+	got = math.Hypot(closeX-fromX, closeY-fromY)
+	if math.Abs(got-5) > 0.0001 {
+		t.Fatalf("a close shot starts %v u from the gun, want 5", got)
+	}
+}
+
+func TestShellTrailGrowsWithItsFlight(t *testing.T) {
+	shot := Shot{Kind: ShotShell, ToX: 500}
+	if got := shellTrailSteps(shot); got != 0 {
+		t.Fatalf("a shell at the muzzle has %d trail marks", got)
+	}
+	shot.X = shellTrailStepUnits - 0.1
+	if got := shellTrailSteps(shot); got != 0 {
+		t.Fatalf("a shell before its first trail step has %d marks", got)
+	}
+	shot.X = shellTrailStepUnits * 2
+	if got, want := shellTrailSteps(shot), 2; got != want {
+		t.Fatalf("a shell after two steps has %d trail marks, want %d", got, want)
+	}
+	shot.X = shellTrailLengthUnits * 2
+	if got, want := shellTrailSteps(shot), 6; got != want {
+		t.Fatalf("a long-flight shell has %d trail marks, want %d", got, want)
+	}
+}
+
+func TestShellLeavesSubtleSmokeAlongItsFlight(t *testing.T) {
+	f := newFxField()
+	shot := Shot{
+		ID: 1, Kind: ShotShell,
+		FromX: 10, FromY: 20, ToX: 1010, ToY: 20,
+	}
+	shot.X, shot.Y = shot.FromX, shot.FromY
+	s := &State{Shots: map[int64]Shot{shot.ID: shot}}
+	f.update(s, 1.0/60)
+	shot.X = shot.FromX + shellSmokeStepUnits*2 + shellSmokeStepUnits/2
+	shot.Y = shot.FromY
+	s.Shots[shot.ID] = shot
+	f.update(s, 1.0/60)
+
+	trailPuffs := 0
+	for _, particle := range f.sparks {
+		if particle.smoke && particle.opacity == shellSmokeOpacity {
+			trailPuffs++
+		}
+	}
+	if trailPuffs != 2 {
+		t.Fatalf("the shell left %d trail puffs, want 2", trailPuffs)
+	}
+}
+
 // settledCityNexus builds a city for shot tests and returns its Nexus.
 func settledCityNexus(t *testing.T, s *State) Enemy {
 	t.Helper()

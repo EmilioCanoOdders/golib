@@ -134,6 +134,33 @@ func TestWriteShotMovingArtilleryState(t *testing.T) {
 	}
 }
 
+func TestWriteShellTrailShotState(t *testing.T) {
+	path := os.Getenv("NIEBLA_SHELL_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_SHELL_SHOT_STATE to write a shell shot state")
+	}
+	s := newGame()
+	noRivals(s)
+	const col, row = 100, 100
+	raised(t, s, BuildingArtillery, col, row)
+	fromX, fromY := cellCenterUnits(col, row)
+	toX, toY := fromX+300, fromY-300
+	muzzleX, muzzleY := shellLaunchPoint(fromX, fromY, toX, toY)
+	s.fire(Shot{
+		Kind:  ShotShell,
+		FromX: muzzleX, FromY: muzzleY,
+		ToX: toX, ToY: toY,
+		Damage: artilleryShellDamage,
+	})
+	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestWriteRobotPortraitShotState(t *testing.T) {
 	path := os.Getenv("NIEBLA_ROBOT_SHOT_STATE")
 	if path == "" {

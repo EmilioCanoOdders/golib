@@ -500,8 +500,9 @@ func (s *State) fireCityArtillery(e Enemy) {
 	}
 	e.Reload = cityArtilleryReload
 	s.Enemies[e.ID] = e
+	muzzleX, muzzleY := shellLaunchPoint(e.X, e.Y, targetX, targetY)
 	s.fire(Shot{
-		Kind: ShotShell, FromX: e.X, FromY: e.Y,
+		Kind: ShotShell, FromX: muzzleX, FromY: muzzleY,
 		ToX: targetX, ToY: targetY, Damage: cityArtilleryDamage,
 		Rival: true,
 	})

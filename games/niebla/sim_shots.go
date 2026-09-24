@@ -18,8 +18,9 @@ import (
 
 // Tuning: the shots' numbers, with units in the name.
 const (
-	bulletSpeed = 480.0 // u/s
-	shellSpeed  = 150.0 // u/s along the ground: a shell takes its time
+	bulletSpeed            = 480.0 // u/s
+	shellSpeed             = 150.0 // u/s along the ground: a shell takes its time
+	shellMuzzleOffsetUnits = 24.0  // u ahead of the firing unit
 
 	shellBlastUnits = 50.0 // u of a shell's blast
 
@@ -85,6 +86,18 @@ func (s *State) fire(shot Shot) {
 	s.NextID++
 	shot.X, shot.Y = shot.FromX, shot.FromY
 	s.Shots[shot.ID] = shot
+}
+
+func shellLaunchPoint(
+	fromX, fromY, toX, toY float64,
+) (x, y float64) {
+	dx, dy := toX-fromX, toY-fromY
+	distance := math.Hypot(dx, dy)
+	if distance == 0 {
+		return fromX, fromY
+	}
+	offset := math.Min(shellMuzzleOffsetUnits, distance/2)
+	return fromX + dx/distance*offset, fromY + dy/distance*offset
 }
 
 // stepShots flies every shot a tick forward and lands the ones that
@@ -278,8 +291,11 @@ func stepArtillery(s *State) {
 		s.payOil(artilleryShellOil)
 		b.Reload, b.Aim = artilleryReloadTicks, target.ID
 		s.Buildings[id] = b
+		muzzleX, muzzleY := shellLaunchPoint(x, y, target.X, target.Y)
 		s.fire(Shot{
-			Kind: ShotShell, FromX: x, FromY: y, ToX: target.X, ToY: target.Y,
+			Kind:  ShotShell,
+			FromX: muzzleX, FromY: muzzleY,
+			ToX: target.X, ToY: target.Y,
 			Damage: artilleryShellDamage,
 		})
 	}

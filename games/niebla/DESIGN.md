@@ -436,6 +436,10 @@ The squads, in `sim_squads.go`: every dial is in [The rivals](#the-rivals). A tr
 
 Shots, in `sim_shots.go` and `shots.go`: every dial of the first is in [The rivals](#the-rivals). The state gained `Shots`, `Building.Damage` and `Raids.Settle`; `Party` gained `Settles`, `Level` and `Grow`. The view's field: `fxGravity` 320 m/s2 on a spark, `fxMaxSparks` 1600, a pool of light stacked from `fxLightRings` 14 ellipses (a spark's own from 3), a shell's burst of 90 sparks, 14 puffs of smoke and a flash 190 m wide that lasts 0.45 s, a bullet's of 5 sparks.
 
+Shells start `shellMuzzleOffsetUnits` 24 m ahead of their firing unit.
+Their orange trail grows to `shellTrailLengthUnits` 54 m; `shots.go` adds
+faint smoke every `shellSmokeStepUnits` 30 m, fading as it rises.
+
 ## Prototype scope
 The prototype is done when these five have landed, on top of the debts under [Later](#later) (decided 2026-09-21). Each is a heading to design, not a design, until its turn comes: they are discussed and landed one at a time. Enemies and battles is under way and nearly whole; the other four are not started.
 
@@ -476,6 +480,10 @@ The prototype is done when these five have landed, on top of the debts under [La
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-24: shells now leave the artillery muzzle instead of the
+  firing unit's center; their orange trail grows during the first 54 m of
+  flight, and faint smoke puffs rise at 30 m intervals. A saved shot checks
+  the muzzle, the growing trail and smoke at several frames.
 - 2026-09-24: world audio fades harder with distance except for cannon
   reports; clicks are lower, marking a site thumps, and fresh rival
   reports announce themselves with a low brass fanfare.
