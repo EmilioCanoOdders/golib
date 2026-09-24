@@ -620,11 +620,10 @@ func drawRobotPortraits(
 		screen.DrawRectangleOutline(portrait.area, 1, buttonEdgeColor)
 		center := golib.Vector2{
 			X: portrait.area.X + portrait.area.Width/2,
-			Y: portrait.area.Y + 10,
+			Y: portrait.area.Y + 8,
 		}
-		drawUnitModel(
-			screen, portrait.robot.Kind, center, 7,
-			portrait.robot.Facing, 1, unitLamp(portrait.robot.Kind),
+		robotModel(portrait.robot.Kind).drawIcon(
+			screen, center, portrait.robot.Facing, golib.White,
 		)
 		screen.DrawText(
 			fmt.Sprintf("#%d", portrait.robot.ID),

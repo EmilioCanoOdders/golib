@@ -26,6 +26,7 @@ func dotRadius(units, zoom, minPx float32) float32 {
 func drawRegion(
 	s *State,
 	screen *golib.Screen,
+	camera *golib.Camera,
 	zoom float32,
 	view golib.Rectangle,
 ) {
@@ -37,14 +38,14 @@ func drawRegion(
 	drawPipes(s, screen, zoom, true)
 	drawPiles(s, screen, zoom, true)
 	drawBuildings(s, screen, zoom)
-	drawRobots(s, screen, zoom)
+	drawRobots(s, screen, camera, zoom)
 	drawFogCover(s, screen, zoom, view)
 	drawSwellWaves(s, screen)
 	drawFogLine(screen, zoom, s)
 	drawPipes(s, screen, zoom, false)
 	drawPiles(s, screen, zoom, false)
 	drawJobs(s, screen, zoom)
-	drawEnemies(s, screen, zoom)
+	drawEnemies(s, screen, camera, zoom)
 	drawBubbles(s, screen, zoom)
 }
 

@@ -63,20 +63,13 @@ func markStrokes() [][]PipePoint {
 	}
 }
 
-// vehicleIcon returns the factor that lifts a vehicle's true size until
-// it is minPx across on the screen, the robots' law.
-func vehicleIcon(across, zoom, minPx float32) float32 {
-	if w := across * unitW; w < minPx/zoom {
-		return minPx / zoom / w
-	}
-	return 1
-}
-
 // drawEnemies paints the rivals over the fog, so a party reads from far
 // out as what it is: a pocket of clear air moving through the mist. The
 // pockets go first, then the structures and vehicles back to front, then
 // the squads' marks (squads.go).
-func drawEnemies(s *State, screen *golib.Screen, zoom float32) {
+func drawEnemies(
+	s *State, screen *golib.Screen, camera *golib.Camera, zoom float32,
+) {
 	type spot struct {
 		e    Enemy
 		x, y float32
@@ -101,7 +94,7 @@ func drawEnemies(s *State, screen *golib.Screen, zoom float32) {
 			drawCityBuilding(s, screen, sp.e, sp.x, sp.y, zoom)
 			continue
 		}
-		drawVehicle(screen, sp.e, sp.x, sp.y, zoom)
+		drawVehicle(screen, camera, sp.e, sp.x, sp.y, zoom)
 	}
 	drawCityConstruction(s, screen, zoom)
 	drawSquadMarks(s, screen, zoom)
@@ -199,102 +192,29 @@ func drawHealthBar(
 }
 
 // drawVehicle paints a rival rover pointing along its last movement.
-func drawVehicle(screen *golib.Screen, e Enemy, gx, gy, zoom float32) {
-	var across float32
-	var minPx float32
-	var length, width float32
-	var hullColor golib.Color
+func drawVehicle(
+	screen *golib.Screen, camera *golib.Camera,
+	e Enemy, gx, gy, zoom float32,
+) {
+	model, across := rivalRaiderModel, float32(8)
 	switch e.Kind {
 	case EnemyArtillery:
-		across, minPx = 16, 8
-		length, width, hullColor = 1.3, 1.15, mid(enemyColor, enemyDark)
+		model, across = rivalArtilleryModel, 16
 	case EnemyCrawler:
-		across, minPx = 16, 9
-		length, width, hullColor = 1.15, 1.35, enemyColor
+		model, across = rivalCrawlerModel, 16
 	case EnemyScout:
-		across, minPx = 6, 5
-		length, width, hullColor = 0.95, 1.05, enemyColor
-	default:
-		across, minPx = 8, 5
-		length, width, hullColor = 1.1, 1.2, enemyColor
+		model, across = rivalScoutModel, 6
 	}
-	k := vehicleIcon(across, zoom, minPx)
-	size := across * unitW * k * 0.4
 	center := golib.Vector2{X: gx, Y: gy}
-	hullShape := vehicleHull(length, width)
-	hull := facingPoints(center, size, e.Facing, hullShape)
-	screen.DrawPolygon(hull, enemyDark)
-	deck := facingPoints(center, size*0.74, e.Facing, hullShape)
-	screen.DrawPolygon(deck, hullColor)
-	screen.DrawPolygonOutline(deck, 0.75/zoom, enemyDark)
-	if size*zoom >= 5 && e.Kind != EnemyScout {
-		drawVehicleTracks(screen, center, size, e.Facing, zoom)
-	}
-	if e.Kind == EnemyArtillery {
-		drawVehicleGun(screen, center, size, e.Facing, zoom)
-	} else {
-		lamp := facingPoint(center, 0.82, 0, size, e.Facing)
-		lampSize := size * 0.2
-		if e.Kind == EnemyScout {
-			lampSize = size * 0.24
-		}
-		screen.DrawCircle(lamp.X, lamp.Y, lampSize, enemyLampColor)
-	}
+	model.draw(screen, camera, center, e.Facing, zoom)
 	if e.Kind == EnemyRaider && e.Oil > 0 {
-		drum := facingPoint(center, -0.48, 0, size, e.Facing)
-		screen.DrawCircle(drum.X, drum.Y, size*0.24, oilColor)
+		scale := model.iconScale(zoom)
+		size := across * unitW * scale * 0.4
+		tank := center.Add(golib.Vector2{Y: -6.3 * unitH * scale})
+		screen.DrawCircle(tank.X, tank.Y, size*0.22, oilColor)
 	}
 	drawHealthBar(screen, gx, gy, across, zoom, e.Health,
 		enemySpecOf(e.Kind).health, dangerColor)
-}
-
-func vehicleHull(length, width float32) []golib.Vector2 {
-	return []golib.Vector2{
-		{X: length},
-		{X: length * 0.58, Y: -width * 0.5},
-		{X: -length * 0.58, Y: -width * 0.5},
-		{X: -length, Y: -width * 0.28},
-		{X: -length, Y: width * 0.28},
-		{X: -length * 0.58, Y: width * 0.5},
-		{X: length * 0.58, Y: width * 0.5},
-	}
-}
-
-func drawVehicleTracks(
-	screen *golib.Screen,
-	center golib.Vector2,
-	size float32,
-	facing uint8,
-	zoom float32,
-) {
-	for _, side := range []float32{-0.48, 0.48} {
-		back := facingPoint(center, -0.72, side, size, facing)
-		front := facingPoint(center, 0.52, side, size, facing)
-		screen.DrawLine(back.X, back.Y, front.X, front.Y,
-			1.1/zoom, enemyDark)
-	}
-}
-
-func drawVehicleGun(
-	screen *golib.Screen,
-	center golib.Vector2,
-	size float32,
-	facing uint8,
-	zoom float32,
-) {
-	base := facingPoint(center, 0.05, 0, size, facing)
-	tip := facingPoint(center, 1.55, 0, size, facing)
-	thickness := 1.5 / zoom
-	if thickness < size*0.12 {
-		thickness = size * 0.12
-	}
-	screen.DrawLine(base.X, base.Y, tip.X, tip.Y, thickness, enemyDark)
-	muzzle := facingPoint(center, 1.55, 0, size, facing)
-	muzzleSize := 0.6 / zoom
-	if muzzleSize < size*0.12 {
-		muzzleSize = size * 0.12
-	}
-	screen.DrawCircle(muzzle.X, muzzle.Y, muzzleSize, enemyLampColor)
 }
 
 // compassWord names the way from the core to a spot as the screen shows

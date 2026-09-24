@@ -235,18 +235,37 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - No win condition in the MVP; the region is the tutorial for the arc.
 
 ## Art
-The screen is 2K/2 (1280x720) with `Config.PixelArt`, so a 2K monitor scales it by two whole, sharp numbers; 2K/4 (640x360) is the step when pixel-art sprites arrive. Three monitor filters run in order (`shaders/glow.fs`, `shaders/crt.fs`, `shaders/soft.fs`, adapted from games/asteroids and turned down): a glow that only the brightest things clear (the fog itself outshines the oil, so the threshold is 0.8 there), a whisper of a tube screen (faint scanlines, light vignette, no flicker) and a small tent blur that rounds pixels' corners. F2 turns them all off. Isometric look from a manual projection in `Draw` (`screenX = (x-y)*tileW/2`, `screenY = (x+y)*tileH/2`), with painters-order drawing by depth. Note: Tiled maps cannot be isometric in GoLib (orthogonal only), so the region is drawn from sprites and shapes, not `DrawMap`; if Tiled is used, it is only as a layout editor whose data the game re-projects. First version: simple shapes and a small palette (cold ground, lilac veins, amber oil, pale fog); sprites later, tiny robots over larger tiles. Robots and rival vehicles have eight screen-facing directions: movement is projected onto the screen and rounded to the nearest 45 degrees. Their saved facing stays put when they stop; older saves default to right. Polygon hulls, front lamps, rear cargo and combat barrels make direction readable without sprites.
+The screen is 1280x720 with `Config.PixelArt`, scaling by whole numbers on
+a larger monitor. Three monitor filters run in order (`shaders/glow.fs`,
+`shaders/crt.fs`, `shaders/soft.fs`): restrained glow, a faint tube screen
+and a small blur that rounds pixel corners. F2 turns them all off.
 
-The three colony chassis have distinct silhouettes at close range and in
-screen-space icons: core workers are narrow, white scouts with two warm rear
-lights; factory workers are teal cargo carriers with side rails and a visible
-oil tank; war-factory troopers are broad green armored hulls with a turret,
-tracks and a projecting barrel. Cargo and refueling lights add information
-without defining the model. `units.go` draws these bodies at the world's
-size or directly at an icon's size, so a card portrait does not enlarge
-the three-pixel dot seen at the farthest zoom. Deposit cards use the same
-models for their clickable robot portraits, and the squad strip uses the
-trooper's own body. The simulation and saved state do not change.
+The region uses a manual isometric projection (`screenX = (x-y)*unitW/2`,
+`screenY = (x+y)*unitH/2`), drawn back to front. GoLib does not load Tiled
+isometric maps, so the ground is generated and drawn here. Movement is
+projected to the screen and rounded to eight directions, 45 degrees apart
+*on the screen*. Facing stays put when a unit stops and older saves default
+to right; those screen headings become nonuniform world yaws in the
+Blender renders.
+
+All seven moving chassis have editable Blender models, rendered into eight
+transparent PNG frames apiece with the same 2:1 orthographic camera and
+lighting. The three colony silhouettes stay distinct: narrow ivory core
+scouts with warm rear lights, teal carriers with a raised tank and rails,
+and broad olive troopers with a turret and forward gun. Rival scouts are
+small and red, raiders carry an oil drum, crawlers carry a repulsor mast,
+and mobile artillery has its cannon raised above its turret. Their wheels
+and shaded sides have real 3D geometry. Portraits and squad icons show
+these same models, scaled for the UI rather than the world. Cargo, refuel
+blink, damage and oil carried remain view overlays; the simulation and
+saved facing do not change.
+
+The single `studio.py` makes the geometry primitives, materials, light,
+camera, world-yaw conversion and eight-view sheet for all models. GoLib
+draws each PNG at its projected ground point in screen pixels, scaled to
+the camera's zoom; rounding a sprite in world pixels before zoom would
+make it jump by tens of screen pixels. Blender is only for editing and
+rendering the art, never for building or playing the game.
 
 ## Sounds
 Audio correction (2026-09-23): the listener is the camera's ground center

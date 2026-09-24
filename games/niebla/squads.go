@@ -172,12 +172,12 @@ func drawSquadStrip(s *playScene, screen *golib.Screen) {
 		}
 		screen.DrawRectangleOutline(rect, 1, edge)
 		count := len(squadMembers(s.state, home))
-		body, dark := guardColor, guardDark
 		ink := panelTextColor
+		tint := golib.White
 		if count == 0 && !armed {
-			body, dark, ink = panelDimColor, golib.WithOpacity(panelDimColor, 0.5), panelDimColor
+			tint, ink = golib.WithOpacity(panelDimColor, 0.5), panelDimColor
 		}
-		drawTrooperIcon(screen, rect.X+4, rect.Y+8, body, dark)
+		drawTrooperIcon(screen, rect.X+4, rect.Y+8, tint)
 		words := fmt.Sprintf("%d", count)
 		screen.DrawText(words, rect.X+squadBoxWidth-8-screen.TextWidth(words, textSize, uiText),
 			rect.Y+8, textSize, ink, uiText)
@@ -212,10 +212,9 @@ func squadBoxAt(mx, my float32) (int, bool) {
 	return 0, false
 }
 
-func drawTrooperIcon(screen *golib.Screen, x, y float32, body, dark golib.Color) {
+func drawTrooperIcon(screen *golib.Screen, x, y float32, tint golib.Color) {
 	center := golib.Vector2{X: x + 11, Y: y + 8}
-	drawTrooperModel(screen, center, 7.4, facingUpRight, 1,
-		body, dark, body)
+	trooperModel.drawIcon(screen, center, facingUpRight, tint)
 }
 
 // squadWords says a squad in a few words: how many it is and what it is

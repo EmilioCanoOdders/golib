@@ -63,6 +63,68 @@ func TestWriteShotUnitState(t *testing.T) {
 	}
 }
 
+func TestWriteShotVehicleState(t *testing.T) {
+	path := os.Getenv("NIEBLA_VEHICLE_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_VEHICLE_SHOT_STATE to write the vehicles' shot state")
+	}
+	s := newGame()
+	noRivals(s)
+	x, y := parkCenter()
+	kinds := []EnemyKind{
+		EnemyScout, EnemyCrawler, EnemyRaider, EnemyArtillery,
+		EnemyArtillery, EnemyArtillery, EnemyArtillery, EnemyArtillery,
+	}
+	for i, kind := range kinds {
+		id := s.NextID
+		s.NextID++
+		column, row := float64(i%4), float64(i/4)
+		s.Enemies[id] = Enemy{
+			ID: id, Kind: kind,
+			X: x + 32 + column*36, Y: y - 30 + row*74,
+			Facing: uint8(i), Health: enemySpecOf(kind).health,
+			Oil: 10,
+		}
+	}
+	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWriteShotMovingArtilleryState(t *testing.T) {
+	path := os.Getenv("NIEBLA_MOVING_ARTILLERY_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_MOVING_ARTILLERY_SHOT_STATE to write a moving artillery state")
+	}
+	s := newGame()
+	noRivals(s)
+	x, y := parkCenter()
+	partyID := s.NextID
+	s.NextID++
+	id := s.NextID
+	s.NextID++
+	s.Parties[partyID] = Party{
+		ID: partyID, Stage: StageApproach,
+		CampX: x + 400, CampY: y - 400,
+	}
+	s.Enemies[id] = Enemy{
+		ID: id, Kind: EnemyArtillery, Party: partyID,
+		X: x, Y: y, Facing: facingRight,
+		Health: enemySpecOf(EnemyArtillery).health,
+	}
+	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestWriteRobotPortraitShotState(t *testing.T) {
 	path := os.Getenv("NIEBLA_ROBOT_SHOT_STATE")
 	if path == "" {

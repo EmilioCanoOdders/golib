@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"math"
 	"testing"
+
+	"golib"
 )
 
 func TestFacingFromMovementUsesScreenOctants(t *testing.T) {
@@ -18,6 +20,45 @@ func TestFacingFromMovementUsesScreenOctants(t *testing.T) {
 		if got := facingFromMovement(dx, dy); got != want {
 			t.Errorf("screen octant %d maps to %d", want, got)
 		}
+	}
+}
+
+func TestGroundFacingProjectsAWorldYaw(t *testing.T) {
+	center := golib.Vector2{X: 300, Y: 200}
+	for facing := uint8(0); facing < 8; facing++ {
+		tip := groundFacingPoint(center, 1, 0, unitW, facing)
+		got := tip.Sub(center).Angle()
+		want := facingAngle(facing)
+		difference := math.Abs(float64(got - want))
+		if difference > 180 {
+			difference = 360 - difference
+		}
+		if difference > 0.01 {
+			t.Errorf("facing %d projects at %.2f degrees, want %.2f",
+				facing, got, want)
+		}
+	}
+}
+
+func TestGroundFacingUsesTheGroundAspectRatio(t *testing.T) {
+	center := golib.Vector2{X: 300, Y: 200}
+	forward := groundFacingPoint(center, 1, 0, unitW, facingRight).
+		Sub(center)
+	side := groundFacingPoint(center, 0, 1, unitW, facingRight).
+		Sub(center)
+	if math.Abs(float64(forward.X-unitW/float32(math.Sqrt2))) > 0.001 {
+		t.Errorf("forward ground offset is %v, want %.3f", forward,
+			unitW/float32(math.Sqrt2))
+	}
+	if math.Abs(float64(forward.Y)) > 0.001 {
+		t.Errorf("forward ground offset has screen Y %.3f", forward.Y)
+	}
+	if math.Abs(float64(side.X)) > 0.001 {
+		t.Errorf("side ground offset has screen X %.3f", side.X)
+	}
+	if math.Abs(float64(side.Y-unitH/float32(math.Sqrt2))) > 0.001 {
+		t.Errorf("side ground offset is %v, want %.3f", side,
+			unitH/float32(math.Sqrt2))
 	}
 }
 

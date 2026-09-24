@@ -5,7 +5,37 @@ import (
 	"math"
 	"reflect"
 	"testing"
+
+	"golib"
 )
+
+func TestWorldSpritesHaveEveryFacing(t *testing.T) {
+	for name, model := range map[string]worldSprite{
+		"core":      coreWorkerModel,
+		"carrier":   carrierModel,
+		"trooper":   trooperModel,
+		"scout":     rivalScoutModel,
+		"crawler":   rivalCrawlerModel,
+		"raider":    rivalRaiderModel,
+		"artillery": rivalArtilleryModel,
+	} {
+		if got := model.sprite.Frames(); got != 8 {
+			t.Errorf("%s sprite has %d facings, want 8", name, got)
+		}
+	}
+}
+
+func TestWorldSpritesMoveInScreenPixelsAtCloseZoom(t *testing.T) {
+	camera := golib.NewCamera(screenWidth, screenHeight)
+	camera.Zoom = 32
+	camera.Target = golib.Vector2{X: 100, Y: 200}
+	camera.Snap()
+	before := modelScreenPosition(camera, golib.Vector2{X: 100.2, Y: 200})
+	after := modelScreenPosition(camera, golib.Vector2{X: 100.4, Y: 200})
+	if moved := after.X - before.X; math.Abs(float64(moved-6.4)) > 0.01 {
+		t.Errorf("sprite moved %.2f screen pixels, want 6.4", moved)
+	}
+}
 
 // noRivals keeps the rivals away for good, for the tests that are about
 // something else.

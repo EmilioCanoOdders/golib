@@ -606,7 +606,7 @@ func regionOnScreen() golib.Rectangle {
 func (s *playScene) Draw(screen *golib.Screen) {
 	screen.SetCamera(s.camera)
 	corner := s.camera.ToWorld(0, 0)
-	drawRegion(s.state, screen, s.zoom, golib.Rectangle{
+	drawRegion(s.state, screen, s.camera, s.zoom, golib.Rectangle{
 		X: corner.X, Y: corner.Y,
 		Width: screenWidth / s.zoom, Height: screenHeight / s.zoom,
 	})

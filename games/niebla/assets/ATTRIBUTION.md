@@ -13,6 +13,12 @@ Files in this folder that were not made for GoLib. Keep this file with them: a
 | License | SIL Open Font License 1.1, <https://openfontlicense.org/open-font-license-official-text/> |
 | Author | Copyright (c) 2012-2015, The Mozilla Foundation and Telefonica S.A. |
 
+## Sprites
+
+All seven PNG sheets in `sprites/` are rendered for this game from their
+matching `.blend` files in `sources/models/` using the scripts there. They
+need no third-party attribution.
+
 ## Sounds
 
 `wind-loop.ogg`, `oil-bed.ogg` and `mineral-ring.wav` are synthesized for this game by
