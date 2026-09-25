@@ -55,6 +55,19 @@ NIEBLA_GUIDE_SHOT_STATE=../../build/niebla/guides.json \
   --input "Enter@1 Mouse@2:640,360 MouseWheel@3:4 D@10-240"
 ```
 
+To inspect the schematics callout and its squares of what a drop brings:
+
+```text
+NIEBLA_TECH_SHOT_STATE=../../build/niebla/tech.json \
+  ./golib go -C games/niebla test -run TestWriteTechShotState
+./golib shot niebla 60 --save build/niebla/tech.json \
+  --input "Enter@1 Mouse@2:640,312 MouseLeft@3"
+```
+
+The test prints where the badge stands on the screen for the current
+layout. `NIEBLA_TECH_PIPES_SHOT_STATE` writes the frontier kit instead,
+with the pipes' square among the blueprints; both may be written at once.
+
 A shot starts on the menu; `Enter@1` presses Play (or click it: `Mouse@5:640,390
 MouseLeft@6`). Inside the region:
 
@@ -146,7 +159,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `store.go` | The local database (SQLite): players, saves and the machine table; `saveBase`/`resumeState`, the scenes' door into it; the DB path, `:memory:` under `golib shot` |
 | `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); the camera, selected cell, open cards, focused robot portrait, portrait page and pointer modes live here, never serialized; the schematics' callout, looks-only fields, rivals' HUD, reach overlays and autosave are view state too |
 | `radial.go` | The build menu: the two rings a click on empty ground opens - the build groups (industry, military, logistics), then the group's blueprints - laid out around the cell every frame, and `backRadial`/`closeRadial`/`openRadial` for the scene |
-| `glyphs.go` | The marks the build menu wears: a group's own glyph, and a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both |
+| `glyphs.go` | The marks the build menu wears: a group's own glyph, a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both - and the pipe's mark, the tube the region lifts on posts |
 | `state.go` | The simulation's state and save-schema version: robots (core, built, combat or repair) with their saved screen-facing octant, buildings with their tanks, production type, reloads and damage, stock, what remains of each deposit, build jobs, piles, pipes, the fog and the rivals' tables (`Enemies`, `Parties`, `Cities`, `Raids`, `Marks`, `Reports`, `Squads`, `Shots`, the PRNG's `Rolls`) plus the schematics' `Tech`; `newGame`, which deals the starting region |
 | `actions.go` | The actions (`Tick`, `SendRobot`, ID-specific `RecallRobot`, `MarkBuilding`, `QueueRobot`, `QueueMechanic`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
 | `sim_robots.go` | The workers' rules and tuning: `robotDay`, the task priorities — haul, refuel, mechanic repairs, loading, protector jobs before other construction, pipe, piles, post, squad or idle —, `postRobots` and `pickRobot` for shared deposits, movement's saved facing octant, pipe-section claims and idle ranks |
@@ -176,7 +189,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `mites.go` | The fog's wear, for looks only: mites of darkness orbiting whatever stands in the mist, by its volume, trailing walkers and closing in on what stands still; view, never state |
 | `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, the blobs of oil by the state's tick) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
 | `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset/new world, next arrival, create city, finish one city building, finish/send a battalion, fast-forward and next schematics —; view only, acting through `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
-| `tech.go` | The schematics on the screen: the badge over the core - breathing halos around the drop's mark - while an unopened drop waits, the callout its click opens (`techWords`, `techWrap`), and the words (`techWords`) and ink (`techInk`) of each drop; view, never state |
+| `tech.go` | The schematics on the screen: the badge over the core - breathing halos around the drop's mark - while an unopened drop waits, the callout its click opens (`techWords`, `techWrap`) with a square per thing the drop brings (`techBrings`, `drawTechSquares`), and the words (`techWords`) and ink (`techInk`) of each drop; view, never state |
 | `guides.go` | Screen-edge arrows for an offscreen rival report or pending schematics, with layout kept clear of the HUD and the two guides separated when they point the same way; view, never state |
 | `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and amplitude-modulated crystal pings, gunfire and shell impacts, low interface clicks, a site-marking thump and a low fanfare for new rival reports. Ordinary world emitters fade steeply with distance and become quiet beyond the view; cannon reports keep their longer, gentler range. Individual shell whistles track their own positions through the descending half of flight. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |
 | `tools/soundgen/` | The maker of the wind, oil and mineral sounds and `assets/sounds/alert.wav`: stdlib Go renders the noise beds as WAV for conversion to OGG, the mineral ring as a seamless WAV with irregular pitch drift of at most one semitone, the crystal ping with amplitude modulation, and the low alert fanfare with `--alert`; run it only when a sound changes |
