@@ -47,6 +47,8 @@ type Pipe struct {
 	Bends    []PipePoint // the clicks between its ends
 	Sections int64       // its length in whole sections: what it cost
 	Left     int64       // ticks of robot work left; 0 is laid
+	Flow     float64     // liters moved in the latest simulation tick
+	Moved    float64     // liters moved since the pipe began carrying oil
 	// Ticks of work left by section, from the source out. It is nil until
 	// the first tick of work and once the pipe is laid: Left alone then
 	// says the work went in from the source out, as old saves have it.
@@ -510,7 +512,10 @@ func stepPipes(s *State) {
 	var flowing []Pipe
 	outlets := map[int64]float64{}
 	for _, id := range sortedPipeIDs(s) {
-		if p := s.Pipes[id]; pipeFlowing(s, p) {
+		p := s.Pipes[id]
+		p.Flow = 0
+		s.Pipes[id] = p
+		if pipeFlowing(s, p) {
 			flowing = append(flowing, p)
 			outlets[p.From]++
 		}
@@ -526,6 +531,9 @@ func stepPipes(s *State) {
 	for _, p := range flowing {
 		flow := math.Min(pipeLitersPerSecond/60, share[p.From])
 		flow = math.Min(flow, tankRoom(s, p.To))
+		p.Flow = flow
+		p.Moved += flow
+		s.Pipes[p.ID] = p
 		s.addOil(p.To, flow)
 		if !isPump(s, p.From) {
 			s.addOil(p.From, -flow)

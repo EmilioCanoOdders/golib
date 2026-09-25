@@ -97,7 +97,7 @@ The game has no belts and never will, but oil flows through pipes, so it stops r
 
 **The price is by the section** (`pipeSectionMeters` 25 m, a cell's side; `pipeSectionLilac` 5 kg apiece), paid when the pipe is marked. Marking is building here too, and it is work for many hands: a robot **claims a section** - of the oldest unlaid pipe's sections nobody else holds, the nearest to it -, tells the others by the claim itself, which is state (`Robot.Pipe`, `Robot.Section`), walks to the section's middle and **stands by it** for two seconds of work (`pipeSectionWorkTicks` 120), then claims another. So a pipe is laid in patches, by as many robots as it has free sections, the laid sections standing on their posts among the ghost of the rest, and the robots a pipe has no section for go on with their day. A claim lasts while the robot's task is the build line and dies with the robot, so a section is never orphaned. A pipe through the mist costs what walking and standing in the mist costs. Laying pipe is part of the build line of the robot's day, after the sites.
 
-**It shows.** A pipe runs above the ground (`pipeLiftUnits` 9 m, never under 5 px), on posts a section apart, and casts its shadow on the ground, leaning away from the sun the buildings' faces imply. Blobs of oil run down a pipe that carries it, a beat apart - a picture of the state's tick and nothing else. Pipes may cross anything, the fog too, and are drawn over it like the sites.
+**It shows.** A pipe runs above the ground (`pipeLiftUnits` 9 m, never under 5 px), on posts a section apart, and casts its shadow on the ground, leaning away from the sun the buildings' faces imply. Blobs of oil run down a pipe only while oil actually moves; their phase follows the pipe's accumulated liters. At a pump's full `pumpLitersPerSecond` 2 L/s, they keep the original 40-tick beat. A silo with room takes that full output when it is the pump's only outlet. A full protector takes only its `protectorOilPerSecond` 0.25 L/s upkeep, so its pipe's blobs move eight times slower. Pipes may cross anything, the fog too, and are drawn over it like the sites.
 
 **Taking it up.** The card of either end lists its pipes, each with where it goes or comes from, its length, what it is doing, and a `remove` button; demolishing a building takes its pipes with it. Either way a pipe's whole cost falls as a pile - by the building it started at, or on the demolished cell - and comes home as a haul.
 
@@ -497,6 +497,17 @@ The prototype is done when these five have landed, on top of the debts under [La
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-25: pipe blobs now follow the liters actually moved by each
+  pipe, rather than advancing with the global tick. A pump feeding a silo
+  as its only outlet keeps the old speed at 2 L/s; once a protector is
+  full, its pipe slows to the 0.25 L/s upkeep it replaces, and a blocked
+  or dry pipe stops.
+  `Pipe.Flow` and `Pipe.Moved` are saved simulation state, so the picture
+  stays deterministic across saves and replays. Pinned by
+  `TestPipeFlowAnimationFollowsDestinationDemand` (including shared pump
+  outlets) and `TestPipesSurviveASave`. `TestWritePipeFlowShotStates` and
+  three scripted frames show the pump-to-silo and core-to-protector rates
+  side by side.
 - 2026-09-24: the schematics callout shows what a drop brings as squares,
   in the likeness of the workers' portraits a deposit's card holds: the
   rendered icon of each construction above and its name below, one square

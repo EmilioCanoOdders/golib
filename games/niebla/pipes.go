@@ -25,10 +25,11 @@ const (
 
 	// The oil shows as blobs running down the pipe, one every gap, each
 	// taking a beat to reach the next one's place.
-	flowGapUnits  = 30.0 // u between two blobs, close up
-	flowGapPx     = 16.0 // and never closer than this on the screen
-	flowBlobPart  = 0.4  // how much of a gap its blob fills
-	flowBeatTicks = 40
+	flowGapUnits      = 30.0 // u between two blobs, close up
+	flowGapPx         = 16.0 // and never closer than this on the screen
+	flowBlobPart      = 0.4  // how much of a gap its blob fills
+	flowBeatTicks     = 40
+	flowLitersPerBeat = pumpLitersPerSecond * flowBeatTicks / 60.0
 
 	layReachPx = 12.0 // how near a store's body a click ends a pipe
 	layNodePx  = 10.0 // how near the pipe's last node a click opens its menu
@@ -65,6 +66,10 @@ func projectPoint(p PipePoint) (x, y float32) {
 	return project(float32(p.X), float32(p.Y))
 }
 
+func pipeFlowPhase(moved float64) float64 {
+	return math.Mod(moved, flowLitersPerBeat) / flowLitersPerBeat
+}
+
 // drawPipes paints the pipes, in two passes like the piles: the
 // stretches under a bubble or on clear ground go under the buildings and
 // the robots, and the ones in the mist over the fog, so the colony never
@@ -72,8 +77,8 @@ func projectPoint(p PipePoint) (x, y float32) {
 // lies on the ground under it, where the mist doesn't hide it, posts
 // hold it up a section apart, and the pipe itself is drawn lifted. The
 // sections still to be laid show as a faint line, over the fog too. Oil
-// runs down a pipe that carries it as blobs, placed by the state's tick
-// and nothing else.
+// runs down a pipe that carries it as blobs, placed by the oil that has
+// actually passed through the pipe.
 func drawPipes(s *State, screen *golib.Screen, zoom float32, sheltered bool) {
 	width := 2 * dotRadius(pipeWidthUnits/2, zoom, pipeMinPx/2)
 	lift := float32(math.Max(pipeLiftUnits*float64(unitH), float64(pipeLiftPx/zoom)))
@@ -137,11 +142,11 @@ func drawPipes(s *State, screen *golib.Screen, zoom float32, sheltered bool) {
 					golib.WithOpacity(siteColor, 0.6))
 			}
 		}
-		if !pipeFlowing(s, p) {
+		if p.Flow <= 0 {
 			continue
 		}
 		gap := math.Max(flowGapUnits, float64(flowGapPx/zoom/unitW))
-		beat := float64(s.Ticks%flowBeatTicks) / flowBeatTicks
+		beat := pipeFlowPhase(p.Moved)
 		for along := gap * beat; along < length; along += gap {
 			if !inPass(pathPointAt(path, along)) {
 				continue

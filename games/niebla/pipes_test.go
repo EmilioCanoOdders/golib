@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"math"
+	"os"
 	"reflect"
 	"testing"
 
@@ -151,11 +152,26 @@ func TestALaidPipeCarriesThePoolIntoItsTank(t *testing.T) {
 	pump := pumpOn(t, s, d)
 	Apply(s, LayPipe{From: pump.ID, To: coreTank})
 	laid(t, s)
+	p, ok := pipeOut(s, pump.ID)
+	if !ok {
+		t.Fatal("the laid pipe disappeared")
+	}
 	oil, pool := s.Stock.Oil, s.Drain[depositKey(d)]
 	runTicks(s, 600)
 	gained := s.Stock.Oil - oil
-	if want := pumpLitersPerSecond * 10; math.Abs(gained-want) > 0.001 {
-		t.Errorf("ten seconds of pumping brought %v L, want %v", gained, want)
+	wantGained := pumpLitersPerSecond * 10
+	if math.Abs(gained-wantGained) > 0.001 {
+		t.Errorf("ten seconds of pumping brought %v L, want %v",
+			gained, wantGained)
+	}
+	p = s.Pipes[p.ID]
+	wantFlow := pumpLitersPerSecond / 60
+	if math.Abs(p.Flow-wantFlow) > 1e-9 {
+		t.Errorf("the pipe moved %v L this tick, want %v", p.Flow, wantFlow)
+	}
+	if math.Abs(p.Moved-gained) > 0.001 {
+		t.Errorf("the pipe records %v L moved, but the tank gained %v",
+			p.Moved, gained)
 	}
 	if lost := pool - s.Drain[depositKey(d)]; math.Abs(lost-gained) > 0.001 {
 		t.Errorf("the pool lost %v L and the core gained %v", lost, gained)
@@ -167,11 +183,17 @@ func TestALaidPipeCarriesThePoolIntoItsTank(t *testing.T) {
 		}
 	}
 	// A full tank at the pipe's end stops the pump, and nothing is lost.
+	moved := p.Moved
 	s.Stock.Oil = coreOilCap - 1
 	pool = s.Drain[depositKey(d)]
 	runTicks(s, 600)
+	p = s.Pipes[p.ID]
 	if s.Stock.Oil != coreOilCap {
 		t.Errorf("the core holds %v L in a tank of %v", s.Stock.Oil, coreOilCap)
+	}
+	if math.Abs(p.Moved-moved-1) > 0.001 || p.Flow != 0 {
+		t.Errorf("a full tank left pipe movement at %v L total and %v L this tick",
+			p.Moved-moved, p.Flow)
 	}
 	if lost := pool - s.Drain[depositKey(d)]; math.Abs(lost-1) > 0.001 {
 		t.Errorf("the pool lost %v L for 1 L of room", lost)
@@ -182,11 +204,114 @@ func TestALaidPipeCarriesThePoolIntoItsTank(t *testing.T) {
 	// A dry pool stops it too.
 	s.Stock.Oil = 0
 	s.Drain[depositKey(d)] = 0.01
+	moved = p.Moved
 	runTicks(s, 60)
+	p = s.Pipes[p.ID]
 	if s.Drain[depositKey(d)] != 0 || pumpStatus(s, pump) != pumpDry {
 		t.Errorf("the pool holds %v L and the pump says %q",
 			s.Drain[depositKey(d)], pumpStatus(s, pump))
 	}
+	if math.Abs(p.Moved-moved-0.01) > 1e-9 || p.Flow != 0 {
+		t.Errorf("a dry pool left pipe movement at %v L and %v L this tick",
+			p.Moved-moved, p.Flow)
+	}
+}
+
+func TestPipeFlowAnimationFollowsDestinationDemand(t *testing.T) {
+	t.Run("silo receives the pump rate", func(t *testing.T) {
+		s := newGame()
+		seedStock(s)
+		arriveAll(s)
+		d := safePool(t)
+		pump := pumpOn(t, s, d)
+		col, row := groundNearCore()
+		silo := raised(t, s, BuildingSilo, col, row)
+		p := layNow(t, s, pump.ID, silo.ID)
+
+		runTicks(s, 600)
+		p = s.Pipes[p.ID]
+		wantMoved := pumpLitersPerSecond * 10
+		if math.Abs(p.Moved-wantMoved) > 0.001 {
+			t.Errorf("the pipe moved %v L in ten seconds, want %v",
+				p.Moved, wantMoved)
+		}
+		wantFlow := pumpLitersPerSecond / 60
+		if math.Abs(p.Flow-wantFlow) > 1e-9 {
+			t.Errorf("the silo pipe moved %v L this tick, want %v",
+				p.Flow, wantFlow)
+		}
+		if got := pipeFlowPhase(p.Moved); math.Abs(got) > 1e-9 {
+			t.Errorf("the pump-rate flow is at phase %v after 15 beats", got)
+		}
+	})
+
+	t.Run("shared pump output slows both pipes", func(t *testing.T) {
+		s := newGame()
+		seedStock(s)
+		arriveAll(s)
+		d := safePool(t)
+		pump := pumpOn(t, s, d)
+		col, row := groundNearCore()
+		first := raised(t, s, BuildingSilo, col, row)
+		second := raised(t, s, BuildingSilo, col+2, row)
+		firstPipe := layNow(t, s, pump.ID, first.ID)
+		secondPipe := layNow(t, s, pump.ID, second.ID)
+
+		runTicks(s, 600)
+		for _, p := range []Pipe{
+			s.Pipes[firstPipe.ID], s.Pipes[secondPipe.ID],
+		} {
+			wantMoved := pumpLitersPerSecond * 5
+			if math.Abs(p.Moved-wantMoved) > 0.001 {
+				t.Errorf("the shared pipe moved %v L in ten seconds, want %v",
+					p.Moved, wantMoved)
+			}
+			wantFlow := pumpLitersPerSecond / 2 / 60
+			if math.Abs(p.Flow-wantFlow) > 1e-9 {
+				t.Errorf("the shared pipe moved %v L this tick, want %v",
+					p.Flow, wantFlow)
+			}
+		}
+	})
+
+	t.Run("full protector draws only its upkeep", func(t *testing.T) {
+		s := newGame()
+		seedStock(s)
+		arriveAll(s)
+		d := safePool(t)
+		pump := pumpOn(t, s, d)
+		col, row := groundNearCore()
+		protector := raised(t, s, BuildingProtector, col, row)
+		p := layNow(t, s, pump.ID, protector.ID)
+
+		runTicks(s, 60*100)
+		protector = s.Buildings[protector.ID]
+		p = s.Pipes[p.ID]
+		if protector.Oil < protectorOilCap-0.01 {
+			t.Fatalf("the protector has %v L, not yet full", protector.Oil)
+		}
+		wantFlow := protectorOilPerSecond / 60
+		if math.Abs(p.Flow-wantFlow) > 1e-9 {
+			t.Fatalf("the full protector's pipe moved %v L this tick, want %v",
+				p.Flow, wantFlow)
+		}
+
+		moved := p.Moved
+		phase := pipeFlowPhase(moved)
+		runTicks(s, 60)
+		p = s.Pipes[p.ID]
+		wantMoved := protectorOilPerSecond
+		if math.Abs(p.Moved-moved-wantMoved) > 1e-9 {
+			t.Errorf("the pipe moved %v L in one second, want upkeep %v",
+				p.Moved-moved, wantMoved)
+		}
+		wantPhase := protectorOilPerSecond / flowLitersPerBeat
+		phaseDelta := pipeFlowPhase(p.Moved) - phase
+		if math.Abs(phaseDelta-wantPhase) > 1e-9 {
+			t.Errorf("one second advanced the animation by %v, want %v",
+				phaseDelta, wantPhase)
+		}
+	})
 }
 
 func TestOilHasAPlaceAndPipesMoveItBetweenTanks(t *testing.T) {
@@ -399,11 +524,12 @@ func TestPipesSurviveASave(t *testing.T) {
 	seedStock(s)
 	arriveAll(s)
 	pump := pumpOn(t, s, safePool(t))
-	from, _ := pipeEndSpot(s, pump.ID)
-	Apply(s, LayPipe{
-		From: pump.ID, To: 0, Bends: []PipePoint{{from.X + 80, from.Y - 40}},
-	})
+	layNow(t, s, pump.ID, 0)
 	runTicks(s, 300)
+	p, ok := pipeOut(s, pump.ID)
+	if !ok || p.Moved <= 0 || p.Flow <= 0 {
+		t.Fatal("a flowing pipe didn't save its animation progress")
+	}
 	data, err := json.Marshal(s)
 	if err != nil {
 		t.Fatalf("the state does not marshal: %v", err)
@@ -414,6 +540,11 @@ func TestPipesSurviveASave(t *testing.T) {
 	}
 	if !reflect.DeepEqual(&back, s) {
 		t.Error("the pipes changed across a JSON round trip")
+	}
+	runTicks(s, 60)
+	runTicks(&back, 60)
+	if !reflect.DeepEqual(&back, s) {
+		t.Error("a loaded pipe didn't continue its flow deterministically")
 	}
 	// A save from before the pipes has no table for them, and takes one.
 	old := newGame()
@@ -637,5 +768,37 @@ func TestAHalfLaidPipeFromAnOldSaveKeepsItsWork(t *testing.T) {
 	p.Left = 0
 	if sectionLeft(p, 2) != 0 {
 		t.Error("a laid pipe still asks for work")
+	}
+}
+
+func TestWritePipeFlowShotStates(t *testing.T) {
+	path := os.Getenv("NIEBLA_PIPE_FLOW_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_PIPE_FLOW_SHOT_STATE to write a shot state")
+	}
+
+	s := newGame()
+	noRivals(s)
+	seedStock(s)
+	arriveAll(s)
+	pump := pumpOn(t, s, safePool(t))
+	silo := raised(t, s, BuildingSilo, pump.Col+10, pump.Row+4)
+	coreCellCol, coreCellRow := tileCell(coreCol, coreRow)
+	protector := raised(
+		t, s, BuildingProtector, coreCellCol+20, coreCellRow,
+	)
+	pumpPipe := layNow(t, s, pump.ID, silo.ID)
+	protectorPipe := layNow(t, s, coreTank, protector.ID)
+	runTicks(s, 60*100)
+	if s.Pipes[pumpPipe.ID].Flow <= 0 ||
+		s.Pipes[protectorPipe.ID].Flow <= 0 {
+		t.Fatal("a pipe in the shot state has no flow")
+	}
+	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
 	}
 }
