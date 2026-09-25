@@ -36,15 +36,24 @@ func runTicks(s *State, n int) {
 	}
 }
 
-func TestNewGameStartsTwoIdleRobotsByTheCore(t *testing.T) {
+func addWorker(s *State) int64 {
+	x, y := parkSlot(len(s.Robots))
+	return s.spawnRobot(RobotWorker, x, y)
+}
+
+func TestNewGameStartsWithOneFueledBuilder(t *testing.T) {
 	s := newGame()
-	if len(s.Robots) != startingRobots {
-		t.Fatalf("the core starts with %d robots, want %d",
-			len(s.Robots), startingRobots)
+	if len(s.Robots) != startingBuilders {
+		t.Fatalf("the colony starts with %d robots, want %d",
+			len(s.Robots), startingBuilders)
 	}
 	cx, cy := tileCenterUnits(coreCol, coreRow)
 	for _, id := range sortedRobotIDs(s) {
 		r := s.Robots[id]
+		if r.Kind != RobotBuilder || r.Tank != robotTankLiters {
+			t.Errorf("starting robot %d is %s with %v L, want a fueled builder",
+				r.ID, r.Kind, r.Tank)
+		}
 		if r.hasPost() {
 			t.Errorf("robot %d starts with a post, want it idle", id)
 		}
@@ -63,8 +72,137 @@ func TestNewGameStartsTwoIdleRobotsByTheCore(t *testing.T) {
 	}
 }
 
+func TestAssignRobotChangesOnlyTheChosenDepositPost(t *testing.T) {
+	s := newGame()
+	workerID := addWorker(s)
+	oilCol, oilRow, ok := nearestTileOf(kindOil)
+	if !ok {
+		t.Fatal("the region has no oil to assign")
+	}
+	lilacCol, lilacRow, ok := nearestTileOf(kindLilac)
+	if !ok {
+		t.Fatal("the region has no lilac to assign")
+	}
+	builder := s.Robots[1]
+	builder.Carry, builder.Cargo = 5, TypeOil
+	builder.WorkTicks, builder.Pile = 30, 8
+	s.Robots[builder.ID] = builder
+	Apply(s, AssignRobot{ID: builder.ID, Col: oilCol, Row: oilRow})
+	gotBuilder := s.Robots[builder.ID]
+	if !gotBuilder.hasPost() || gotBuilder.PostCol != oilCol ||
+		gotBuilder.PostRow != oilRow {
+		t.Fatalf("the selected builder's post is %+v", gotBuilder)
+	}
+	if gotBuilder.Carry != builder.Carry || gotBuilder.Cargo != builder.Cargo {
+		t.Error("assigning a builder dropped the load already in its arms")
+	}
+	if gotBuilder.WorkTicks != 0 || gotBuilder.Pile != 0 {
+		t.Error("assigning a builder kept an unfinished loading task")
+	}
+	Apply(s, AssignRobot{ID: workerID, Col: lilacCol, Row: lilacRow})
+	gotWorker := s.Robots[workerID]
+	if !gotWorker.hasPost() || gotWorker.PostCol != lilacCol ||
+		gotWorker.PostRow != lilacRow {
+		t.Fatalf("the selected worker's post is %+v", gotWorker)
+	}
+	if len(postRobots(s, oilCol, oilRow)) != 1 ||
+		len(postRobots(s, lilacCol, lilacRow)) != 1 {
+		t.Fatal("individual assignments did not keep the two posts separate")
+	}
+}
+
+func TestAssignRobotRejectsMissingUnitsAndDryGround(t *testing.T) {
+	s := newGame()
+	workerID := addWorker(s)
+	col, row, ok := nearestTileOf(kindOil)
+	if !ok {
+		t.Fatal("the region has no oil to test")
+	}
+	d, _ := depositAt(col, row)
+	s.Drain[depositKey(d)] = 0
+	Apply(s, AssignRobot{ID: 10000, Col: col, Row: row})
+	Apply(s, AssignRobot{ID: workerID, Col: col, Row: row})
+	if s.Robots[workerID].hasPost() {
+		t.Fatal("a dry deposit took a worker")
+	}
+	Apply(s, AssignRobot{ID: workerID, Col: coreCol, Row: coreRow})
+	if s.Robots[workerID].hasPost() {
+		t.Fatal("ground without a deposit took a worker")
+	}
+	combatID := s.spawnRobot(RobotCombat, 0, 0)
+	Apply(s, AssignRobot{ID: combatID, Col: col, Row: row})
+	if s.Robots[combatID].hasPost() {
+		t.Fatal("a trooper took a worker deposit order")
+	}
+}
+
+func TestBuildersCarryOneThirdOfAWorkersLoad(t *testing.T) {
+	builder := Robot{Kind: RobotBuilder}
+	worker := Robot{Kind: RobotWorker}
+	for _, cargo := range []ThingType{TypeOil, TypeLilac} {
+		if got, want := robotCarryCapacity(builder, cargo),
+			robotCarryCapacity(worker, cargo)*builderCarryPart; got != want {
+			t.Errorf("builder capacity for %s is %v, want %v",
+				cargo, got, want)
+		}
+	}
+	pile := Pile{ID: 1, Lilac: 100, Oil: 100}
+	_, builderOffer := pileOffer(newGame(), pile, builder)
+	_, workerOffer := pileOffer(newGame(), pile, worker)
+	if got, want := builderOffer, workerOffer*builderCarryPart; got != want {
+		t.Errorf("builder pile offer is %v, want %v", got, want)
+	}
+	s := newGame()
+	col, row, ok := nearestTileOf(kindLilac)
+	if !ok {
+		t.Fatal("the region has no lilac to test")
+	}
+	d, _ := depositAt(col, row)
+	s.Drain[depositKey(d)] = 100
+	r := s.Robots[1]
+	r.PostCol, r.PostRow = col, row
+	s.takeLoad(&r)
+	if r.Carry != robotCarryCapacity(r, TypeLilac) || r.Cargo != TypeLilac {
+		t.Errorf("builder load is %v %s, want %v kg",
+			r.Carry, r.Cargo, robotCarryCapacity(r, TypeLilac))
+	}
+}
+
+func TestLegacyRobotKindsMigrateToVulnerableBuildersAndWorkers(t *testing.T) {
+	s := newGame()
+	builder := s.Robots[1]
+	builder.Kind, builder.Tank = "core", 0
+	s.Robots[builder.ID] = builder
+	workerID := s.spawnRobot(RobotWorker, 100, 100)
+	worker := s.Robots[workerID]
+	worker.Kind = "built"
+	s.Robots[workerID] = worker
+	buildingID := s.NextID
+	s.NextID++
+	s.Buildings[buildingID] = Building{
+		ID: buildingID, Kind: BuildingFactory,
+		Work: 60, WorkKind: "built",
+	}
+	s.Version = stateVersion - 1
+	s.enterRegion()
+	if s.Version != stateVersion {
+		t.Fatalf("save version is %d, want %d", s.Version, stateVersion)
+	}
+	if got := s.Robots[builder.ID]; got.Kind != RobotBuilder ||
+		got.Tank != robotTankLiters {
+		t.Errorf("legacy core robot migrated as %+v", got)
+	}
+	if got := s.Robots[workerID]; got.Kind != RobotWorker {
+		t.Errorf("legacy built robot migrated as %+v", got)
+	}
+	if got := s.Buildings[buildingID].WorkKind; got != RobotWorker {
+		t.Errorf("legacy factory production kind is %q, want worker", got)
+	}
+}
+
 func TestSentRobotHaulsOilHome(t *testing.T) {
 	s := newGame()
+	addWorker(s)
 	col, row, ok := nearestTileOf(kindOil)
 	if !ok {
 		t.Fatal("the region has no oil to test with")
@@ -99,6 +237,8 @@ func TestSentRobotHaulsOilHome(t *testing.T) {
 // recalling one worker leaves the others assigned.
 func TestDepositPatchSharesItsWorkersAcrossEveryTile(t *testing.T) {
 	s := newGame()
+	addWorker(s)
+	addWorker(s)
 	col, row, ok := nearestTileOf(kindOil)
 	if !ok {
 		t.Fatal("the region has no oil to test with")
@@ -124,9 +264,9 @@ func TestDepositPatchSharesItsWorkersAcrossEveryTile(t *testing.T) {
 		t.Errorf("the patch workers are %v, want distinct IDs including %d",
 			workers, first.ID)
 	}
-	if len(s.Robots) != startingRobots {
+	if len(s.Robots) != startingBuilders+2 {
 		t.Fatalf("the colony grew to %d robots, want %d",
-			len(s.Robots), startingRobots)
+			len(s.Robots), startingBuilders+2)
 	}
 	Apply(s, RecallRobot{ID: first.ID})
 	workers = postRobots(s, col, row)
@@ -136,8 +276,10 @@ func TestDepositPatchSharesItsWorkersAcrossEveryTile(t *testing.T) {
 	}
 }
 
-func TestSendRobotPicksAndKeepsItsRobots(t *testing.T) {
+func TestSendRobotOnlyAssignsFreeWorkers(t *testing.T) {
 	s := newGame()
+	addWorker(s)
+	addWorker(s)
 	oilCol, oilRow, ok := nearestTileOf(kindOil)
 	if !ok {
 		t.Fatal("the region has no oil to test with")
@@ -162,13 +304,20 @@ func TestSendRobotPicksAndKeepsItsRobots(t *testing.T) {
 	if got := len(postRobots(s, oilCol, oilRow)); got != 2 {
 		t.Errorf("a third send made %d workers at the oil patch, want 2", got)
 	}
-	// With no free robots, the next deposit retasks one from another patch.
+	// With no free workers, a send never retasks an existing post.
 	Apply(s, SendRobot{Col: veinCol, Row: veinRow})
 	veinWorkers := postRobots(s, veinCol, veinRow)
-	if len(veinWorkers) == 0 {
-		t.Fatal("nobody took the lilac post")
+	if len(veinWorkers) != 0 {
+		t.Fatal("send robot retasked a worker with an existing post")
 	}
-	second := veinWorkers[0]
+	second := oilWorkers[1]
+	Apply(s, AssignRobot{
+		ID: second.ID, Col: veinCol, Row: veinRow,
+	})
+	veinWorkers = postRobots(s, veinCol, veinRow)
+	if len(veinWorkers) != 1 || veinWorkers[0].ID != second.ID {
+		t.Fatalf("individual assignment left lilac workers %v", veinWorkers)
+	}
 	oilWorkers = postRobots(s, oilCol, oilRow)
 	if len(oilWorkers) != 1 || oilWorkers[0].ID == second.ID {
 		t.Errorf("retasking to lilac left oil workers %v and lilac worker %d",
@@ -190,6 +339,8 @@ func TestSendRobotPicksAndKeepsItsRobots(t *testing.T) {
 
 func TestWorkersShareAndExhaustOneDeposit(t *testing.T) {
 	s := newGame()
+	addWorker(s)
+	addWorker(s)
 	col, row, ok := nearestTileOf(kindLilac)
 	if !ok {
 		t.Fatal("the region has no lilac to test with")
@@ -218,6 +369,7 @@ func TestWorkersShareAndExhaustOneDeposit(t *testing.T) {
 
 func TestDryDepositReleasesItsRobot(t *testing.T) {
 	s := newGame()
+	addWorker(s)
 	col, row, ok := nearestTileOf(kindLilac)
 	if !ok {
 		t.Fatal("the region has no lilac to test with")
@@ -246,44 +398,46 @@ func TestDryDepositReleasesItsRobot(t *testing.T) {
 
 func TestBuildJobsComeFirst(t *testing.T) {
 	s := newGame()
+	workerID := addWorker(s)
 	col, row, ok := nearestTileOf(kindOil)
 	if !ok {
 		t.Fatal("the region has no oil to test with")
 	}
-	Apply(s, SendRobot{Col: col, Row: row})
-	owner := postRobots(s, col, row)[0]
-	runTicks(s, 60) // the robot sets out towards its post
-	// A build job springs up on open ground across the way, five cells
-	// north-east of the core.
-	jobCol, jobRow := coreCol*5+5, coreRow*5-5
+	worker := s.Robots[workerID]
+	Apply(s, AssignRobot{ID: workerID, Col: col, Row: row})
+	owner := s.Robots[worker.ID]
+	owner.X, owner.Y = postSpot(col, row, workerID)
+	s.Robots[workerID] = owner
+	// The job stands one cell east of the core, where the builder can reach
+	// it before the worker finishes its first load.
+	jobCol, jobRow := coreCol*5+1, coreRow*5
 	s.Jobs = []Job{{Col: jobCol, Row: jobRow, Left: 30}}
 	jobX, jobY := cellCenterUnits(jobCol, jobRow)
-	r := s.Robots[owner.ID]
-	d0 := math.Hypot(r.X-jobX, r.Y-jobY)
+	builder := s.Robots[1]
+	d0 := math.Hypot(builder.X-jobX, builder.Y-jobY)
 	Apply(s, Tick{})
-	r = s.Robots[owner.ID]
-	d1 := math.Hypot(r.X-jobX, r.Y-jobY)
+	builder = s.Robots[1]
+	d1 := math.Hypot(builder.X-jobX, builder.Y-jobY)
 	if d1 >= d0 {
-		t.Errorf("the robot ignored the build job: its distance to it went %v to %v",
+		t.Errorf("the builder ignored the job: its distance went %v to %v",
 			d0, d1)
 	}
-	// It raises the job before it goes back to its own post: the walk
-	// there and back is a few minutes at robotSpeed.
+	// The worker stays on its post while the builder raises the job.
+	worker = s.Robots[workerID]
+	if worker.X != owner.X || worker.Y != owner.Y {
+		t.Errorf("the worker left its post for construction: %+v", worker)
+	}
 	for i := 0; i < 60*400 && len(s.Jobs) > 0; i++ {
 		Apply(s, Tick{})
 	}
 	if len(s.Jobs) != 0 {
 		t.Fatal("the build job never finished")
 	}
-	if s.Stock.Oil > startingStockOil {
-		t.Errorf("the stores hold %v L before the job is done, want just the gift",
-			s.Stock.Oil)
-	}
 	for i := 0; i < 60*500 && s.Stock.Oil <= startingStockOil; i++ {
 		Apply(s, Tick{})
 	}
 	if s.Stock.Oil <= startingStockOil {
-		t.Fatal("the robot never went back to its post after the job")
+		t.Fatal("the worker never delivered its load during construction")
 	}
 }
 
@@ -302,8 +456,6 @@ func TestRobotsBuildProtectorsBeforeOlderJobs(t *testing.T) {
 	r.X = x + math.Cos(angle)*11
 	r.Y = y + math.Sin(angle)*11
 	s.Robots[r.ID] = r
-	delete(s.Robots, 2)
-
 	Apply(s, Tick{})
 
 	protector, built := buildingAt(s, protectorCol, protectorRow)
@@ -320,6 +472,8 @@ func TestRobotsBuildProtectorsBeforeOlderJobs(t *testing.T) {
 func TestTheSimulationReplaysTheSame(t *testing.T) {
 	play := func() *State {
 		s := newGame()
+		addWorker(s)
+		addWorker(s)
 		arriveAll(s)
 		oilCol, oilRow, _ := nearestTileOf(kindOil)
 		veinCol, veinRow, _ := nearestTileOf(kindLilac)
@@ -328,7 +482,7 @@ func TestTheSimulationReplaysTheSame(t *testing.T) {
 		s.Stock = Stock{Oil: 400, Lilac: 800}
 		Apply(s, MarkBuilding{Kind: BuildingCharger, Col: 67, Row: 60})
 		runTicks(s, 1800) // the charger rises in the first half
-		Apply(s, QueueRobot{Building: 3})
+		Apply(s, QueueRobot{Building: 3, Kind: RobotWorker})
 		runTicks(s, 1800)  // the factory's robot rolls out in the second
 		runTicks(s, 33000) // the run crosses the first swell, at cycle 18
 		return s
@@ -340,13 +494,14 @@ func TestTheSimulationReplaysTheSame(t *testing.T) {
 
 func TestTheStateSerializesRound(t *testing.T) {
 	s := newGame()
+	addWorker(s)
 	arriveAll(s)
 	col, row, _ := nearestTileOf(kindOil)
 	Apply(s, SendRobot{Col: col, Row: row})
 	s.Stock = Stock{Oil: 400, Lilac: 800}
 	Apply(s, MarkBuilding{Kind: BuildingSilo, Col: 67, Row: 60})
 	runTicks(s, 1200) // the silo rises, and joins the oil room
-	Apply(s, QueueRobot{Building: 3})
+	Apply(s, QueueRobot{Building: 3, Kind: RobotWorker})
 	runTicks(s, 1200) // the factory's robot joins the colony
 	data, err := json.Marshal(s)
 	if err != nil {
@@ -365,7 +520,7 @@ func TestIdleRobotsRestInRanksByTheCore(t *testing.T) {
 	s := newGame()
 	cx, cy := tileCenterUnits(coreCol, coreRow)
 	for len(s.Robots) < parkSlots+2 {
-		s.spawnRobot(RobotCore, cx+60, cy+60)
+		s.spawnRobot(RobotBuilder, cx+60, cy+60)
 	}
 	runTicks(s, 60*10)
 	if idle := idleRobots(s); idle != parkSlots+2 {

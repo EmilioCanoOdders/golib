@@ -54,7 +54,10 @@ The player never builds by hand. Marking is building, and building is earned: th
 3. The job joins the queue; while robots raise it, the site shows a wireframe of the body to come with its progress bar, drawn over the fog.
 4. Harvesting works the same way: mark an oil pool or a lilac vein, and robots commute between it and storage while their charge lasts.
 
-Robots are simple workers with priorities, not pathfinders of genius: the player solves the layout, the robots solve the walking.
+Robots are simple units with priorities, not pathfinders of genius: the
+player solves the layout, and the robots solve the walking. Builders and
+workers are separate roles, so a construction job never pulls a worker away
+from a deposit.
 
 When a protector site is waiting, robots build it before any other
 construction. Protectors keep their marked order, as do the remaining
@@ -157,7 +160,7 @@ Open: independent city choices and production strategies, pathfinding, cities se
 ## Architecture
 The game is a deterministic simulation first, and a picture of it second. These rules are law; every feature bends around them.
 
-1. **One serializable state.** The whole game is a single value (`State`) that serializes to JSON with no pointers, no channels, no functions. `State.Version` identifies its save schema; `enterRegion` migrates old protector records once. Entities live in ID-keyed tables (`map[int64]Entity`-style, with fixed field structs); every reference between things is an ID, like a relational database. Saving = the state's JSON into the local database (SQLite, the schema a server keeps; `golib shot --save` feeds the same value through the shot channel). Loading the state = loading the game, exactly.
+1. **One serializable state.** The whole game is a single value (`State`) that serializes to JSON with no pointers, no channels, no functions. `State.Version` identifies its save schema; `enterRegion` migrates old protector records and robot roles. Entities live in ID-keyed tables (`map[int64]Entity`-style, with fixed field structs); every reference between things is an ID, like a relational database. Saving = the state's JSON into the local database (SQLite, the schema a server keeps; `golib shot --save` feeds the same value through the shot channel). Loading the state = loading the game, exactly.
 2. **Actions in, state out (flux/redux).** Nothing mutates the state
    except reducers. Actions are serializable structs (`MarkBuilding`,
    `QueueMechanic`, `OrderSquad`, `Tick`...). `Apply(state, action) ->
@@ -193,11 +196,20 @@ static data generated from `State.Seed`, never state. `play.go` and
     filling from the bottom: a silo and charger in oil, a warehouse in
     lilac against all its roofs, and the core in both oil and lilac.
   - An expanded oil or lilac card offers `send robot` while another
-    worker can be assigned. It lists assigned workers as up to eight
-    clickable portraits per page. A portrait opens that worker's card,
+    worker can be assigned. It lists assigned units as up to eight
+    clickable portraits per page. A portrait opens that unit's card,
     wherever it is in the region; `recall robot` clears only its post,
     and `back to deposit` returns to the patch card. A robot standing
     on a cell also has its own card with what it is doing.
+  - A **robot roster button** under the squad boxes opens a panel on the
+    right. Reopen it or press its X to close. Boxed groups show builders,
+    unassigned workers, workers by deposit and mechanics; each row shows
+    the model, ID and current task. Selecting a builder or worker offers
+    `assign deposit` and, when posted, `recall`. Assignment arms the
+    pointer: click an oil pool or lilac vein to send that exact robot,
+    or right-click to cancel. This includes assigning a builder to a
+    deposit when the colony is in trouble; it carries only a third of a
+    worker's load.
   - A building's or site's card has a trash can button. Demolished
     buildings leave their cost and overflow on their cell as a pile
     with a card of its own (see [Demolition and loose items](#demolition-and-loose-items)).
@@ -245,7 +257,10 @@ screen; they never move the camera or take input.
 | Mouse right, held | Drag the view: grab the ground and move it |
 | Mouse left, on a free cell of ground | Open the build menu on that cell; picking a blueprint builds it there. Until the first schematics arrive, the click inspects the cell instead |
 | Mouse left, on the schematics badge over the core | Open the drop: the badge goes and the callout says what arrived; clicking the callout closes it, while a click elsewhere closes it and acts on the region |
-| Mouse left | Select / inspect the cell under the pointer: expand a card, press its buttons, send another robot from a deposit, or click a worker portrait to open its card and recall it individually |
+| Mouse left | Select / inspect the cell under the pointer: expand a card, press its buttons, send another robot from a deposit, or click a unit portrait to open its card and recall it individually |
+| Mouse left, on the robot roster button | Open or close the colony robot panel; its X closes it too |
+| Mouse left, on a robot in the roster | Select it; `assign deposit` arms an individual order, then click an oil pool or lilac vein to assign that robot |
+| Mouse right, after `assign deposit` | Cancel the individual assignment |
 | Mouse left, after a pump's `lay pipe` | On the ground: a bend of the pipe. On a ringed tank (silo, charger, core): the pipe's end, which marks it. On the pipe's last node: its menu (`connect` to the nearest store, `undo`, `cancel`). Right click: the menu away, the last bend back, or out of the mode |
 | Mouse left, after a war factory's `give order` | On a rival vehicle: the squad attacks its party, that vehicle first. On the ground: the squad guards that spot. Right click: the order away |
 | 1-9 | Call a squad: 1 is the first war factory raised, 2 the next. The key arms the order the same way `give order` does (one click orders, right click puts it away); the same key again takes it back. A squad's box at the top right - tank icon, unit count, the key below - calls it too |
@@ -276,21 +291,38 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - **place robots** (`DevSpawnRobot`): arms the pointer, and every left click on the region puts a built robot there, its tank full, for nothing - in the fog too, which is what it is for. The button again, or a right click, disarms it. While armed, clicks don't inspect or open the build menu.
 
 ## Rules (MVP)
-- The buildings arrive as remote schematics, one drop per valley of the difficulty saw: the robot factory with the first delivery home, infrastructure (silo, warehouse, charger) after it produces its first worker, the guard post once the scout's theft is inevitable, the frontier kit (protector, pump, pipes) at 5:30, the war factory after the introductory raid, and artillery when a rival city completes its war factory. A drop's badge waits over the core until opened; nothing unreachable is ever offered - the menu only shows what the cell could really take, and what the stores can't pay stands washed out with its shortfall boxed in red (see [Construction model](#construction-model)).
+- The robot factory's schematic waits over the core from the start. The
+  first delivered load brings infrastructure (silo, warehouse, charger);
+  the guard post comes when the scout's theft is inevitable, the frontier
+  kit (protector, pump, pipes) at 5:30, the war factory after the
+  introductory raid, and artillery when a rival city completes its war
+  factory. A drop's badge waits until opened; the menu offers only what
+  the cell could really take, and unaffordable options stand washed out
+  with their shortfall boxed in red (see [Construction model](#construction-model)).
 - One generated region, a pure function of `State.Seed` (`worldgen.go`): a gentle relief with great plains, ground cover in zones, oil pools and lilac veins that thin out toward their rims, fog everywhere else. Buildings ask for a flat cell.
-- The core starts with two robots, free of charge: one can watch the oil, the other the lilac. Robots built later will cost oil each cycle.
-- Sending is by card: expand an oil or lilac card and press send robot; the nearest free robot takes the whole deposit as its post (all busy, the nearest worker from another deposit is retasked). Repeat to assign more workers; a worker already at that deposit is never assigned twice. A vein is one thing however many tiles it spans: one card, many workers, one shared amount. Its card shows up to eight clickable robot portraits per page; each opens that worker's card, where recall removes only that robot's post. A dry deposit releases every worker still assigned to it.
-- A worker's day has its priority built in: bring home what it carries,
-  mind its tank, finish loading, raise protectors before other build jobs
-  (oldest first within each group), lay pipe, clear piles, work its own
-  post, rest by the core. A mechanic instead repairs the oldest damaged
-  building, then waits by its war factory. A trooper's day is its tank
-  and its squad's order. Idle workers go home: they line up in ranks
-  before the core's broad face, five to a rank, and close the ranks up
-  when one leaves; past ten the rest stand inside the first ones and a
-  label says how many are idle. A post that runs dry releases its worker.
-  Clearing piles of loose items sits between raising jobs and working the
-  post, and every load ends its walk at the nearest store of its kind
+- The core gives the colony one white builder, with a full oil tank. It
+  is no more immune to the fog than any other builder: empty outside a
+  bubble, it is digested. The factory builds either another builder or a
+  blue worker for the same lilac and oil cost and 12 seconds of work.
+- Builders first bring home any load they already carry and refuel when
+  low, then raise buildings and lay pipes before collecting piles or
+  working their own deposit post. Workers carry loads home, refuel, finish
+  loading, collect piles, work their assigned post and idle; they never
+  build or lay pipes. Both kinds have the same speed and tank. A builder
+  carries only one third of a worker's oil or lilac load, enough for an
+  emergency, not routine hauling. Troopers follow their squad; mechanics
+  repair the oldest damaged building and then wait at their war factory.
+- `send robot` on a deposit card assigns one unassigned worker and never
+  takes a worker from another post. The right-side roster shows builders,
+  unassigned workers, workers grouped by deposit and mechanics, with each
+  unit's current task. Select a builder or worker and assign a deposit to
+  order that exact unit; this is the explicit way to retask a builder for
+  emergency hauling. Deposit cards still show up to eight assigned-unit
+  portraits per page. A dry deposit releases its posted units.
+- Idle builders and workers return to the core and line up in ranks before
+  its broad face, five to a rank; ranks close when one leaves, and past ten
+  the rest stand inside the first ones with a count label. A post that runs
+  dry releases its units. Every load ends at the nearest store of its kind
   (warehouse or core for lilac, silo or core for oil).
 - Any building but the core can be demolished from its card, and a site cancelled. Its tasks die with it, and its whole cost, plus what the stores lose the roof for, falls on its cell as one pile of loose items that the robots haul back to the stores. A protector can't go while its current bubble is the only one over another building.
 - Rivals come for the oil, one moving party at a time: a scout four minutes in, which siphons 25 L and leaves its mark, then an introductory raid from the scout's bearing. Thirty cycles after the raid leaves, a crawler arrives and establishes a city that builds a repulsor, extractors and a war factory. The factory sends raiders first without artillery, then mobile artillery. Cities do not attack by themselves; their mobile forces do. Structures can be destroyed, wrecks drop loot, and the colony's artillery shells visible rival targets for lilac and oil (see [The rivals](#the-rivals)).
@@ -302,7 +334,7 @@ For whoever works on the game, not for the player: in the region, hold Control a
   troopers, mechanics and guard posts; a post they bring down falls into
   a pile like any building.
 - Lose nothing at the start: the core is indestructible and its bubble has no upkeep. Protector reserves are not part of the oil rivals can steal. The rivals take oil, never the game.
-- Lose units: any built worker, trooper or mechanic outside a bubble with
+- Lose units: any builder, worker or mechanic outside a bubble with
   an empty tank is digested by the fog. Rival bullets and artillery
   blasts can kill troopers and mechanics; ordinary workers are not
   targets. A lost unit leaves 25% of its build cost and remaining tank
@@ -315,13 +347,14 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - The safe zone feeds you: an oil pool and a lilac vein, the region's smallest, sit whole inside the bubble, off the core, so at least one resource of each type is minable in comfort whatever the fog does outside.
 - Guard posts, the war factory and artillery are the colony's arms, all three under a bubble like any building, all three paid in the stores the colony grows on: a post's shot in oil, a trooper in both and its shots out of its own tank, a shell in both.
 - Buildings grow the colony out of the bubble: the oil-fed shadow protector holds a small bubble of its own, and only under an active bubble may any other building stand. Silos and warehouses give the stores a bigger roof; the charger refills built robots' tanks away from the core; the factory turns lilac and oil into new robots.
-- Four unit roles: core workers are slow and free; factory workers
-  harvest and haul; war-factory troopers fight as squads; mechanics repair
-  buildings alone. Factory workers, troopers and mechanics are paid for
-  in lilac and oil. A built unit burns oil from its tank **while it
-  carries something, and at no other time** - walking out, loading and
-  resting are free -; low, it walks to the nearest charger or the core to
-  refill; at zero outside a bubble the fog digests it. The fog drags at
+- Four unit roles: builders (white) construct and lay pipes, workers
+  (blue) harvest and haul, war-factory troopers fight as squads, and
+  mechanics repair buildings. The starting builder is a gift; every
+  factory-built unit costs lilac and oil. Builders, workers and mechanics
+  burn oil from their tanks **while carrying something, and at no other
+  time**; troopers pay for their shots. Low, a tanked unit walks to the
+  nearest charger or the core to refill; empty outside a bubble, it is
+  digested, regardless of whether it is a builder or worker. Fog drags at
   every walker's pace, and the bubbles cancel it.
 - The stores have a roof (the core's own room, plus every silo and warehouse); a robot hauling into a full store waits at the core with the cargo in its arms.
 - Lose the region (later): when oil hits zero inside the bubble and no robot can reach fuel, the bubble collapses; that ends the run.
@@ -348,8 +381,8 @@ lighting. Each also has an eight-frame shadow mask rendered from its 3D
 geometry on a flat ground plane, with soft daylight from the model's light
 direction. The game paints that mask beneath its matching unit sprite; it is
 view-only and never enters the simulation. The colony silhouettes stay
-distinct: narrow ivory core scouts with warm rear lights, teal carriers with
-a raised tank and rails, and broad olive troopers with a turret and forward
+distinct: narrow ivory builders with warm rear lights, teal workers with a
+raised tank and rails, and broad olive troopers with a turret and forward
 gun. A mechanic has a service chassis, amber tool deck and raised repair
 crane, with no weapon.
 Rival scouts are small and red, raiders carry an oil drum, crawlers carry
@@ -463,10 +496,10 @@ An unprotected finished pump loses its full health over `pumpFogTicks`
 
 Pinned as code lands, all at the top of the sim files with units in the name: `fogCycleTicks`, `protectorOilPerSecond`, `robotChargeSeconds`, `robotMoveSpeed` (units/s), `oilPerPoolUnit`, `lilacPerVeinUnit`, blueprint costs. Pinned so far, in `region.go`: `regionCols`/`regionRows` (25x25 tiles), `tileW`/`tileH` (48x24 px at 2K/2), `unitsPerTile` 200 (the world's unit is a meter: a tile is 200 m across, the region 5 km; a robot is 6 u across, the core's monolith 16 u, a future building 40 u, a deposit patch of four tiles is 400 m aside), `coreBubbleRadius` 4 tiles, `fogLineRadius` 10.5 tiles, `fogFadeTiles` 2.4 tiles. In `play.go`: `zoomOut`/`zoomIn`, the wheel's stops, each twice the last: 1, 2, 4, 8, 16, 32 (stop 0 shows the whole region as icons, stop 5 about 80 m of ground; at 32 a robot's 6 u is about 46 screen px), `zoomGlide` 0.1 s (the zoom glides from stop to stop instead of jumping, keeping the point under the cursor under it; only at rest is the zoom a whole power of two), `panSpeed` 480 screen px/s, constant on the screen at every zoom; the right button drags the view, grab style. The camera is view, not state: it lives in the play scene and never serializes. In `draw.go`: `propZoom` 4, the zoom from which the rocks and bushes are drawn; they are world-sized (6 u across), so zooming in grows them from pebbles to boulders. Robots draw at their world size but never under about 3 screen px (`dotRadius`): far out, everything alive is a point, R.U.S.E.-style. The core draws as a dark monolith on its tile's middle (`drawCore`), broad face to the right, a seam of light down it and a top in the core's warm white, the part the glow filter picks; it obeys the buildings' icon law and sorts by depth among them, and its pad, the whole tile, lies on the ground under the robots. Deposits draw as one continuous body per patch - a pool as one sheet of oil, a vein as one shelf with crystal clusters over its tiles - shrinking as the patch drains, one big scar when dry. The fog's shape and speed are the feel of the game: their section is [The fog](#the-fog), and their dials are pinned, in `sim_fog.go`: `fogCycleTicks` 1800 (30 s a cycle), `fogSwellPeriod` 18 cycles (the first swell at 9 min), `fogSwellQuickener` 0.90 (each swell shortens the next calm; `fogSwellMinPeriod` 4 cycles), `fogSwellTicks` 900 (15 s) growing `fogSwellTicksGrowth` 180 apiece to `fogSwellTicksMax` 3600 (a minute), `fogSwellReach` 2.0 tiles growing `fogSwellGrowth` 0.35 apiece, capped by `fogSwellMargin` 0.75 tiles the line never takes off the bubble, `fogSwellSpeedFactor` 0.25 in the pushed band (fog that was already there keeps `fogSpeedFactor` 0.5) and `fogSwellBurn` 1.5x outside the bubbles.
 
-In `sim_tech.go`: `techFrontierTicks` 5:30 is the ladder's clock drop;
-the first delivery unlocks the factory and its first built worker unlocks
-infrastructure. `legacyTechIndustryTicks` keeps the former 7:00 factory
-trigger for migrating saves without a tech ledger. The view's
+In `sim_tech.go`: the factory blueprint is the opening drop, and the
+first delivery unlocks infrastructure. `techFrontierTicks` 5:30 is the
+frontier kit's clock drop. `legacyTechIndustryTicks` keeps the former
+7:00 factory trigger for migrating saves without a tech ledger. The view's
 `techBadgeR` is 22 px, `techPulseTicks` is 90 (one breath of the glow,
 from the state's tick) and `techCalloutW` is 280 px.
 
@@ -495,15 +528,27 @@ the old proportions, 1 by 4 by 9 - `coreSlabDeep` 4 m, `coreSlabWide`
 Each thing type gets its color from `catalog.go`, which falls back to a
 stable hash of the type name; `markup.go` colors text with `[name]...[/]`.
 In `inspect.go`, `tooltipWidth` is 290 px, `titleSize`/`textSize` are
-15/13, and `buttonWidth`/`buttonRow` are 112/22. Worker portraits use a
+15/13, and `buttonWidth`/`buttonRow` are 112/22. Deposit portraits use a
 four-column grid, eight per page, and the panel stays anchored to the
-selected cell's projected middle.
+selected cell's projected middle. `robots_panel.go` adds the fixed roster
+under the squad strip: five entries per page, grouped by role and post,
+with individual assignment and recall controls.
 
-The robots, in `sim_robots.go`: `startingRobots` 2 (the core's gift, they cost nothing yet), `robotSpeed` 30 u/s and `robotCarryOil` 30 L / `robotCarryLilac` 20 kg per trip - a fast rover that shuttles like an ant, so a worked deposit shows a constant coming and going - , `robotLoadTicks` 150 (2.5 s loading at a deposit), and the idle ranks by the core: `parkSlots` 10 places, `parkRankSize` 5 to a rank, `parkSpacing` 7 u, the first rank `parkFromCore` 10 u before the monolith's broad face. A drained patch leaves one big scar and releases its robot. The stores live in the state (`State.Stock`) with the room each roof gives them, and show in the HUD and in the core's card; the robots' captions (`things.go`) read the state in the same priority order the rules do, so the words always say what the robot is doing.
+The robots, in `sim_robots.go`: `startingBuilders` 1, `robotSpeed` 30 u/s,
+`robotCarryOil` 30 L and `robotCarryLilac` 20 kg per worker trip; a builder
+carries `builderCarryPart` one third as much. `robotLoadTicks` is 150 (2.5 s
+loading at a deposit). Builders alone raise sites and lay pipes; both roles
+can collect piles and work an explicitly assigned post. The idle ranks by
+the core use `parkSlots` 10 places, `parkRankSize` 5 to a rank,
+`parkSpacing` 7 u and `parkFromCore` 10 u before the monolith's broad face.
+A drained patch leaves one big scar and releases its assigned units. The
+stores live in the state (`State.Stock`) with the room each roof gives them,
+and show in the HUD and in the core's card; robot captions (`things.go`)
+read the current task in simulation priority order.
 
 The buildings, in `sim_buildings.go`, all landed: the ground's last subdivision is the **cell**, `buildingCell` 25 u on a side (8 by 8 to a tile, `regionCellCols`/`Rows` 200), the footprint of the smallest building - about four robots across - so buildings sit on cells and a tile may hold several. The build menu opens on the clicked cell over two rings - the build groups, then a group's blueprints - and picking a blueprint marks it there (dimmed when `canPlace` or the stores refuse it), paying lilac up front (factory 200 kg; charger 120 kg + 40 L; silo 100 kg; warehouse 100 kg; protector 180 kg + 40 L initial fuel) and asking `buildingWorkTicks` 600 (10 s) of robot work to raise; a building draws as an isometric body that never shrinks under a 9x6 screen-pixel icon, and a site under construction shows its built part rising from the ground in solid colors inside the wireframe of the whole body, the work's progress bar under the cell, all drawn over the fog, the builders standing on their cell's edge. The factory turns `robotCostLilac` 40 kg + `robotCostOil` 30 L into a robot every `factoryRobotTicks` 720 (12 s), one at a time, its card carrying the build robot button while idle. The stores' roof: `coreOilCap` 1000 L and `coreLilacCap` 2500 kg, `siloOilCap` +1000 L and `warehouseLilacCap` +4000 kg apiece, and they start with the core's gift (300 L, 600 kg). A built robot's tank: `robotTankLiters` 120 L, `robotBurnPerSecond` 0.25 L/s while it carries a load and nothing otherwise, `robotLowTankAt` 25% the line that sends it to the nearest refill post (a charger or the core, `chargerRefillPerSec` 20 L/s from the stores, filling to the top so it doesn't dance between post and charger); at zero outside a bubble the fog digests it. A shadow protector has a dedicated `protectorOilCap` 200 L tank; it starts with its 40 L construction charge and uses `protectorOilPerSecond` 0.25 L/s (provisional). Its `protectorBubbleTiles` 2.0 radius (400 m) stays full above `protectorRadiusFadeBelow` 5% charge, then fades linearly to zero. Robots and pipes refill it; its oil is reserved and can't pay other costs or be stolen. Old saves give existing protectors their starting charge once (`State.Version`). Only an active protector shelters buildings and robots; only a protector may stand outside every bubble - the fog's law in `canPlace`. The fog's drag, `fogSpeedFactor` 0.5, slows every robot, core or built, scaled by how deep its tile sits in the mist, and the bubbles cancel it. The robots carry no plan - every tick the rules derive what one does from the state (`stepRobot`), so a save reproduces its future; their positions are floats in units, the tile computed from them; deposits are patches (`Deposit` in `region.go`, flooded once out of the layout): one robot per patch, one card per patch, and what remains lives in `State.Drain` under the patch's key.
 
-The colony saves itself, in `store.go` and `identity.go`: the machine's own ID (Windows' MachineGuid, macOS' IOPlatformUUID, Linux' `/etc/machine-id`), hashed with `playerIDSalt`, is the player identity - `playerIDSalt` "niebla player id v1", 64 hex characters, shown on the menu as its first eight (`#30E99076`) and never in raw form; a machine with no ID gets a random one kept in the database. The local database is SQLite (`modernc.org/sqlite`, pure Go - no C compiler here), at the player's settings folder in `GoLib games/niebla/niebla.db`, with the schema a server keeps: `players` (identity, source, created_at, `token` empty until a server hands one out), `saves` (the whole State as one JSON value per player and slot, `region` for now, with tick and timestamp) and `machine` (key-value for this machine alone, the fallback identity lives there). Autosave every `autosaveTicks` 900 (15 s of game time) and on leaving the region, so a window closed without ceremony loses less than 15 s. Under `golib shot` and `go test` the database is `:memory:`, so shots and tests never touch the player's base, and `golib shot --save` still starts a game deep in a state: `resumeState` takes the seeded value over the database. The driver doesn't build for `js/wasm`: a web build will take its store from a server or the browser's own.
+The colony saves itself, in `store.go` and `identity.go`: the machine's own ID (Windows' MachineGuid, macOS' IOPlatformUUID, Linux' `/etc/machine-id`), hashed with `playerIDSalt`, is the player identity - `playerIDSalt` "niebla player id v1", 64 hex characters, shown on the menu as its first eight (`#30E99076`) and never in raw form; a machine with no ID gets a random one kept in the database. The local database is SQLite (`modernc.org/sqlite`, pure Go - no C compiler here), at the player's settings folder in `GoLib games/niebla/niebla.db`, with the schema a server keeps: `players` (identity, source, created_at, `token` empty until a server hands one out), `saves` (the whole State as one JSON value per player and slot, `region` for now, with tick and timestamp) and `machine` (key-value for this machine alone, the fallback identity lives there). State version 2 migrates old `core` robots into fueled builders and old `built` robots into workers, including an in-progress factory product. Autosave every `autosaveTicks` 900 (15 s of game time) and on leaving the region, so a window closed without ceremony loses less than 15 s. Under `golib shot` and `go test` the database is `:memory:`, so shots and tests never touch the player's base, and `golib shot --save` still starts a game deep in a state: `resumeState` takes the seeded value over the database. The driver doesn't build for `js/wasm`: a web build will take its store from a server or the browser's own.
 
 Demolition and loose items, in `sim_piles.go`: `demolishRefund` 1.0 (the part of the cost that falls to the ground; a site gives back the same), no work ticks to demolish, piles loaded with the deposits' `robotLoadTicks` and carry sizes, one kind per trip, lilac first. A robot never loads what the stores have no free room for, counting what is already on its way home (`freeRoom`), and unloads `storeStandoff` 11 u from its store's middle, spread by ID like the builders. State holds `Piles` (by ID: cell, oil, lilac) and `Robot.Pile` (the pile a loading robot stands at), the actions are `Demolish` (a building's ID) and `CancelJob` (a site's cell), `canPlace` refuses a cell with a pile, and the catalog has the `site` and `pile` types, primary on their tile. The robot's day is a list now (`robotDay`), the shape the per-robot task list will filter. In `inspect.go`: the trash can, `trashWidth` by `trashHeight` 11 by 13 px at the end of a card's title, red and under `demolish?` while armed.
 
@@ -519,13 +564,18 @@ Shells start `shellMuzzleOffsetUnits` 24 m ahead of their firing unit.
 Their orange trail grows to `shellTrailLengthUnits` 54 m; `shots.go` adds
 faint smoke every `shellSmokeStepUnits` 30 m, fading as it rises.
 
+Current factory production differs from the earlier implementation note
+above: its card offers `build builder` and `build worker`, at 40 kg of lilac
+and 30 L of oil apiece. The role rules and opening gift are in
+[Rules (MVP)](#rules-mvp).
+
 ## Prototype scope
 The prototype is done when these five have landed, on top of the debts under [Later](#later) (decided 2026-09-21). Each is a heading to design, not a design, until its turn comes: they are discussed and landed one at a time. Enemies and battles is under way and nearly whole; the other four are not started.
 
-The introduction note below records the first ladder from 2026-09-22. Its
-unlock order was revised on 2026-09-25: the factory arrives with the first
-delivery, and infrastructure arrives when it produces a worker. The live
-rules are in [Rules (MVP)](#rules-mvp).
+The introduction note below records the original ladder from 2026-09-22.
+Its unlock order was revised on 2026-09-25: the factory is the opening
+gift, and the first delivery brings infrastructure. The live rules are in
+[Rules (MVP)](#rules-mvp).
 
 - **Enemies and battles.** The swell is pressure, but it is only weather: resources should also buy war. **Under way**: the design and what has landed are in [The rivals](#the-rivals). Decided (2026-09-21): no walls, ever, and war that is good to watch, R.U.S.E.-style (artillery, an enemy that builds a base in the region); a repulsor repels the fog and nothing else; rivals steal, and later destroy; they ride vehicles under a crawler's mobile repulsor, which is never usable loot; wrecks drop loot; many kinds in time, humans for now; positioning is coarse - posts (preventive) and small squads, never units placed by hand one by one; an enemy that settles is a warning with a clock, and a head-on attack is at a disadvantage. Landed: the scout and its mark, the camped raids, the fog's due, loot, the guard post, the war factory and its squad, rivals that shoot back at troopers, the settled enemy and its gun, buildings that fall and are mended, the colony's artillery, bullets and shells with their light and their bursts.
 - **Economy analysis and balance.** Times, yields, costs and rates looked at as one system, so that the decisions are interesting instead of obvious: how long a deposit lasts, what a robot pays back and when, what a pipe saves against the legs it replaces, what a swell costs. `economy_test.go` is the first instrument: it plays the real, deterministic simulation for an hour over three seeds and records each minute in CSV. It compares safe harvesting, worker growth and a protected oil outpost with a pump, pipe and guard; it does not duplicate the rules in a spreadsheet. The first report (2026-09-22) says two core robots bring about 60 L and 40 kg a minute from the safe patches; the core oil tank fills around minute 13 and its lilac store around minute 44. The outpost opening reaches its protector around minute 2, pump around minute 5, guard around minute 11 and laid pipe around minute 17, so those are measured hypotheses, not tuning targets yet. Next reports change one dial or opening policy at a time, and compare the times to each milestone, reserves, resources mined, losses and whether the player had a usable answer before the threat. What remains deliberately unbalanced (2026-09-22): every dial of [The rivals](#the-rivals) was set by eye, a level 2 base razes a small outpost in a few minutes, and oil got much cheaper the day the tank stopped burning while a robot walks empty-handed. Reference: [Difficulty curves](https://www.davetech.co.uk/difficultycurves) (Dave Tech) - the **difficulty saw**: difficulty is not one rising line but a tooth per mechanic, a spike when it is introduced and a slope down as it is mastered, and later mechanics call back to earlier ones as foundations. It bears on the economy (the swells' growth is the base line the teeth ride on) and on the introduction below (the order of the unlocks is the order of the teeth).
@@ -544,16 +594,6 @@ rules are in [Rules (MVP)](#rules-mvp).
   a raid so it typically destroys about two vehicles before going down,
   with positioning, repairs and numbers still able to change the result.
   A post should buy time, not make the next raid safe to ignore.
-- **Debt - micromanaging robots**, the remaining complaints from play
-  (2026-09-21), to design together with the task list below:
-  - A robot can't be clicked and told otherwise: no direct order that
-    overrides its day (go there, come home, drop that). Squads are the
-    first direct orders in the game (a war factory's `give order`), and
-    their pointer mode is the shape a worker's order could take.
-  - There is no colony-wide roster. Deposit cards now show their assigned
-    workers as clickable portraits and expose each worker's task and tank;
-    a global list of all robots remains to be designed.
-- **Debt, for the UI pass - a task list per robot:** robots stay generalists, jacks of all trades (decided 2026-09-21, against Ixion-style specialist workers): the fog eats robots, so a lost one must cost capacity, never a hole in a chain, and two starting robots can't afford trades. The price of generalists is the swarm - today every robot drops its post for the oldest build job, and piles will pull them the same way - so the player needs control: each robot's card lists the lines of the robot's day (build, clear piles, work a post...) and the player turns them on and off, which makes a specialist a policy instead of a model. The list is state, not view (it changes the sim's future): a field on `Robot`, set by an action (`SetRobotTasks`), read by `stepRobot` as a filter over its priority order. If robots ever differ, it is by chassis (tank, speed, carry - an expedition rover), not by trade.
 - **Debt - the relief doesn't slow anybody** (2026-09-21): the generated ground is looks and building ground only, and robots walk it at their one speed. A robot should go slower uphill (and perhaps no faster downhill), by the slope under it along its way: `Region.heightAt` gives the height at both ends of a step, and `walkTowards` in `sim_robots.go` is where the factor goes, beside the fog's drag. It moves hauls' timings, so the tests that count ticks on seed 0 will need a look.
 - **The arc (mid-game):** stabilizing the first region summons the ark, the mobile base - the game's own idea, arriving as a reward. By then the fog deepens too slowly to feel in an hour of play: a region is a chapter, not a home.
 - **Expeditions:** sending a robot into the deep fog as adventure - richer finds, ruins, beacons, the fog's origin; the fear and the loot of the mist.
@@ -568,7 +608,14 @@ rules are in [Rules (MVP)](#rules-mvp).
   one minute from founding; later city reports keep the 15-second lifetime.
   The deadline is saved with the city, so loading an older city does not
   announce it again. Pinned by `cities_test.go` and `guides_test.go`.
-<<<<<<< HEAD
+- 2026-09-25: builders and workers are distinct unit roles. The colony
+  starts with a vulnerable, fueled builder; the factory schematic is the
+  opening drop, and the first delivered load brings infrastructure. Only
+  builders build and lay pipes, while workers stay on their posts; builders
+  carry a third as much and can be assigned to deposits in an emergency.
+  A roster under the squad strip groups units by role and deposit, shows
+  their current task, and assigns or recalls an individual by ID. Old saves
+  migrate former core robots to builders and built robots to workers.
 - 2026-09-25: pipe bands show each source's offered flow as orange length,
   with 90% orange at a pump's full 2 L/s; their phase follows liters moved,
   so a sink's limit slows them and a blocked pipe turns gray. Protectors
@@ -578,21 +625,15 @@ rules are in [Rules (MVP)](#rules-mvp).
   `Pipe.Moved` are saved for deterministic drawing and replay. Pinned by
   `pipes_test.go`, including filling before pass-through, the thinning
   protector chain, equal pump shares and flow-phase persistence.
-=======
 - 2026-09-25: pumps can now be marked on outside oil pools without a
   protector. Once raised, an exposed pump is swarmed by mites and digested
   in ten seconds, leaving half its cost as a pile and a news plate that
   explains why; a protector over the pool stops the damage. The second
   pool's button, exposure, shelter and report have simulation tests, and
   shots check the swarm and the aftermath.
->>>>>>> d69071e (niebla: watch the mites erupt after eating your pump)
-- 2026-09-25: the first delivered haul now brings the robot factory;
-  infrastructure follows the first worker it produces. The opening can
-  grow its workforce during the wait for the first scout instead of
-  waiting for a factory schematic at 7:00. The old clock trigger remains
-  only to migrate saves with no tech ledger. A deterministic opening test
-  measures delivery, factory, worker and infrastructure against the
-  scout's four-minute arrival.
+- Earlier opening ladder (superseded 2026-09-25): a delivered haul brought
+  the factory, and its first worker brought infrastructure. This is kept
+  here as history; the current order is described under Rules (MVP).
 - 2026-09-24: the schematics callout shows what a drop brings as squares,
   in the likeness of the workers' portraits a deposit's card holds: the
   rendered icon of each construction above and its name below, one square

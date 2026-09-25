@@ -360,7 +360,7 @@ func TestArtilleryShellsWhatTheColonySeesAndCityNexusFalls(t *testing.T) {
 	}
 	// A spotter within sight of the Nexus, and the shells fly.
 	sx, sy := towardCore(core.X, core.Y, sightUnits*0.8)
-	s.spawnRobot(RobotCore, sx, sy)
+	s.spawnRobot(RobotBuilder, sx, sy)
 	spotter := s.NextID - 1
 	keep := func() {
 		r := s.Robots[spotter]

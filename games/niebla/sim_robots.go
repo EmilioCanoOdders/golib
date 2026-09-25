@@ -5,19 +5,20 @@ import (
 	"sort"
 )
 
-// Tuning: the robots' numbers, with units in the name. The core's own
-// robots work for nothing and never run dry; the factory's (see
-// sim_buildings.go for their cost) burn oil from a tank and answer to
-// the fog. A robot is a small, fast rover, 6 u across: it shuttles like
-// an ant, carrying a little and coming back for more, so a worked
-// deposit shows a constant coming and going.
+// Tuning: the robots' numbers, with units in the name. The colony starts
+// with one free builder; factory-built builders and workers cost oil and
+// lilac. Every role has a tank and answers to the fog. A robot is a small,
+// fast rover, 6 u across: it shuttles like an ant, carrying a little and
+// coming back for more, so a worked deposit shows a constant coming and
+// going.
 const (
-	startingRobots = 2 // robots the core starts with
+	startingBuilders = 1 // builder the core gives the colony
 
-	robotSpeed      = 30.0 // units (m) per second
-	robotLoadTicks  = 150  // ticks of loading at a deposit: 2.5 s
-	robotCarryOil   = 30.0 // liters per trip
-	robotCarryLilac = 20.0 // kilograms per trip
+	robotSpeed       = 30.0      // units (m) per second
+	robotLoadTicks   = 150       // ticks of loading at a deposit: 2.5 s
+	robotCarryOil    = 30.0      // liters per worker trip
+	robotCarryLilac  = 20.0      // kilograms per worker trip
+	builderCarryPart = 1.0 / 3.0 // fraction of a worker's load
 
 	// Idle robots rest by the core, lined up in ranks before its broad
 	// face. Past parkSlots of them the ranks are full: the rest stand
@@ -36,9 +37,9 @@ const (
 
 // stepSim moves the world one tick forward: the weather, the factories,
 // pipes, protector upkeep, rivals and guard posts, then robots in ID order,
-// so the outcome never depends on map iteration. A built robot empty of oil
-// outside every bubble is digested by the fog and leaves a quarter of each
-// resource in a wreck: its cost and onboard resources.
+// so the outcome never depends on map iteration. A tanked robot empty of
+// oil outside every bubble is digested by the fog and leaves a quarter of
+// each resource in a wreck: its cost and onboard resources.
 func stepSim(s *State) {
 	stepTech(s)
 	stepFog(s)
@@ -97,13 +98,9 @@ const (
 	taskIdle    = "idle"    // stand by the core
 )
 
-// robotDay is the robot's day, in priority order: the first line that
-// claims the robot owns its tick. It brings home what it carries, minds
-// its tank, gives mechanics their repair work, finishes loading, raises
-// protector jobs before other build jobs, picks up what lies on the
-// ground before digging more, works its own post, and otherwise idles by
-// the core. A robot arriving home builds first and returns to its own
-// task after, exactly as the design asks.
+// robotDay is the general task order. Builders alone can claim the build
+// line; workers skip it, so marking construction never pulls them from
+// their posts. The first line that claims a robot owns its tick.
 var robotDay []robotTask
 
 // Idling asks what the other robots are at, which reads the day back:
@@ -226,7 +223,7 @@ func (r *Robot) stepLoad(s *State) {
 }
 
 func (r *Robot) building(s *State) bool {
-	if r.Kind == RobotCombat || r.Kind == RobotRepair {
+	if r.Kind != RobotBuilder {
 		return false
 	}
 	if _, _, hasJob := priorityJob(s); hasJob {
@@ -303,7 +300,8 @@ func (r *Robot) stepCollect(s *State) {
 }
 
 func (r *Robot) posted(s *State) bool {
-	return r.hasPost() && remainingAt(s, r.PostCol, r.PostRow) > 0
+	return (r.Kind == RobotBuilder || r.Kind == RobotWorker) &&
+		r.hasPost() && remainingAt(s, r.PostCol, r.PostRow) > 0
 }
 
 func (r *Robot) stepPost(s *State) {
@@ -312,6 +310,20 @@ func (r *Robot) stepPost(s *State) {
 		r.WorkTicks = robotLoadTicks
 		r.Pile = 0
 	}
+}
+
+func robotCarryCapacity(r Robot, cargo ThingType) float64 {
+	capacity := 0.0
+	switch cargo {
+	case TypeOil:
+		capacity = robotCarryOil
+	case TypeLilac:
+		capacity = robotCarryLilac
+	}
+	if r.Kind == RobotBuilder {
+		capacity *= builderCarryPart
+	}
+	return capacity
 }
 
 // postSpot returns a worker's loading place beside the deposit's richest
@@ -450,9 +462,9 @@ func (s *State) takeLoad(r *Robot) {
 	}
 	key := depositKey(d)
 	remaining := s.Drain[key]
-	capacity := robotCarryLilac
+	capacity := robotCarryCapacity(*r, TypeLilac)
 	if d.Kind == kindOil {
-		capacity = robotCarryOil
+		capacity = robotCarryCapacity(*r, TypeOil)
 	}
 	take := math.Min(capacity, remaining)
 	if take <= 0 {
@@ -581,34 +593,19 @@ func postRobots(s *State, col, row int) []Robot {
 	return robots
 }
 
-// pickRobot chooses a worker not already assigned to this deposit: a free
-// robot if there is one, else the one whose walk is shortest; IDs break ties.
+// pickRobot chooses the first unassigned worker. SendRobot never retasks
+// an existing post or assigns a builder implicitly.
 func pickRobot(s *State, col, row int) int64 {
-	cx, cy := tileCenterUnits(col, row)
-	want, ok := depositAt(col, row)
+	_, ok := depositAt(col, row)
 	if !ok {
 		return -1
 	}
-	best := int64(-1)
-	bestFree, bestDist := false, 0.0
 	for _, id := range sortedRobotIDs(s) {
 		r := s.Robots[id]
-		if r.Kind == RobotCombat || r.Kind == RobotRepair {
+		if r.Kind != RobotWorker || r.hasPost() {
 			continue
 		}
-		if r.hasPost() {
-			if d, found := depositAt(r.PostCol, r.PostRow); found && d == want {
-				continue
-			}
-		}
-		free := !r.hasPost()
-		d := math.Hypot(r.X-cx, r.Y-cy)
-		closer := best < 0 ||
-			(free && !bestFree) ||
-			(free == bestFree && d < bestDist)
-		if closer {
-			best, bestFree, bestDist = id, free, d
-		}
+		return id
 	}
-	return best
+	return -1
 }

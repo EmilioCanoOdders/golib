@@ -68,7 +68,9 @@ var (
 
 func robotModel(kind RobotKind) worldSprite {
 	switch kind {
-	case RobotBuilt:
+	case RobotBuilder:
+		return coreWorkerModel
+	case RobotWorker:
 		return carrierModel
 	case RobotCombat:
 		return trooperModel

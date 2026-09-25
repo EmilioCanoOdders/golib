@@ -151,7 +151,7 @@ func TestASwellBurnsTanksFasterOutside(t *testing.T) {
 	// load stays in its arms.
 	s.Stock.Lilac = lilacCap(s)
 	loaded := func(x, y float64) int64 {
-		r := s.Robots[s.spawnRobot(RobotBuilt, x, y)]
+		r := s.Robots[s.spawnRobot(RobotWorker, x, y)]
 		r.Carry, r.Cargo = robotCarryLilac, TypeLilac
 		s.Robots[r.ID] = r
 		return r.ID
@@ -183,7 +183,7 @@ func TestASwellBurnsTanksFasterOutside(t *testing.T) {
 	}
 	// Empty hands burn nothing, anywhere.
 	id3 := s.NextID
-	s.spawnRobot(RobotBuilt, x, y)
+	s.spawnRobot(RobotWorker, x, y)
 	runTicks(s, 60)
 	if got := s.Robots[id3].Tank; got != robotTankLiters {
 		t.Errorf("an empty-handed robot's tank holds %v L after a swell's second, want it whole", got)

@@ -64,6 +64,7 @@ func TestAWarFactoryBuildsItsSquadAndNoMore(t *testing.T) {
 			delete(s.Robots, id)
 		}
 	}
+	addWorker(s)
 	Apply(s, MarkBuilding{Kind: BuildingSilo, Col: col + 3, Row: row})
 	s.dropPile(col+5, row, 0, 50)
 	oilCol, oilRow, _ := nearestTileOf(kindOil)
@@ -73,8 +74,10 @@ func TestAWarFactoryBuildsItsSquadAndNoMore(t *testing.T) {
 		t.Errorf("%d jobs and %d piles left, want the troopers to touch neither",
 			len(s.Jobs), len(s.Piles))
 	}
-	if len(postRobots(s, oilCol, oilRow)) > 0 {
-		t.Errorf("a trooper took a post")
+	for _, robot := range postRobots(s, oilCol, oilRow) {
+		if robot.Kind == RobotCombat {
+			t.Errorf("trooper %d took a deposit post", robot.ID)
+		}
 	}
 }
 

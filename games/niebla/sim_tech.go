@@ -11,9 +11,9 @@ package main
 // exactly what it has earned; only "opened" is written down, in
 // State.Tech, so a save with the badge unclicked keeps it.
 
-// Tuning: the frontier kit's clock drop sits in the calm before the first
-// raid. The first delivery brings the factory; its first worker brings
-// infrastructure. The guard post answers the scout's inevitable theft.
+// Tuning: the factory blueprint is the opening gift. The first delivery
+// brings logistics. The frontier kit's clock drop sits in the calm before
+// the first raid; the guard post answers the scout's inevitable theft.
 const (
 	techFrontierTicks       = 5*60*60 + 30*60 // mid-valley, before the first raid
 	legacyTechIndustryTicks = 7 * 60 * 60     // old saves' factory unlock
@@ -44,9 +44,9 @@ type techDrop struct {
 // LayPipe asks for the frontier drop by name.
 var techLadder = []techDrop{
 	{techIndustryID, []BuildingKind{BuildingFactory},
-		func(s *State) bool { return s.Deliveries > 0 }},
+		func(s *State) bool { return true }},
 	{techInfraID, []BuildingKind{BuildingSilo, BuildingWarehouse, BuildingCharger},
-		hasBuiltWorker},
+		func(s *State) bool { return s.Deliveries > 0 }},
 	{techGuardID, []BuildingKind{BuildingGuard},
 		func(s *State) bool {
 			if len(s.Marks) > 0 {
@@ -76,7 +76,7 @@ var techLadder = []techDrop{
 
 func hasBuiltWorker(s *State) bool {
 	for _, id := range sortedRobotIDs(s) {
-		if s.Robots[id].Kind == RobotBuilt {
+		if s.Robots[id].Kind == RobotWorker {
 			return true
 		}
 	}

@@ -670,7 +670,7 @@ func TestRobotsCarryOilToATankWithRoomAndRefillFromTheirPost(t *testing.T) {
 	// A dry charger sends a thirsty robot on to a post with oil.
 	charger := raised(t, s, BuildingCharger, col+3, row)
 	cx, cy := cellCenterUnits(charger.Col, charger.Row)
-	thirsty := Robot{Kind: RobotBuilt, X: cx + 5, Y: cy, Tank: 10}
+	thirsty := Robot{Kind: RobotWorker, X: cx + 5, Y: cy, Tank: 10}
 	if got := refuelTank(s, thirsty); got != coreTank {
 		t.Errorf("a robot by a dry charger refills at tank %d, want the core", got)
 	}
@@ -845,8 +845,7 @@ func TestPipesSurviveASave(t *testing.T) {
 	}
 	legacy.enterRegion()
 	runTicks(&legacy, 1)
-	if p := legacy.Pipes[p.ID];
-		math.Abs(p.Offered-pumpLitersPerSecond/60) > 1e-9 ||
+	if p := legacy.Pipes[p.ID]; math.Abs(p.Offered-pumpLitersPerSecond/60) > 1e-9 ||
 		math.Abs(p.Flow-pumpLitersPerSecond/60) > 1e-9 ||
 		math.Abs(p.Moved-p.Flow) > 1e-9 {
 		t.Errorf("an old pipe didn't resume with fresh flow data: %+v", p)
@@ -865,6 +864,7 @@ func TestPipesSurviveASave(t *testing.T) {
 
 func TestAPumpAndItsSiteBelongOnlyToTheirCell(t *testing.T) {
 	s := newGame()
+	addWorker(s)
 	seedStock(s)
 	arriveAll(s)
 	d := safePool(t)
@@ -1005,6 +1005,9 @@ func TestAPumpAndItsSiteBelongOnlyToTheirCell(t *testing.T) {
 
 func TestRobotsLayAPipeASectionEachAndStandByIt(t *testing.T) {
 	s := newGame()
+	x, y := parkSlot(1)
+	s.spawnRobot(RobotBuilder, x, y)
+	workerID := addWorker(s)
 	seedStock(s)
 	arriveAll(s)
 	pump := pumpOn(t, s, safePool(t))
@@ -1025,6 +1028,9 @@ func TestRobotsLayAPipeASectionEachAndStandByIt(t *testing.T) {
 	}
 	if first.Section == second.Section {
 		t.Errorf("both robots claimed section %d, want one each", first.Section)
+	}
+	if worker := s.Robots[workerID]; worker.Pipe != 0 || worker.Section != 0 {
+		t.Errorf("worker %d claimed pipe work: %+v", workerID, worker)
 	}
 	path, _ := pipeSpine(s, p)
 	mine := pointGap(PipePoint{first.X, first.Y}, sectionSpot(path, first.Section))

@@ -48,7 +48,8 @@ const (
 const (
 	buttonSend          = "send robot"
 	buttonRecall        = "recall robot"
-	buttonBuildRobot    = "build robot"
+	buttonBuildBuilder  = "build builder"
+	buttonBuildWorker   = "build worker"
 	buttonTrooper       = "build trooper"
 	buttonMechanic      = "build mechanic"
 	buttonOrder         = "give order"
@@ -242,7 +243,20 @@ func tooltipLayoutForThings(
 		}
 		if thing.Type == TypeFactory {
 			if b, ok := s.Buildings[thing.Ref]; ok && b.Work <= 0 {
-				t.rows = append(t.rows, tooltipRow{thing: thing, button: buttonBuildRobot})
+				lilac, oil, _, _ := robotProduction(RobotBuilder)
+				t.rows = append(t.rows,
+					tooltipRow{
+						thing: thing, button: buttonBuildBuilder,
+						note: "[dim]" + costWords(lilac, oil) + "[/]",
+					},
+				)
+				lilac, oil, _, _ = robotProduction(RobotWorker)
+				t.rows = append(t.rows,
+					tooltipRow{
+						thing: thing, button: buttonBuildWorker,
+						note: "[dim]" + costWords(lilac, oil) + "[/]",
+					},
+				)
 			}
 			continue
 		}

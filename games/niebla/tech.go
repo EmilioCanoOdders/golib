@@ -159,8 +159,8 @@ func techWords(id string) (title, body string) {
 	switch id {
 	case techInfraID:
 		return "infrastructure",
-			"Silos hold oil, warehouses hold lilac, and " +
-				"chargers refill worker tanks."
+			"Your first delivered load brings silos, warehouses and " +
+				"chargers."
 	case techGuardID:
 		return "guard post",
 			"They are at the tanks: the mark they leave is their claim. A guard post would stop the next visit."
@@ -169,7 +169,8 @@ func techWords(id string) (title, body string) {
 			"Grow the safe ground and draw oil without legs. Pipes come with them."
 	case techIndustryID:
 		return "robot factory",
-			"Build it on clear ground, then use its card to build a robot."
+			"The builder is a gift from the core. Build this factory to " +
+				"choose builders or workers."
 	case techMobileID:
 		return "war factory",
 			"Troopers are its squad. Keys 1-9 give the order."

@@ -28,10 +28,9 @@ func (Tick) apply(s *State) {
 	stepSim(s)
 }
 
-// SendRobot sends a robot to work a deposit tile: the tile becomes its
-// post. The nearest free robot takes it; when every robot already has a
-// post, the nearest one working elsewhere is retasked. It does nothing for
-// a tile that holds no deposit, a dry one, or a deposit with no spare robot.
+// SendRobot sends a free worker to a deposit tile: the tile becomes its
+// post. It never retasks a worker that already has one. Builders can be
+// assigned only through AssignRobot, by ID.
 type SendRobot struct {
 	Col int
 	Row int
@@ -55,7 +54,7 @@ func (a SendRobot) apply(s *State) {
 }
 
 // RecallRobot takes one robot's post away, which finishes any carry it
-// holds and then idles by the core.
+// holds and then returns to its role's ordinary work.
 type RecallRobot struct {
 	ID int64
 }
@@ -66,6 +65,29 @@ func (a RecallRobot) apply(s *State) {
 		return
 	}
 	r.clearPost()
+	s.Robots[r.ID] = r
+}
+
+// AssignRobot sends one chosen builder or worker to a deposit tile. It
+// leaves cargo in transit intact and cancels any unfinished loading.
+type AssignRobot struct {
+	ID       int64
+	Col, Row int
+}
+
+func (a AssignRobot) apply(s *State) {
+	r, ok := s.Robots[a.ID]
+	if !ok || (r.Kind != RobotBuilder && r.Kind != RobotWorker) {
+		return
+	}
+	kind := tileAt(a.Col, a.Row)
+	if (kind != kindOil && kind != kindLilac) ||
+		remainingAt(s, a.Col, a.Row) <= 0 {
+		return
+	}
+	r.PostCol, r.PostRow = a.Col, a.Row
+	r.WorkTicks, r.Pile = 0, 0
+	r.Pipe, r.Section = 0, 0
 	s.Robots[r.ID] = r
 }
 
@@ -102,13 +124,17 @@ func (a MarkBuilding) apply(s *State) {
 // pay, leave it as it is.
 type QueueRobot struct {
 	Building int64 // the factory's entity ID
+	Kind     RobotKind
 }
 
 func (a QueueRobot) apply(s *State) {
 	b, ok := s.Buildings[a.Building]
-	kind, _, _, _, builds := robotWorks(b.Kind)
-	if !ok || !builds {
+	if !ok {
 		return
+	}
+	kind := a.Kind
+	if kind == "" {
+		kind, _, _, _, _ = robotWorks(b.Kind)
 	}
 	queueUnit(s, b.ID, kind)
 }
@@ -429,7 +455,7 @@ func (a DevSpawnRobot) apply(s *State) {
 		a.X >= regionCols*unitsPerTile || a.Y >= regionRows*unitsPerTile {
 		return
 	}
-	s.spawnRobot(RobotBuilt, a.X, a.Y)
+	s.spawnRobot(RobotWorker, a.X, a.Y)
 }
 
 // DevNextTech makes the next drop of the ladder arrive at once, whether

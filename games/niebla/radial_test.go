@@ -153,18 +153,12 @@ func TestRadialGoesBackARingAndThenCloses(t *testing.T) {
 	}
 }
 
-// The menu only offers what the cell could take: a fresh colony's rings
-// are empty, the factory arrives first, then infrastructure after a
-// worker exists, and the guard post answers the scout. The stores are not
-// part of the offer: what they can't pay stands on its ring washed out.
+// The menu only offers what the cell could take: the factory is the
+// opening blueprint, the first delivery brings infrastructure, and the
+// guard post answers the scout. The stores are not part of the offer.
 func TestTheRadialOnlyOffersWhatArrived(t *testing.T) {
 	s := newPlayScene(newGame())
 	s.openRadial(104, 96)
-	if groups := radialGroupLayout(s); len(groups) != 0 {
-		t.Fatalf("a fresh colony's menu offers %d groups, want none", len(groups))
-	}
-	Apply(s.state, DevNextTech{})
-	runTicks(s.state, 1)
 	groups := radialGroupLayout(s)
 	if len(groups) != 1 || groups[0].group != groupIndustry {
 		t.Fatalf("the factory alone shows %d groups, want industry only",
@@ -208,9 +202,7 @@ func TestTheRadialOnlyOffersWhatArrived(t *testing.T) {
 	if !leaves[0].afford {
 		t.Error("the guard post reads as unaffordable over full stores")
 	}
-	worker := s.state.Robots[1]
-	worker.Kind = RobotBuilt
-	s.state.Robots[worker.ID] = worker
+	s.state.Deliveries = 1
 	runTicks(s.state, 1)
 	groups = radialGroupLayout(s)
 	if len(groups) != 3 || groups[2].group != groupLogistics {

@@ -24,7 +24,7 @@ const (
 
 	buildingWorkTicks = 600 // ticks of robot work to raise any building: 10 s
 
-	// The factory's robots: lilac and oil apiece, 12 s of work each.
+	// The factory's builders and workers: lilac and oil apiece, 12 s of work.
 	robotCostLilac    = 40.0 // kg
 	robotCostOil      = 30.0 // L
 	factoryRobotTicks = 720  // ticks to build one robot
@@ -333,7 +333,7 @@ func refuelSpot(s *State, r Robot) (x, y float64) {
 func robotWorks(kind BuildingKind) (robot RobotKind, lilac, oil float64, ticks int64, ok bool) {
 	switch kind {
 	case BuildingFactory:
-		return RobotBuilt, robotCostLilac, robotCostOil, factoryRobotTicks, true
+		return RobotWorker, robotCostLilac, robotCostOil, factoryRobotTicks, true
 	case BuildingWarFactory:
 		return RobotCombat, trooperCostLilac, trooperCostOil, trooperBuildTicks, true
 	}
@@ -342,7 +342,7 @@ func robotWorks(kind BuildingKind) (robot RobotKind, lilac, oil float64, ticks i
 
 func robotProduction(kind RobotKind) (lilac, oil float64, ticks int64, ok bool) {
 	switch kind {
-	case RobotBuilt:
+	case RobotBuilder, RobotWorker:
 		return robotCostLilac, robotCostOil, factoryRobotTicks, true
 	case RobotCombat:
 		return trooperCostLilac, trooperCostOil, trooperBuildTicks, true
@@ -355,7 +355,7 @@ func robotProduction(kind RobotKind) (lilac, oil float64, ticks int64, ok bool) 
 func canProduce(b Building, kind RobotKind) bool {
 	switch b.Kind {
 	case BuildingFactory:
-		return kind == RobotBuilt
+		return kind == RobotBuilder || kind == RobotWorker
 	case BuildingWarFactory:
 		return kind == RobotCombat || kind == RobotRepair
 	}

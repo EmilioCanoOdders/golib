@@ -6,7 +6,7 @@ import "math"
 // creeps toward the core, and the colony never maintains a wall of
 // repulsors - conflict is temporal, not positional. Whole cycles of
 // calm pass; then a swell rises for a while: the line presses in, the
-// pushed band drags harder, and built robots outside a bubble burn
+// pushed band drags harder, and tanked robots outside a bubble burn
 // their tanks faster. Each swell leaves the next one sooner, longer
 // and deeper, but the bubbles never give an inch, and no ground is
 // lost for good.
@@ -36,7 +36,7 @@ const (
 	fogSwellRampTicks = 300 // ticks the line takes to press in, and to let go: 5 s
 
 	fogSwellSpeedFactor = 0.25 // speed left in the pushed band; fog that was already there keeps fogSpeedFactor
-	fogSwellBurn        = 1.5  // a built robot's tank burn outside a bubble
+	fogSwellBurn        = 1.5  // tanked units' burn outside a bubble
 )
 
 // stepFog moves the weather one tick forward: the swell drains tick by

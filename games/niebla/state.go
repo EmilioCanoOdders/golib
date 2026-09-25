@@ -39,7 +39,7 @@ type State struct {
 	Tech       map[string]bool    // the schematics that arrived: drop ID -> opened (sim_tech.go)
 }
 
-const stateVersion = 1
+const stateVersion = 2
 
 // Fog is the region's weather, where the fog's breath has got to. The
 // swell rises at a cycle's end and drains tick by tick; NextIn counts
@@ -63,34 +63,29 @@ type Stock struct {
 	Lilac float64 // kilograms
 }
 
-// RobotKind says where a robot comes from: the core's own slow workers,
-// free and without a tank, or the ones the factory builds, which burn
-// oil from a tank and are digested by the fog when it runs dry outside
-// a bubble.
+// RobotKind says which role a colony unit has: builders construct, workers
+// harvest, combat units fight in squads, and repair units mend buildings.
 type RobotKind string
 
 const (
-	RobotCore  RobotKind = "core"
-	RobotBuilt RobotKind = "built"
-	// RobotCombat is a trooper, a war factory's: a built robot on a combat
-	// chassis, which does no work and follows its squad (sim_squads.go).
+	RobotBuilder RobotKind = "builder"
+	RobotWorker  RobotKind = "worker"
+	// RobotCombat is a war-factory trooper, which follows its squad.
 	RobotCombat RobotKind = "combat"
-	// RobotRepair is a war factory's mechanic: a vulnerable unit that
-	// repairs damaged colony buildings (sim_robots.go).
+	// RobotRepair is a mechanic that repairs damaged colony buildings.
 	RobotRepair RobotKind = "repair"
 )
 
-// Robot is one worker. It carries no plan: every tick the rules (see
-// sim_robots.go) derive what it does from the state, so a save reproduces
-// its future. What it claims - a section of pipe to lay - is state too,
-// since the other robots read it. Its post is one tile of a deposit patch, and working it
-// drains the whole patch.
+// Robot is one colony unit. Builders raise buildings and lay pipes;
+// workers mine deposits. Their current task is derived from state every
+// tick, so a save reproduces its future. What a robot claims - a post or a
+// pipe section - is state too, since the other robots read it.
 type Robot struct {
 	ID        int64
-	Kind      RobotKind // core or built
+	Kind      RobotKind // builder, worker, combat or repair
 	X, Y      float64   // position, in units (1 u = 1 m)
 	Facing    uint8     // screen-facing octant; zero points right
-	Tank      float64   // liters of oil left; core robots carry none
+	Tank      float64   // liters of oil left
 	PostCol   int       // the tile of the patch it was sent to; -1 when free
 	PostRow   int       //
 	WorkTicks int64     // ticks of loading left at its post
@@ -106,10 +101,9 @@ type Robot struct {
 	Aim       int64     // troopers: the vehicle the last shot went to
 }
 
-// tanked reports whether the robot runs on a tank of oil: every robot
-// but the core's own.
+// tanked reports whether the robot runs on a tank of oil.
 func (r Robot) tanked() bool {
-	return r.Kind != RobotCore
+	return r.Kind != ""
 }
 
 // BuildingKind names one of the structures the colony can raise. The
@@ -186,9 +180,8 @@ func newGame() *State {
 	return newGameOn(defaultSeed)
 }
 
-// newGameOn deals the starting region a seed generates: every deposit
-// full, the starting robots idle by the core, and the core's gift in the
-// stores.
+// newGameOn deals the starting region a seed generates: every deposit is
+// full, one fueled builder idles by the core, and the core gives its stores.
 func newGameOn(seed int64) *State {
 	useRegion(seed)
 	s := &State{
@@ -209,14 +202,13 @@ func newGameOn(seed int64) *State {
 		Drain:     map[string]float64{},
 		Stock:     Stock{Oil: startingStockOil, Lilac: startingStockLilac},
 		Fog:       Fog{CycleLeft: fogCycleTicks, NextIn: fogSwellPeriod},
+		Tech:      map[string]bool{techIndustryID: false},
 	}
 	for _, d := range land.deposits {
 		s.Drain[depositKey(d)] = depositFull(d)
 	}
-	for i := 0; i < startingRobots; i++ {
-		x, y := parkSlot(i)
-		s.spawnRobot(RobotCore, x, y)
-	}
+	x, y := parkSlot(0)
+	s.spawnRobot(RobotBuilder, x, y)
 	return s
 }
 
@@ -241,13 +233,33 @@ func (s *State) migrateState() {
 	if s.Version >= stateVersion {
 		return
 	}
+	if s.Version < 1 {
+		for _, id := range sortedBuildingIDs(s) {
+			b := s.Buildings[id]
+			if b.Kind != BuildingProtector || b.Oil > 0 {
+				continue
+			}
+			b.Oil = protectorCostOil
+			s.Buildings[id] = b
+		}
+	}
+	for _, id := range sortedRobotIDs(s) {
+		r := s.Robots[id]
+		switch string(r.Kind) {
+		case "core":
+			r.Kind = RobotBuilder
+			r.Tank = robotTankLiters
+		case "built":
+			r.Kind = RobotWorker
+		}
+		s.Robots[id] = r
+	}
 	for _, id := range sortedBuildingIDs(s) {
 		b := s.Buildings[id]
-		if b.Kind != BuildingProtector || b.Oil > 0 {
-			continue
+		if b.WorkKind == "built" {
+			b.WorkKind = RobotWorker
+			s.Buildings[id] = b
 		}
-		b.Oil = protectorCostOil
-		s.Buildings[id] = b
 	}
 	s.Version = stateVersion
 }

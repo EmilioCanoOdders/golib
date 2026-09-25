@@ -179,7 +179,7 @@ func TestFactoryBuildsRobotsWithATank(t *testing.T) {
 	var fresh Robot
 	found := false
 	for _, r := range s.Robots {
-		if r.Kind == RobotBuilt {
+		if r.Kind == RobotWorker {
 			fresh, found = r, true
 		}
 	}
@@ -196,6 +196,32 @@ func TestFactoryBuildsRobotsWithATank(t *testing.T) {
 	}
 }
 
+func TestFactoryBuildsTheSelectedBuilderOrWorker(t *testing.T) {
+	for _, kind := range []RobotKind{RobotBuilder, RobotWorker} {
+		t.Run(string(kind), func(t *testing.T) {
+			s := newGame()
+			seedStock(s)
+			id := s.NextID
+			s.NextID++
+			col, row := groundNearCore()
+			s.Buildings[id] = Building{
+				ID: id, Kind: BuildingFactory, Col: col, Row: row,
+			}
+			Apply(s, QueueRobot{Building: id, Kind: kind})
+			if got := s.Buildings[id].WorkKind; got != kind {
+				t.Fatalf("factory selected %s, want %s", got, kind)
+			}
+			runTicks(s, factoryRobotTicks)
+			for _, robotID := range sortedRobotIDs(s) {
+				if s.Robots[robotID].Kind == kind && robotID != 1 {
+					return
+				}
+			}
+			t.Fatalf("the factory never produced a %s", kind)
+		})
+	}
+}
+
 func TestABuiltRobotRefuelsBeforeItRunsDry(t *testing.T) {
 	s := newGame()
 	s.Stock = Stock{Oil: 200}
@@ -203,7 +229,7 @@ func TestABuiltRobotRefuelsBeforeItRunsDry(t *testing.T) {
 	s.NextID++
 	cx, cy := tileCenterUnits(coreCol, coreRow)
 	s.Robots[id] = Robot{
-		ID: id, Kind: RobotBuilt,
+		ID: id, Kind: RobotWorker,
 		X: cx + 100, Y: cy, Tank: 10,
 		PostCol: -1, PostRow: -1,
 	}
@@ -230,7 +256,7 @@ func TestFogDigestsARobotRunDryOutsideTheBubbles(t *testing.T) {
 	s.NextID++
 	fx, fy := tileCenterUnits(2, 2)
 	s.Robots[id] = Robot{
-		ID: id, Kind: RobotBuilt, X: fx, Y: fy, Tank: 0,
+		ID: id, Kind: RobotWorker, X: fx, Y: fy, Tank: 0,
 		PostCol: -1, PostRow: -1, Carry: 12, Cargo: TypeOil,
 	}
 	r := s.Robots[id]
@@ -250,21 +276,20 @@ func TestFogDigestsARobotRunDryOutsideTheBubbles(t *testing.T) {
 		t.Errorf("the robot's wreck holds %v L and %v kg, want %v and %v",
 			p.Oil, p.Lilac, wantOil, wantLilac)
 	}
-	if len(s.Robots) != startingRobots {
+	if len(s.Robots) != startingBuilders {
 		t.Errorf("the colony holds %d robots, want %d",
-			len(s.Robots), startingRobots)
+			len(s.Robots), startingBuilders)
 	}
-	// A core robot never runs dry, so the fog never takes one.
+	// Builders have tanks and are just as vulnerable to the fog as workers.
 	cid := s.NextID
 	s.NextID++
 	s.Robots[cid] = Robot{
-		ID: cid, Kind: RobotCore, X: fx, Y: fy, PostCol: -1, PostRow: -1,
+		ID: cid, Kind: RobotBuilder, X: fx, Y: fy, Tank: 0,
+		PostCol: -1, PostRow: -1,
 	}
-	for i := 0; i < 60; i++ {
-		Apply(s, Tick{})
-	}
-	if _, ok := s.Robots[cid]; !ok {
-		t.Error("the fog digested a core robot")
+	Apply(s, Tick{})
+	if _, ok := s.Robots[cid]; ok {
+		t.Error("the fog spared a dry builder outside every bubble")
 	}
 	// On the robot's own cell, a shadow protector's bubble shelters even
 	// a dry built robot.
@@ -277,7 +302,7 @@ func TestFogDigestsARobotRunDryOutsideTheBubbles(t *testing.T) {
 	sid := s.NextID
 	s.NextID++
 	s.Robots[sid] = Robot{
-		ID: sid, Kind: RobotBuilt, X: fx, Y: fy, Tank: 0,
+		ID: sid, Kind: RobotWorker, X: fx, Y: fy, Tank: 0,
 		PostCol: -1, PostRow: -1,
 	}
 	for i := 0; i < 60; i++ {
@@ -291,8 +316,8 @@ func TestFogDigestsARobotRunDryOutsideTheBubbles(t *testing.T) {
 func TestTheFogSlowsWhoeverWalksIt(t *testing.T) {
 	s := newGame()
 	cx, cy := tileCenterUnits(coreCol, coreRow)
-	clear := Robot{Kind: RobotCore, X: cx, Y: cy, PostCol: -1, PostRow: -1}
-	fogged := Robot{Kind: RobotCore, X: 0, Y: 0, PostCol: -1, PostRow: -1}
+	clear := Robot{Kind: RobotBuilder, X: cx, Y: cy, PostCol: -1, PostRow: -1}
+	fogged := Robot{Kind: RobotBuilder, X: 0, Y: 0, PostCol: -1, PostRow: -1}
 	for i := 0; i < 120; i++ {
 		clear.walkTowards(s, cx+100, cy)
 		fogged.walkTowards(s, 100, 0)
@@ -315,7 +340,7 @@ func TestTheFogSlowsWhoeverWalksIt(t *testing.T) {
 		ID: pid, Kind: BuildingProtector, Col: 0, Row: 0,
 		Oil: protectorCostOil,
 	}
-	sheltered := Robot{Kind: RobotCore, X: 0, Y: 0, PostCol: -1, PostRow: -1}
+	sheltered := Robot{Kind: RobotBuilder, X: 0, Y: 0, PostCol: -1, PostRow: -1}
 	for i := 0; i < 120; i++ {
 		sheltered.walkTowards(s, 100, 0)
 	}
@@ -332,7 +357,7 @@ func TestFullStoresHoldTheCargoUntilASiloOpens(t *testing.T) {
 	s.NextID++
 	x, y := parkSlot(0)
 	s.Robots[id] = Robot{
-		ID: id, Kind: RobotCore, X: x, Y: y,
+		ID: id, Kind: RobotBuilder, X: x, Y: y,
 		Carry: 30, Cargo: TypeOil, PostCol: -1, PostRow: -1,
 	}
 	runTicks(s, 10)
@@ -383,7 +408,7 @@ func TestARefueledRobotGoesBackToWork(t *testing.T) {
 	id := s.NextID
 	s.NextID++
 	s.Robots[id] = Robot{
-		ID: id, Kind: RobotBuilt, X: cx + 50, Y: cy, Tank: 10,
+		ID: id, Kind: RobotWorker, X: cx + 50, Y: cy, Tank: 10,
 		PostCol: oilCol, PostRow: oilRow,
 	}
 	if !tickUntil(s, 60*60, func() bool { return s.Robots[id].Tank > robotTankLiters-1 }) {

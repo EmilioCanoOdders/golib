@@ -60,7 +60,7 @@ func (s *State) dropPile(col, row int, oil, lilac float64) {
 func (s *State) dropRobotWreck(r Robot) {
 	lilac, oil := 0.0, 0.0
 	switch r.Kind {
-	case RobotBuilt:
+	case RobotBuilder, RobotWorker:
 		lilac, oil = robotCostLilac, robotCostOil
 	case RobotCombat:
 		lilac, oil = trooperCostLilac, trooperCostOil
@@ -143,12 +143,18 @@ func freeRoom(s *State, cargo ThingType) float64 {
 // pileOffer returns what a robot would take from a pile in one trip:
 // one kind, lilac first, as much as its arms and the stores' room
 // allow. An amount of zero means the pile has nothing for now.
-func pileOffer(s *State, p Pile) (cargo ThingType, amount float64) {
-	lilac := math.Min(math.Min(p.Lilac, robotCarryLilac), freeRoom(s, TypeLilac))
+func pileOffer(s *State, p Pile, r Robot) (cargo ThingType, amount float64) {
+	lilac := math.Min(
+		math.Min(p.Lilac, robotCarryCapacity(r, TypeLilac)),
+		freeRoom(s, TypeLilac),
+	)
 	if lilac >= pileDust {
 		return TypeLilac, lilac
 	}
-	oil := math.Min(math.Min(p.Oil, robotCarryOil), freeRoom(s, TypeOil))
+	oil := math.Min(
+		math.Min(p.Oil, robotCarryCapacity(r, TypeOil)),
+		freeRoom(s, TypeOil),
+	)
 	if oil >= pileDust {
 		return TypeOil, oil
 	}
@@ -162,7 +168,7 @@ func nearestPile(s *State, r Robot) (Pile, bool) {
 	found, bestDist := false, 0.0
 	for _, id := range sortedPileIDs(s) {
 		p := s.Piles[id]
-		if _, amount := pileOffer(s, p); amount <= 0 {
+		if _, amount := pileOffer(s, p, r); amount <= 0 {
 			continue
 		}
 		x, y := cellCenterUnits(p.Col, p.Row)
@@ -182,7 +188,7 @@ func (s *State) takeFromPile(r *Robot) {
 	if !ok {
 		return
 	}
-	cargo, amount := pileOffer(s, p)
+	cargo, amount := pileOffer(s, p, *r)
 	if amount <= 0 {
 		return
 	}

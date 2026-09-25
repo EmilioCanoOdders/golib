@@ -27,17 +27,17 @@ func TestDevSpawnRobotPutsAFreeBuiltRobotOnTheSpot(t *testing.T) {
 	s := newGame()
 	stock := s.Stock
 	Apply(s, DevSpawnRobot{X: 500, Y: 700})
-	if len(s.Robots) != startingRobots+1 || s.Stock != stock {
+	if len(s.Robots) != startingBuilders+1 || s.Stock != stock {
 		t.Fatalf("%d robots and stores %+v, want one more robot for nothing",
 			len(s.Robots), s.Stock)
 	}
 	ids := sortedRobotIDs(s)
 	r := s.Robots[ids[len(ids)-1]]
-	if r.Kind != RobotBuilt || r.Tank != robotTankLiters || r.X != 500 || r.Y != 700 {
+	if r.Kind != RobotWorker || r.Tank != robotTankLiters || r.X != 500 || r.Y != 700 {
 		t.Errorf("the robot is %+v, want a built one, tank full, at 500, 700", r)
 	}
 	Apply(s, DevSpawnRobot{X: -1, Y: 700})
-	if len(s.Robots) != startingRobots+1 {
+	if len(s.Robots) != startingBuilders+1 {
 		t.Error("a spot outside the region took a robot")
 	}
 }

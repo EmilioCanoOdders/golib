@@ -121,7 +121,7 @@ func TestRivalFacingChangesWithMovementAndWaitsAtRest(t *testing.T) {
 func TestFacingSavesAndDefaultsForLegacyStates(t *testing.T) {
 	s := &State{
 		Robots: map[int64]Robot{
-			1: {ID: 1, Kind: RobotCore, Facing: facingUpLeft},
+			1: {ID: 1, Kind: RobotBuilder, Facing: facingUpLeft},
 		},
 		Enemies: map[int64]Enemy{
 			2: {ID: 2, Kind: EnemyScout, Facing: facingDownRight},

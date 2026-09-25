@@ -19,7 +19,7 @@ type economyPlan struct {
 }
 
 var economyPlans = []economyPlan{
-	{name: "safe-harvest", workerGoal: startingRobots},
+	{name: "safe-harvest", workerGoal: 2},
 	{name: "growth", workerGoal: 6},
 	{name: "outpost", workerGoal: 6, expand: true, guardAt: 10 * economySampleTicks},
 }
@@ -121,9 +121,7 @@ func newEconomyPlanner(plan economyPlan) economyPlanner {
 
 func (p economyPlanner) decide(s *State) {
 	p.assignPosts(s)
-	if p.plan.workerGoal > startingRobots {
-		p.growWorkers(s)
-	}
+	p.growWorkers(s)
 	if p.plan.expand {
 		p.expandOil(s)
 	}
@@ -143,7 +141,20 @@ func (p economyPlanner) assignPosts(s *State) {
 			continue
 		}
 		if len(postRobots(s, tileCol, tileRow)) == 0 {
-			Apply(s, SendRobot{Col: tileCol, Row: tileRow})
+			if worker := pickRobot(s, tileCol, tileRow); worker >= 0 {
+				Apply(s, SendRobot{Col: tileCol, Row: tileRow})
+				continue
+			}
+			for _, id := range sortedRobotIDs(s) {
+				r := s.Robots[id]
+				if r.Kind != RobotBuilder || r.hasPost() {
+					continue
+				}
+				Apply(s, AssignRobot{
+					ID: id, Col: tileCol, Row: tileRow,
+				})
+				break
+			}
 		}
 	}
 }
@@ -156,7 +167,9 @@ func (p economyPlanner) growWorkers(s *State) {
 		return
 	}
 	if factory, raised := buildingAt(s, p.factoryCol, p.factoryRow); raised {
-		Apply(s, QueueRobot{Building: factory.ID})
+		Apply(s, QueueRobot{
+			Building: factory.ID, Kind: RobotWorker,
+		})
 	}
 }
 
@@ -289,10 +302,11 @@ func mined(s *State) (oil, lilac float64) {
 
 func robotCounts(s *State) (workers, troopers int) {
 	for _, robot := range s.Robots {
-		if robot.Kind == RobotCombat {
-			troopers++
-		} else {
+		switch robot.Kind {
+		case RobotWorker:
 			workers++
+		case RobotCombat:
+			troopers++
 		}
 	}
 	return workers, troopers

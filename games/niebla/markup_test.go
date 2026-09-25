@@ -118,6 +118,7 @@ func TestTooltipLayoutRowsAndCards(t *testing.T) {
 func TestPrimaryCardsStartOpen(t *testing.T) {
 	camera := golib.NewCamera(screenWidth, screenHeight)
 	s := newGame()
+	addWorker(s)
 	// The core's card starts open with no clicks: its details are there.
 	coreCellCol, coreCellRow := tileCell(coreCol, coreRow)
 	panel := tooltipLayout(s, camera, coreCellCol, coreCellRow, map[string]bool{})
@@ -168,6 +169,8 @@ func TestPrimaryCardsStartOpen(t *testing.T) {
 func TestTooltipOffersRobotButtons(t *testing.T) {
 	camera := golib.NewCamera(screenWidth, screenHeight)
 	s := newGame()
+	addWorker(s)
+	addWorker(s)
 	col, row, ok := nearestTileOf(kindOil)
 	if !ok {
 		t.Fatal("the region has no oil to test with")
@@ -225,7 +228,7 @@ func TestTooltipOffersRobotButtons(t *testing.T) {
 		t.Errorf("portrait hit returned %+v, %v, want robot %d", picked, ok, worker.ID)
 	}
 	for len(postRobots(s, col, row)) < portraitPageSize+1 {
-		id := s.spawnRobot(RobotBuilt, 0, 0)
+		id := s.spawnRobot(RobotWorker, 0, 0)
 		r := s.Robots[id]
 		r.PostCol, r.PostRow = col, row
 		s.Robots[id] = r

@@ -52,7 +52,7 @@ func TestWriteShotUnitState(t *testing.T) {
 	s := newGame()
 	noRivals(s)
 	x, y := parkCenter()
-	s.spawnRobot(RobotBuilt, x+20, y+12)
+	s.spawnRobot(RobotWorker, x+20, y+12)
 	s.spawnRobot(RobotCombat, x+40, y+24)
 	col, row := groundNearCore()
 	home := raised(t, s, BuildingWarFactory, col, row)
@@ -182,8 +182,15 @@ func TestWriteRobotPortraitShotState(t *testing.T) {
 	world := camera.ToWorld(point.X, point.Y)
 	cellCol, cellRow, _ := cellAtWorld(float64(world.X), float64(world.Y))
 	parkX, parkY := parkCenter()
-	for len(s.Robots) < 10 {
-		s.spawnRobot(RobotBuilt, parkX, parkY)
+	workers := 0
+	for _, robot := range s.Robots {
+		if robot.Kind == RobotWorker {
+			workers++
+		}
+	}
+	for workers < 10 {
+		s.spawnRobot(RobotWorker, parkX, parkY)
+		workers++
 	}
 	for i := 0; i < 10; i++ {
 		Apply(s, SendRobot{Col: col, Row: row})

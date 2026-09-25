@@ -97,9 +97,11 @@ var catalog = map[ThingType]ThingInfo{
 			if !ok {
 				return nil
 			}
-			model := "core"
+			model := "builder"
 			switch r.Kind {
-			case RobotBuilt:
+			case RobotBuilder:
+				model = "builder"
+			case RobotWorker:
 				model = "worker"
 			case RobotCombat:
 				model = "trooper"
@@ -155,8 +157,10 @@ var catalog = map[ThingType]ThingInfo{
 		},
 		Details: func(s *State, thing Thing) []Detail {
 			return []Detail{
-				{"robot cost", fmt.Sprintf("[lilac]%s[/] + [oil]%s[/]",
+				{"unit cost", fmt.Sprintf("[lilac]%s[/] + [oil]%s[/]",
 					si(robotCostLilac, "kg"), si(robotCostOil, "L"))},
+				{"builders", "build sites and lay pipes"},
+				{"workers", "mine; builders carry a third as much"},
 				{"pace", "one per " + si(factoryRobotTicks/60, "s")},
 				{"robots", fmt.Sprintf("%d", len(s.Robots))},
 			}
@@ -463,7 +467,7 @@ func costWords(lilac, oil float64) string {
 
 // pileState says whether the robots can take a pile home.
 func pileState(s *State, p Pile) string {
-	if _, amount := pileOffer(s, p); amount <= 0 {
+	if _, amount := pileOffer(s, p, Robot{Kind: RobotWorker}); amount <= 0 {
 		return "waiting for storage"
 	}
 	return "to be hauled"

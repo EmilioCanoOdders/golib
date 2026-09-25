@@ -14,18 +14,18 @@
 //     keeps): players, saves, and the glue saveBase and resumeState.
 //   - play.go is the play scene: Update turns input into actions and
 //     sends one Tick per update, Draw draws the region through the
-//     camera, and the camera and the selection live here, never
+//     camera, and the camera, selection and roster live here, never
 //     serialized.
 //   - state.go holds the simulation's state, the one serializable value
 //     the whole game is, and newGame, which deals the starting region.
-//   - actions.go holds the actions (Tick, SendRobot, RecallRobot,
-//     MarkBuilding, QueueRobot) and Apply, the only door into the state.
-//   - sim_robots.go holds the robots' rules and their tuning: what a
-//     robot does each tick — carry home, mind the tank, finish loading,
-//     build jobs first, its post second.
+//   - actions.go holds the actions (Tick, SendRobot, AssignRobot,
+//     RecallRobot, MarkBuilding, QueueRobot) and Apply, the only door
+//     into the state.
+//   - sim_robots.go holds builders' and workers' rules and their tuning:
+//     what each role claims from the robot day.
 //   - sim_buildings.go holds the buildings' rules and their tuning:
 //     blueprints, placement and safe zones, storage caps, refueling,
-//     the factories' robot works.
+//     builders' and workers' factory production.
 //   - sim_pipes.go holds the pumps and the pipes: the curve through the
 //     player's clicks, its price by the section, the robots laying it
 //     and the oil it carries; pipes.go draws them and lays them.
@@ -44,6 +44,7 @@
 //   - markup.go writes text in colors: the "[name]...[/]" markup.
 //   - inspect.go lays out and paints the tile inspection panel, with the
 //     cards' buttons.
+//   - robots_panel.go lays out the colony roster and individual orders.
 //   - draw.go paints the region and the robots.
 //   - world_test.go drives the simulation directly, no window needed.
 //

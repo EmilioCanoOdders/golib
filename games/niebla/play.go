@@ -32,11 +32,11 @@ func zoomOfStop(stop float32) float32 {
 // than that. Leaving to the menu saves at once.
 const autosaveTicks = 900
 
-// playScene shows the region through a camera. The camera and the
-// selection are view, not state: they live here, outside the
+// playScene shows the region through a camera. The camera, selection,
+// menus and robot roster are view, not state: they live here, outside the
 // simulation, and never get serialized. The simulation's state does:
-// Update turns input into actions and sends one Tick per update, and
-// Draw renders the state and changes nothing.
+// Update turns input into actions and sends one Tick per update, and Draw
+// renders the state and changes nothing.
 type playScene struct {
 	state *State
 	mites *miteField  // the fog's wear on what stands in it; looks only
@@ -56,27 +56,31 @@ type playScene struct {
 	savedTicks int64 // ticks since the base last saved itself
 	saveFailed bool  // the last autosave couldn't be written
 
-	picked       bool // a cell is selected and shows its panel
-	pickedCol    int  // the selected cell
-	pickedRow    int
-	pickedThing  string          // a visible body's card picked on that cell
-	pickedRobot  int64           // a worker opened from a deposit portrait
-	robotPage    int             // which page of the selected deposit's portraits
-	expanded     map[string]bool // which cards stand open, by thing ID
-	armed        string          // the card whose trash can was pressed once, by thing ID
-	radial       bool            // the build menu stands open on a cell
-	radialCol    int             // the cell the menu opened on
-	radialRow    int
-	radialLevel  int        // the ring open: 0 the groups, 1 their blueprints
-	radialGroup  buildGroup // the group the second ring shows
-	laying       pipeLaying // the pipe the pointer is drawing, if any
-	ordering     int64      // the war factory whose squad the pointer is ordering; 0 is none
-	techCallout  string     // the schematics drop whose callout stands open, by ID
-	hoverCellCol int        // the cell under the pointer, the cursor
-	hoverCellRow int        //
-	hoverCell    bool       // the pointer is over a cell
-	rightWasDown bool
-	rightFrom    golib.Vector2 // where the right button went down
+	picked         bool // a cell is selected and shows its panel
+	pickedCol      int  // the selected cell
+	pickedRow      int
+	pickedThing    string          // a visible body's card picked on that cell
+	pickedRobot    int64           // a worker opened from a deposit portrait
+	robotPage      int             // which page of the selected deposit's portraits
+	expanded       map[string]bool // which cards stand open, by thing ID
+	armed          string          // the card whose trash can was pressed once, by thing ID
+	radial         bool            // the build menu stands open on a cell
+	radialCol      int             // the cell the menu opened on
+	radialRow      int
+	radialLevel    int        // the ring open: 0 the groups, 1 their blueprints
+	radialGroup    buildGroup // the group the second ring shows
+	laying         pipeLaying // the pipe the pointer is drawing, if any
+	ordering       int64      // the war factory whose squad the pointer is ordering; 0 is none
+	robotsOpen     bool
+	robotsPage     int
+	robotsPicked   int64
+	assigningRobot int64
+	techCallout    string // the schematics drop whose callout stands open, by ID
+	hoverCellCol   int    // the cell under the pointer, the cursor
+	hoverCellRow   int    //
+	hoverCell      bool   // the pointer is over a cell
+	rightWasDown   bool
+	rightFrom      golib.Vector2 // where the right button went down
 }
 
 // newPlayScene takes up the base it is given, dealing a new one when
@@ -132,6 +136,9 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 		taken = s.updateTech(input)
 	}
 	if !taken {
+		taken = s.updateRobotPanel(input)
+	}
+	if !taken {
 		taken = s.updateSquadBoxes(input)
 	}
 	s.updateRadial()
@@ -155,6 +162,7 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 		}
 	}
 	s.clampRobotPage()
+	s.clampRobotPanel()
 	s.mites.update(s.state, dt)
 	s.fx.update(s.state, dt)
 	s.savedTicks += int64(ticks)
@@ -181,7 +189,7 @@ func (s *playScene) saveNow() {
 // down while the pointer is laying a pipe, whose clicks they would
 // fight.
 func (s *playScene) updateSquadKeys(input *golib.Input) {
-	if s.laying.on {
+	if s.laying.on || s.assigningRobot != 0 {
 		return
 	}
 	slots := squadSlots(s.state)
@@ -203,6 +211,9 @@ func (s *playScene) updateSquadKeys(input *golib.Input) {
 // opens the oldest unopened drop. A click on its callout closes it; a
 // click elsewhere closes it and carries on into the region.
 func (s *playScene) updateTech(input *golib.Input) bool {
+	if s.assigningRobot != 0 {
+		return false
+	}
 	if !input.MousePressed(golib.MouseLeft) {
 		return false
 	}
@@ -226,7 +237,8 @@ func (s *playScene) updateTech(input *golib.Input) bool {
 // a box, so the region under it never hears of it; a box that no squad
 // holds doesn't exist and passes the click through.
 func (s *playScene) updateSquadBoxes(input *golib.Input) bool {
-	if !input.MousePressed(golib.MouseLeft) || s.laying.on {
+	if !input.MousePressed(golib.MouseLeft) || s.laying.on ||
+		s.assigningRobot != 0 {
 		return false
 	}
 	mx, my := input.MousePosition()
@@ -377,6 +389,20 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 	}
 
 	rightClick := s.rightClicked(input)
+	if s.assigningRobot != 0 {
+		if rightClick {
+			s.assigningRobot = 0
+			return
+		}
+		if !input.MousePressed(golib.MouseLeft) || clickTaken {
+			return
+		}
+		if s.assignRobotAtScreen(mx, my) {
+			s.assigningRobot = 0
+			s.au.ui(1)
+		}
+		return
+	}
 	if s.laying.on {
 		s.updateLaying(input, clickTaken, rightClick)
 		return
@@ -565,8 +591,18 @@ func (s *playScene) pressButton(row tooltipRow) {
 		if s.robotPage+1 < pages {
 			s.robotPage++
 		}
-	case buttonBuildRobot, buttonTrooper:
-		Apply(s.state, QueueRobot{Building: thing.Ref})
+	case buttonBuildBuilder:
+		Apply(s.state, QueueRobot{
+			Building: thing.Ref, Kind: RobotBuilder,
+		})
+	case buttonBuildWorker:
+		Apply(s.state, QueueRobot{
+			Building: thing.Ref, Kind: RobotWorker,
+		})
+	case buttonTrooper:
+		Apply(s.state, QueueRobot{
+			Building: thing.Ref, Kind: RobotCombat,
+		})
 	case buttonMechanic:
 		Apply(s.state, QueueMechanic{Building: thing.Ref})
 	case buttonOrder:
@@ -671,6 +707,13 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	if s.laying.on {
 		help = "laying a pipe: click the ground to bend it, click a ringed tank (silo, charger, core) to connect it, click the last node for its menu, right-click takes the last bend back"
 	}
+	if s.assigningRobot != 0 {
+		help = fmt.Sprintf(
+			"assigning robot #%d: click an oil pool or lilac vein; "+
+				"right-click cancels",
+			s.assigningRobot,
+		)
+	}
 	screen.DrawText(help, 16, float32(screen.Height())-30, 13, textColor, uiText)
 	if s.laying.on {
 		s.drawLayingLabel(screen)
@@ -681,7 +724,7 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	if s.ordering != 0 {
 		s.drawOrderingLabel(screen)
 	}
-	if s.picked && !s.radial && s.ordering == 0 {
+	if s.picked && !s.radial && s.ordering == 0 && !s.robotsOpen {
 		panel := s.inspectionPanel()
 		panel.arm(s.armed)
 		drawTooltip(screen, panel, s.mouse.X, s.mouse.Y)
@@ -690,6 +733,7 @@ func (s *playScene) Draw(screen *golib.Screen) {
 		drawRadial(s, screen, s.mouse.X, s.mouse.Y)
 	}
 	drawEdgeGuides(s, screen)
+	drawRobotPanel(s, screen)
 }
 
 // hudLine is the strip of stores and hands under the game's name, each
