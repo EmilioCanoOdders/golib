@@ -282,6 +282,9 @@ func threatWords(s *State) string {
 	}
 	for _, id := range sortedCityIDs(s) {
 		city := s.Cities[id]
+		if city.AnnounceUntil <= s.Ticks {
+			continue
+		}
 		where := compassWord(city.X, city.Y)
 		if city.Stage < len(cityBuildOrder) {
 			return fmt.Sprintf("rival city %s, building %s",
@@ -372,5 +375,12 @@ func currentReport(s *State) (Report, bool) {
 		return Report{}, false
 	}
 	r := s.Reports[len(s.Reports)-1]
-	return r, s.Ticks-r.Tick <= reportShowTicks
+	return r, s.Ticks-r.Tick < reportLifetime(r)
+}
+
+func reportLifetime(report Report) int64 {
+	if report.Kind == ReportSettled {
+		return cityAnnouncementTicks
+	}
+	return reportShowTicks
 }

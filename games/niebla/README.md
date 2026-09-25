@@ -556,6 +556,13 @@ won't produce a second sortie while the previous party is still active.
 `movingParty` keeps one party in motion region-wide; other cities wait
 until it returns or is lost.
 
+Each newly founded city saves an `AnnounceUntil` tick one minute ahead.
+Until then, `threatWords` may show its status in the HUD. Its `ReportSettled`
+news plate and offscreen arrow use the same deadline unless newer news
+replaces them. Other reports and their arrows use the 15-second
+`reportShowTicks` lifetime. Old saves without an announcement deadline do
+not announce settled cities again.
+
 The fog is the same law for them: `stepExposure` counts the ticks a
 vehicle stands in fog (`fogAt`, so the colony's bubbles and the clear
 ground count as clear) with no repulsor of its own party or city within

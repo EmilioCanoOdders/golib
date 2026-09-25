@@ -132,6 +132,11 @@ The scout is the first contact: four minutes in it steals up to 25 L, paints its
 
 Thirty fog cycles (15 minutes) after that party leaves, a crawler arrives from a new deterministic bearing and drives to a settlement site 10 tiles (2 km) from the core, beyond the colony artillery's 1.5 km range. It establishes a city there, with the crawler serving as its construction rig. The Nexus comes after the pylon. Later cities arrive no sooner than 30 cycles apart, up to three; each city is part of the saved state. The city has a fixed 170 m repulsor post. Its first sortie needs no mobile artillery in calm weather, while the later artillery shields a whole battalion when the fog swells. The colony is told when a crawler approaches and when the city establishes.
 
+For one minute after a city establishes, the HUD announces its location and
+status. Its founding report and offscreen arrow use that same deadline,
+unless newer news replaces them; other reports and arrows last
+`reportShowTicks` 15 s.
+
 The arrival crawler stays as the city's construction rig. The Nexus ID is reserved at founding, but its entity appears only after the antimist pylon is built. It has no repulsor of its own; the pylon covers it and the rest of the city. The extractor, lilac mine and military factory follow the Nexus, each a gray rival structure with health and a `cityBuildTicks` 90 s build. Oil and lilac are finite city-local reserves (`cityOilReserve` 900 L and `cityLilacReserve` 1800 kg). The extractors add to city stores; the factory spends them on sorties. Destroying an extractor stops that resource. Destroying the factory stops new forces; destroying the Nexus removes the city. City buildings never fire.
 
 Once the factory and stores are ready, the first battalion assembles at the city and waits visibly for `campPrepareTicks`. It has raiders but no mobile artillery, walks directly to the nearest colony oil tank, siphons and returns to its city. The city waits `citySortieTicks` 5 min after a force returns, and never fields two sorties at once. Only one moving party can be in the region at a time; other cities wait their turn. The second battalion and later ones include mobile artillery: it carries its own 170 m antimist bubble and shells colony buildings on the way in. A shot cannot damage the core. The first force can make the trip in calm weather while it is within the fog line; the later artillery keeps the formation repulsed through swells. The route is a straight line for now.
@@ -199,7 +204,8 @@ static data generated from `State.Seed`, never state. `play.go` and
   - While rivals are in the region, the HUD says in red what they are
     doing and where (`raiders camped east, moving in 2:40`, `rival base
     west, level 2`). A news plate under the HUD, for `reportShowTicks`
-    15 s, reports their theft, camp, raid, return, new base, razed
+    15 s (one minute for a city founding), reports their theft, camp, raid,
+    return, new base, razed
     building or fallen base. Rival vehicles and bases have cards too.
     A war factory's card builds troopers, offers one mechanic and gives
     its squad orders; damaged things show their remaining health and say
@@ -223,6 +229,7 @@ all its workers.
 
 When the latest rival report is still on its plate but its location is
 outside the view, a small red arrow at the screen edge points toward it.
+The city-founding report and arrow disappear after one minute.
 Unopened schematics do the same for the core, in the drop's color, until
 the badge is opened. Both guides disappear as soon as their target is on
 screen; they never move the camera or take input.
@@ -457,7 +464,10 @@ trigger for migrating saves without a tech ledger. The view's
 `techBadgeR` is 22 px, `techPulseTicks` is 90 (one breath of the glow,
 from the state's tick) and `techCalloutW` is 280 px.
 
-In `guides.go`, offscreen arrows sit `guideEdgeInset` 28 px from the
+In `sim_cities.go`, `cityAnnouncementTicks` is 3600 ticks (one minute).
+The city status, founding report and offscreen arrow share that deadline;
+other reports last `reportShowTicks` 900 ticks (15 s). In `guides.go`,
+offscreen arrows sit `guideEdgeInset` 28 px from the
 side edges, 78 px below the top and 52 px above the bottom, clear of the
 HUD and the bottom help line.
 
@@ -548,6 +558,10 @@ rules are in [Rules (MVP)](#rules-mvp).
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-25: city status announcements and their offscreen arrow now last
+  one minute from founding; later city reports keep the 15-second lifetime.
+  The deadline is saved with the city, so loading an older city does not
+  announce it again. Pinned by `cities_test.go` and `guides_test.go`.
 <<<<<<< HEAD
 - 2026-09-25: pipe bands show each source's offered flow as orange length,
   with 90% orange at a pump's full 2 L/s; their phase follows liters moved,

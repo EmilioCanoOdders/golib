@@ -46,6 +46,10 @@ func TestAResidentCrawlerArrivesBeforeTheCityBuilds(t *testing.T) {
 	}
 	cityID := sortedCityIDs(s)[0]
 	city := s.Cities[cityID]
+	if city.AnnounceUntil != s.Ticks+cityAnnouncementTicks {
+		t.Fatalf("city announcement ends at %d, want %d ticks ahead",
+			city.AnnounceUntil, cityAnnouncementTicks)
+	}
 	cx, cy := tileCenterUnits(coreCol, coreRow)
 	distance := math.Hypot(city.X-cx, city.Y-cy)
 	if _, partyStillMoving := s.Parties[partyID]; partyStillMoving ||
@@ -76,6 +80,42 @@ func TestAResidentCrawlerArrivesBeforeTheCityBuilds(t *testing.T) {
 	}
 }
 
+func TestCityAnnouncementLastsOneMinute(t *testing.T) {
+	s := newGame()
+	cityID := s.foundCity(3500, 3200, 0.4)
+	city := s.Cities[cityID]
+	if got := threatWords(s); got == "" {
+		t.Fatal("a newly established city was not announced")
+	}
+	if report, ok := currentReport(s); !ok || report.Kind != ReportSettled {
+		t.Fatalf("city founding report is %+v, visible %t", report, ok)
+	}
+
+	s.Ticks = city.AnnounceUntil - 1
+	if got := threatWords(s); got == "" {
+		t.Fatal("the city announcement ended before one minute")
+	}
+	if _, ok := currentReport(s); !ok {
+		t.Fatal("the city founding report ended before one minute")
+	}
+
+	s.Ticks = city.AnnounceUntil
+	if got := threatWords(s); got != "" {
+		t.Errorf("city announcement remained after one minute: %q", got)
+	}
+	if report, ok := currentReport(s); ok {
+		t.Errorf("city founding report remained after one minute: %+v", report)
+	}
+}
+
+func TestLoadedSettledCityHasNoFreshAnnouncement(t *testing.T) {
+	s := newGame()
+	s.Cities[1] = City{ID: 1, X: 3500, Y: 3200, Stage: len(cityBuildOrder)}
+	if got := threatWords(s); got != "" {
+		t.Fatalf("a saved city without an active deadline was announced: %q", got)
+	}
+}
+
 func TestOldSettledBaseMigratesToCityState(t *testing.T) {
 	s := newGame()
 	s.NextID = 10
@@ -88,7 +128,7 @@ func TestOldSettledBaseMigratesToCityState(t *testing.T) {
 	s.enterRegion()
 	party := s.Parties[8]
 	city, ok := s.Cities[party.City]
-	if !ok || party.City == 0 || city.Stage != 2 ||
+	if !ok || party.City == 0 || city.Stage != 2 || city.AnnounceUntil != 0 ||
 		!cityHasBuilding(s, city, EnemyBase) ||
 		!cityHasRepulsor(s, city) ||
 		s.Enemies[9].Health != enemySpecOf(EnemyBase).health ||

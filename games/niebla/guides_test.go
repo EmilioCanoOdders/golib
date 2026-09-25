@@ -74,7 +74,7 @@ func TestOffscreenGuidesFollowReportsAndPendingSchematics(t *testing.T) {
 	s.state.Tech = map[string]bool{techInfraID: false}
 	cx, cy := tileCenterUnits(coreCol, coreRow)
 	s.state.Reports = []Report{{
-		Tick: s.state.Ticks, Kind: ReportSettled, X: cx, Y: cy,
+		Tick: s.state.Ticks, Kind: ReportRazed, X: cx, Y: cy,
 	}}
 	s.camera.Target.X += 500
 	s.camera.Snap()
@@ -92,10 +92,42 @@ func TestOffscreenGuidesFollowReportsAndPendingSchematics(t *testing.T) {
 			guides[0].position, guides[1].position)
 	}
 
-	s.state.Reports[0].Tick = s.state.Ticks - reportShowTicks - 1
+	reportTick := s.state.Reports[0].Tick
+	s.state.Ticks = reportTick + reportShowTicks - 1
+	guides = edgeGuides(s, screenWidth, screenHeight)
+	if len(guides) != 2 {
+		t.Fatalf("ordinary report expired before 15 seconds: %+v", guides)
+	}
+
+	s.state.Ticks = reportTick + reportShowTicks
 	guides = edgeGuides(s, screenWidth, screenHeight)
 	if len(guides) != 1 || guides[0].mark != "S" {
 		t.Errorf("expired report still has a guide: %+v", guides)
+	}
+}
+
+func TestOffscreenCityGuideExpiresAfterOneMinute(t *testing.T) {
+	s := newPlayScene(newGame())
+	s.camera.Bounds = golib.Rectangle{}
+	s.camera.Zoom = 4
+	s.camera.Target = golib.Vector2{X: 640, Y: 372}
+	s.camera.Snap()
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	cityID := s.state.foundCity(cx, cy, 0)
+	city := s.state.Cities[cityID]
+	s.camera.Target.X += 500
+	s.camera.Snap()
+
+	s.state.Ticks = city.AnnounceUntil - 1
+	guides := edgeGuides(s, screenWidth, screenHeight)
+	if len(guides) != 1 || guides[0].mark != "!" {
+		t.Fatalf("the city guide disappeared before its minute: %+v", guides)
+	}
+
+	s.state.Ticks = city.AnnounceUntil
+	guides = edgeGuides(s, screenWidth, screenHeight)
+	if len(guides) != 0 {
+		t.Errorf("the city guide remained after its minute: %+v", guides)
 	}
 }
 

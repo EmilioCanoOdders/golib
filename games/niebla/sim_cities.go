@@ -6,31 +6,33 @@ import (
 )
 
 const (
-	cityFirstDelayCycles = 30
-	cityIntervalCycles   = 30
-	cityLimit            = 3
-	cityRadiusTiles      = 10.0
-	cityMinSeparation    = 900.0
-	cityBuildTicks       = 90 * 60
-	cityOilReserve       = 900.0
-	cityLilacReserve     = 1800.0
-	citySortieTicks      = 5 * 60 * 60
+	cityFirstDelayCycles  = 30
+	cityIntervalCycles    = 30
+	cityLimit             = 3
+	cityRadiusTiles       = 10.0
+	cityMinSeparation     = 900.0
+	cityBuildTicks        = 90 * 60
+	cityAnnouncementTicks = 60 * 60
+	cityOilReserve        = 900.0
+	cityLilacReserve      = 1800.0
+	citySortieTicks       = 5 * 60 * 60
 )
 
 type City struct {
-	ID           int64
-	NexusID      int64 // Reserved at founding; built after the pylon
-	X, Y         float64
-	Angle        float64
-	Stage        int
-	Work         int64
-	Oil          float64
-	Lilac        float64
-	OilDeposit   float64
-	LilacDeposit float64
-	NextSortie   int64
-	Sorties      int64
-	BuildingIDs  []int64
+	ID            int64
+	NexusID       int64 // Reserved at founding; built after the pylon
+	X, Y          float64
+	Angle         float64
+	AnnounceUntil int64
+	Stage         int
+	Work          int64
+	Oil           float64
+	Lilac         float64
+	OilDeposit    float64
+	LilacDeposit  float64
+	NextSortie    int64
+	Sorties       int64
+	BuildingIDs   []int64
 }
 
 const (
@@ -113,7 +115,8 @@ func (s *State) foundCity(x, y, angle float64) int64 {
 	s.NextID++
 	city := City{
 		ID: id, NexusID: nexusID, X: x, Y: y, Angle: angle,
-		Work: cityBuildTicks, OilDeposit: cityOilReserve,
+		AnnounceUntil: s.Ticks + cityAnnouncementTicks,
+		Work:          cityBuildTicks, OilDeposit: cityOilReserve,
 		LilacDeposit: cityLilacReserve,
 		BuildingIDs:  []int64{rigID},
 	}
@@ -171,8 +174,9 @@ func (s *State) foundCityFromCrawler(crawler Enemy, angle float64) int64 {
 	s.Cities[id] = City{
 		ID: id, NexusID: nexusID,
 		X: crawler.X, Y: crawler.Y, Angle: angle,
-		Work:       cityBuildTicks,
-		OilDeposit: cityOilReserve, LilacDeposit: cityLilacReserve,
+		AnnounceUntil: s.Ticks + cityAnnouncementTicks,
+		Work:          cityBuildTicks,
+		OilDeposit:    cityOilReserve, LilacDeposit: cityLilacReserve,
 		BuildingIDs: []int64{crawler.ID},
 	}
 	return id
