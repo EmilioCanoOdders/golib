@@ -260,6 +260,7 @@ func runWindow(game Game, config Config) error {
 		display.apply()
 		focused := device.WindowFocused()
 		windowUnfocused.Store(!focused)
+		device.MeasureWindow() // on macOS, raylib can keep a wrong size from while the window opened
 		windowWidth, windowHeight := device.WindowSize()
 		fit := fitScreen(screenWidth, screenHeight, float32(windowWidth), float32(windowHeight), config.PixelArt)
 

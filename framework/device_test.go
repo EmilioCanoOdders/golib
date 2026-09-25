@@ -48,7 +48,8 @@ func TestPackageGolibGoesThroughTheDevice(t *testing.T) {
 
 // TestDeviceBackendsAreBuiltForOnePlatform checks that every file of the
 // device package that names a backend carries a build tag, so exactly one
-// backend is built into a game.
+// backend is built into a game. A raylib file may narrow it further, to the
+// desktop systems it is for, as raylib_other.go does.
 func TestDeviceBackendsAreBuiltForOnePlatform(t *testing.T) {
 	files, err := filepath.Glob(filepath.Join("internal", "device", "raylib*.go"))
 	if err != nil {
@@ -62,7 +63,8 @@ func TestDeviceBackendsAreBuiltForOnePlatform(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.HasPrefix(string(source), "//go:build !js\n") {
+		line, _, _ := strings.Cut(string(source), "\n")
+		if line != "//go:build !js" && !strings.HasPrefix(line, "//go:build !js && ") {
 			t.Errorf("%s doesn't start with //go:build !js: a backend file says which platforms it is built for", file)
 		}
 	}
