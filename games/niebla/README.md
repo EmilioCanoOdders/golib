@@ -166,7 +166,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `sim_piles.go` | Demolition, unit wrecks and loose items: `canDemolish`, the 25% unit recovery (`dropRobotWreck`), the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, protector upkeep and radius fade, storage caps, refuel spots, production costs and duration for workers, troopers and mechanics |
 | `sim_oil.go` | Oil's spendable tanks and dedicated protector reserves: `oilTotal`, `oilCap`, `payOil`, all physical tank capacity, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
-| `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus`; each pipe records its latest transferred liters and its cumulative flow for the view |
+| `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus`; protectors fill before passing surplus, and each pipe records offered, moved and cumulative liters for the view |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
 | `sim_enemies.go` | The introduction and rival movement: `Enemy` with its saved facing octant, `Party`, `Raids`, `Mark` and `Report`; scout and introductory raid, saved entry bearing, timed city arrivals, party stages, siphoning and return, fog exposure, wrecks, guard posts and the state's PRNG |
 | `sim_cities.go` | Rival cities: serializable production, deterministic building order, finite local oil/mineral reserves, city arrival and old-save migration, city-produced sorties and mobile artillery |
@@ -187,7 +187,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
 | `inspect.go` | The inspection panel: layout, hit testing, painting, clickable paginated worker portraits, remotely opened robot cards, individual recall and return buttons, other card actions and the integrity line of a damaged building; the cell's outline (`cellDiamond`) |
 | `mites.go` | The fog's wear, for looks only: mites of darkness orbiting whatever stands in the mist, by its volume, trailing walkers and closing in on what stands still; view, never state |
-| `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, the blobs of oil moving by cumulative transferred liters) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
+| `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, orange bands sized by offered flow and animated by liters moved) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
 | `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset/new world, next arrival, create city, finish one city building, finish/send a battalion, fast-forward and next schematics —; view only, acting through `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
 | `tech.go` | The schematics on the screen: the badge over the core - breathing halos around the drop's mark - while an unopened drop waits, the callout its click opens (`techWords`, `techWrap`) with a square per thing the drop brings (`techBrings`, `drawTechSquares`), and the words (`techWords`) and ink (`techInk`) of each drop; view, never state |
 | `guides.go` | Screen-edge arrows for an offscreen rival report or pending schematics, with layout kept clear of the HUD and the two guides separated when they point the same way; view, never state |
@@ -208,7 +208,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `world_test.go` | The simulation driven directly: starting robots, hauling, multiple workers sharing a deposit, individual recall, priority, dry deposits, determinism, JSON round trip |
 | `economy_test.go` | The deterministic economy probe: safe harvesting, worker growth and a protected oil outpost over three seeds, sampled each minute into an opt-in CSV report with protector fuel separated from spendable oil |
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
-| `pipes_test.go` | Pumps and pipes driven directly: a pump stands on a pool and a pool takes one, pump and site cards stay on the pump cell while the deposit card spans its patch, the pump body is clickable, pipes are paid by section and laid by robots, who claim a section each - the nearest free one - and stand by it until it is laid, a half-laid pipe from an old save keeps its work, a laid pipe carries the pool into its tank and stops at a full one or a dry pool, blobs follow the actual flow into silos and protectors, oil has a place and pipes move it between tanks (shares, ports, payments, a demolished tank's oil), robots carry oil to a tank with room and refill where there is oil, what `LayPipe` refuses, a pipe leaves with its ends and its cost falls as a pile, the curve passes through its bends, pipes survive and resume a save deterministically; can write a pump-versus-protector flow fixture with `NIEBLA_PIPE_FLOW_SHOT_STATE` |
+| `pipes_test.go` | Pumps and pipes driven directly: a pump stands on a pool and a pool takes one, pump and site cards stay on the pump cell while the deposit card spans its patch, the pump body is clickable, pipes are paid by section and laid by robots, who claim a section each - the nearest free one - and stand by it until it is laid, a half-laid pipe from an old save keeps its work, a laid pipe carries the pool into its tank and stops at a full one or a dry pool, protectors fill before passing surplus and each keeps its upkeep, source outlets share equally, bands reflect offered flow while movement follows actual flow, oil has a place and pipes move it between tanks, robots carry oil to a tank with room and refill where there is oil, what `LayPipe` refuses, a pipe leaves with its ends and its cost falls as a pile, the curve passes through its bends, pipes survive and resume a save deterministically; can write a pump-versus-protector flow fixture with `NIEBLA_PIPE_FLOW_SHOT_STATE` |
 | `protector_test.go` | Protector fuel: upkeep drains its dedicated tank, radius fades below the configured threshold and vanishes empty, robots and pipes refill it, the reserve stays unavailable to other costs, old saves migrate once with starting charge, and an opt-in state fixture supports visual shots |
 | `mites_test.go` | The mites driven with no window: counted by volume and only in the fog, tight on what stands still and trailing a walker, fading over what is gone, the falloff's layers |
 | `dev_test.go` | The dev actions: a held swell stays up and doesn't count, a placed robot is built, the city tool buttons have separate hit boxes, `unitsAtWorld` undoes `project` |
@@ -357,7 +357,7 @@ already. The curve is never stored: `pipeSpine` rebuilds it from the
 ends and the bends with `pipePath` - a centripetal Catmull-Rom spline
 cut into `pipeSpanSamples` pieces a span, with a `sagPoint` when there
 are no bends - so the sim (length, sections, where the robots stand) and
-the view (the drawing, the blobs) read the same line. `Sections` is what
+the view (the drawing, the bands) read the same line. `Sections` is what
 was paid and `Left` the robot work owed, which goes in a section at a
 time, by many hands: once no site is left, `stepLayPipe` has a robot
 claim a section (`freeSection`: of the oldest unlaid pipe's sections
@@ -370,18 +370,28 @@ work left by section, and is nil before the first tick of work and once
 the pipe is laid, when `Left` alone reads as work put in from the source
 out (`sectionLeft`), which is how a save from before the sections
 loads. `building` claims a robot only while it holds a section or one is
-free, so the robots a pipe has no section for go on with their day. `stepPipes` runs after the factories: every `pipeFlowing` pipe
-(laid, `pipeSupply` in its source, `tankRoom` at its end) moves up to
-`pipeLitersPerSecond`, the pipes of one source sharing what it gives -
-for a pump, the `pumpLitersPerSecond` it draws from `State.Drain`.
-`Pipe.Flow` records liters moved in the latest tick and `Pipe.Moved` the
-total since it started flowing; both are state so saves and replays keep
-the animation deterministic. Protector upkeep then drains each dedicated
-tank once per tick. The view advances blobs by `Pipe.Moved`: a pump's sole
-silo outlet at 2 L/s keeps the original 40-tick beat, while a full
-protector's 0.25 L/s upkeep makes its blobs move eight times slower. When
-a source splits its output, each pipe's own share sets its speed. A blocked
-or dry pipe draws no blobs.
+free, so the robots a pipe has no section for go on with their day.
+`stepPipes` runs after the factories, in source-to-destination order. A
+source divides its available oil equally among laid outlets that can
+accept it; each pipe carries up to `pipeLitersPerSecond`, and a tank
+accepts only what fits.
+Pumps draw up to `pumpLitersPerSecond` from `State.Drain`. A protector
+fills its own reserve first and does not feed its outlets until full.
+Afterward, it takes incoming oil to replace the `protectorOilPerSecond`
+that upkeep will drain at the end of the tick, then shares any surplus
+equally among its outlets. This lets a full chain pass oil onward without
+ever spending the protectors' stored reserve. A full protector with no
+outlet takes only its upkeep from its incoming pipe.
+
+`Pipe.Offered` records the source's share before the destination limits
+it, `Pipe.Flow` the liters actually moved in the latest tick, and
+`Pipe.Moved` the total moved since it started flowing. These are saved
+state, so saves and replays keep the animation deterministic. The view
+colors each band by `Offered`: 2 L/s fills 90% of the gap, leaving 10%
+steel gray. Its phase follows `Moved`, so a destination that accepts less
+slows the band without a phase jump, and a blocked or dry pipe stays gray.
+Each full protector subtracts its upkeep from the offer to the next link;
+the eighth pipe in a chain gets 0.25 L/s, and the ninth gets none.
 `Demolish` calls `takePipesOf`, so a pipe never outlives an end.
 
 To compare those two flow rates in consecutive shots:
@@ -391,12 +401,12 @@ NIEBLA_PIPE_FLOW_SHOT_STATE=../../build/niebla/pipe-flow.json \
   ./golib go -C games/niebla test \
   -run TestWritePipeFlowShotStates
 ./golib shot niebla 20 40 60 --save build/niebla/pipe-flow.json \
-  --input "Enter@1" --scale 2
+  --input "Enter@1 Mouse@2:640,360 MouseWheel@3:2" --scale 2
 ```
 
 The saved region shows a pump feeding a silo at full output and the core
-feeding a full protector at its upkeep rate. The shots capture the motion
-over 40 updates; the protector's blobs cover one eighth the distance.
+feeding a full protector at its upkeep rate. The shots zoom in on both
+pipes; the protector's bands cover one eighth the distance over 40 updates.
 
 The laying mode is view (`pipeLaying` in the scene): it collects bends
 and sends one `LayPipe` (`sendPipe`) on the click that lands on a tank

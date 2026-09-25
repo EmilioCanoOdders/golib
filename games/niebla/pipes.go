@@ -23,11 +23,11 @@ const (
 
 	pipeShadowLean = 0.8 // how far left of the pipe its shadow falls, by its lift
 
-	// The oil shows as blobs running down the pipe, one every gap, each
-	// taking a beat to reach the next one's place.
-	flowGapUnits      = 30.0 // u between two blobs, close up
+	// The oil shows as bands running down the pipe, one every gap. Their
+	// length says what the source offers; their speed follows actual flow.
+	flowGapUnits      = 30.0 // u between two bands, close up
 	flowGapPx         = 16.0 // and never closer than this on the screen
-	flowBlobPart      = 0.4  // how much of a gap its blob fills
+	flowBandMaxPart   = 0.9  // the gap's orange share at pump capacity
 	flowBeatTicks     = 40
 	flowLitersPerBeat = pumpLitersPerSecond * flowBeatTicks / 60.0
 
@@ -70,15 +70,20 @@ func pipeFlowPhase(moved float64) float64 {
 	return math.Mod(moved, flowLitersPerBeat) / flowLitersPerBeat
 }
 
+func pipeFlowBandPart(offered float64) float64 {
+	capacity := pumpLitersPerSecond / 60
+	return flowBandMaxPart * math.Max(0, math.Min(1, offered/capacity))
+}
+
 // drawPipes paints the pipes, in two passes like the piles: the
 // stretches under a bubble or on clear ground go under the buildings and
 // the robots, and the ones in the mist over the fog, so the colony never
 // loses sight of its things. A pipe runs above the ground: its shadow
 // lies on the ground under it, where the mist doesn't hide it, posts
 // hold it up a section apart, and the pipe itself is drawn lifted. The
-// sections still to be laid show as a faint line, over the fog too. Oil
-// runs down a pipe that carries it as blobs, placed by the oil that has
-// actually passed through the pipe.
+	// sections still to be laid show as a faint line, over the fog too. Oil
+	// runs down a pipe that carries it in bands sized by source offer and
+	// placed by the oil that actually passed through it.
 func drawPipes(s *State, screen *golib.Screen, zoom float32, sheltered bool) {
 	width := 2 * dotRadius(pipeWidthUnits/2, zoom, pipeMinPx/2)
 	lift := float32(math.Max(pipeLiftUnits*float64(unitH), float64(pipeLiftPx/zoom)))
@@ -142,18 +147,20 @@ func drawPipes(s *State, screen *golib.Screen, zoom float32, sheltered bool) {
 					golib.WithOpacity(siteColor, 0.6))
 			}
 		}
-		if p.Flow <= 0 {
+		if p.Flow <= 0 || p.Offered <= 0 {
 			continue
 		}
 		gap := math.Max(flowGapUnits, float64(flowGapPx/zoom/unitW))
 		beat := pipeFlowPhase(p.Moved)
+		part := pipeFlowBandPart(p.Offered)
 		for along := gap * beat; along < length; along += gap {
 			if !inPass(pathPointAt(path, along)) {
 				continue
 			}
-			tailX, tailY := projectPoint(pathPointAt(path, along-gap*flowBlobPart/2))
+			half := gap * part / 2
+			tailX, tailY := projectPoint(pathPointAt(path, along-half))
 			x, y := projectPoint(pathPointAt(path, along))
-			headX, headY := projectPoint(pathPointAt(path, along+gap*flowBlobPart/2))
+			headX, headY := projectPoint(pathPointAt(path, along+half))
 			screen.DrawLine(tailX, tailY-lift, x, y-lift, width*0.7, oilColor)
 			screen.DrawLine(x, y-lift, headX, headY-lift, width*0.7, oilColor)
 		}

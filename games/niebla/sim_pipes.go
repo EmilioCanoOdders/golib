@@ -47,6 +47,7 @@ type Pipe struct {
 	Bends    []PipePoint // the clicks between its ends
 	Sections int64       // its length in whole sections: what it cost
 	Left     int64       // ticks of robot work left; 0 is laid
+	Offered  float64     // liters offered by the source in the latest tick
 	Flow     float64     // liters moved in the latest simulation tick
 	Moved    float64     // liters moved since the pipe began carrying oil
 	// Ticks of work left by section, from the source out. It is nil until
@@ -487,60 +488,223 @@ func pumpTile(b Building) (tcol, trow int) {
 	return cellTile(b.Col, b.Row)
 }
 
-// pipeSupply returns the oil a pipe's source can still give: what is in
-// a tank, or what remains in a pump's pool.
-func pipeSupply(s *State, p Pipe) float64 {
-	if b, ok := s.Buildings[p.From]; ok && b.Kind == BuildingPump {
-		tcol, trow := pumpTile(b)
-		return remainingAt(s, tcol, trow)
-	}
-	return tankOil(s, p.From)
+// pipeFlowing reports whether oil moved down a pipe in the last tick.
+func pipeFlowing(p Pipe) bool {
+	return p.Left == 0 && p.Flow > 0
 }
 
-// pipeFlowing reports whether oil runs down a pipe: it is laid, its
-// source has oil and its end has room.
-func pipeFlowing(s *State, p Pipe) bool {
-	return p.Left == 0 && pipeSupply(s, p) > 0 && tankRoom(s, p.To) > 0
-}
+func pipeNetwork(
+	s *State,
+) (map[int64][]Pipe, map[int64]int, []int64) {
+	outgoing := map[int64][]Pipe{}
+	indegree := map[int64]int{}
 
-// stepPipes moves a tick's worth of oil down every laid pipe, in ID
-// order: as much as the pipe carries, its source gives and its end has
-// room for. The pipes that leave one source share what it gives this
-// tick in equal parts - a tank's oil, or what a pump draws - so a silo
-// that feeds two pipes feeds both.
-func stepPipes(s *State) {
-	var flowing []Pipe
-	outlets := map[int64]float64{}
 	for _, id := range sortedPipeIDs(s) {
 		p := s.Pipes[id]
-		p.Flow = 0
-		s.Pipes[id] = p
-		if pipeFlowing(s, p) {
-			flowing = append(flowing, p)
-			outlets[p.From]++
-		}
-	}
-	share := map[int64]float64{}
-	for from := range outlets {
-		gives := pipeSupply(s, Pipe{From: from})
-		if isPump(s, from) {
-			gives = math.Min(gives, pumpLitersPerSecond/60)
-		}
-		share[from] = gives / outlets[from]
-	}
-	for _, p := range flowing {
-		flow := math.Min(pipeLitersPerSecond/60, share[p.From])
-		flow = math.Min(flow, tankRoom(s, p.To))
-		p.Flow = flow
-		p.Moved += flow
-		s.Pipes[p.ID] = p
-		s.addOil(p.To, flow)
-		if !isPump(s, p.From) {
-			s.addOil(p.From, -flow)
+		if p.Left > 0 {
 			continue
 		}
-		tcol, trow := pumpTile(s.Buildings[p.From])
-		d, _ := depositAt(tcol, trow)
-		s.Drain[depositKey(d)] -= flow
+		if _, ok := pipeEndSpot(s, p.From); !ok {
+			continue
+		}
+		if _, ok := tankSpot(s, p.To); !ok {
+			continue
+		}
+		outgoing[p.From] = append(outgoing[p.From], p)
+		if _, ok := indegree[p.From]; !ok {
+			indegree[p.From] = 0
+		}
+		indegree[p.To]++
+	}
+
+	nodes := make([]int64, 0, len(indegree))
+	for id := range indegree {
+		nodes = append(nodes, id)
+	}
+	sort.Slice(nodes, func(i, j int) bool { return nodes[i] < nodes[j] })
+	return outgoing, indegree, nodes
+}
+
+func pipeFlowOrder(
+	outgoing map[int64][]Pipe,
+	indegree map[int64]int,
+	nodes []int64,
+) []int64 {
+	ready := make([]int64, 0, len(nodes))
+	for _, id := range nodes {
+		if indegree[id] == 0 {
+			ready = append(ready, id)
+		}
+	}
+
+	order := make([]int64, 0, len(nodes))
+	for len(ready) > 0 {
+		id := ready[0]
+		ready = ready[1:]
+		order = append(order, id)
+		for _, p := range outgoing[id] {
+			indegree[p.To]--
+			if indegree[p.To] == 0 {
+				ready = append(ready, p.To)
+				sort.Slice(ready, func(i, j int) bool {
+					return ready[i] < ready[j]
+				})
+			}
+		}
+	}
+
+	seen := make(map[int64]bool, len(order))
+	for _, id := range order {
+		seen[id] = true
+	}
+	for _, id := range nodes {
+		if !seen[id] {
+			order = append(order, id)
+		}
+	}
+	return order
+}
+
+func protectorReadyToPass(s *State, id int64) bool {
+	b, ok := s.Buildings[id]
+	if !ok || b.Kind != BuildingProtector {
+		return false
+	}
+	return tankRoom(s, id) <= protectorOilPerSecond/60+1e-9
+}
+
+func pipeReceiveCapacity(
+	s *State,
+	id int64,
+	outgoing map[int64][]Pipe,
+	visiting map[int64]bool,
+) float64 {
+	room := tankRoom(s, id)
+	if !protectorReadyToPass(s, id) || visiting[id] {
+		return room
+	}
+
+	visiting[id] = true
+	shareCap := math.Inf(1)
+	outlets := 0
+	for _, p := range outgoing[id] {
+		cap := math.Min(
+			pipeLitersPerSecond/60,
+			pipeReceiveCapacity(s, p.To, outgoing, visiting),
+		)
+		if cap <= 0 {
+			continue
+		}
+		shareCap = math.Min(shareCap, cap)
+		outlets++
+	}
+	delete(visiting, id)
+	if outlets == 0 {
+		return room
+	}
+	return room + float64(outlets)*shareCap
+}
+
+// stepPipes moves oil through laid pipes from sources toward their ends.
+// A protector fills its own tank first; once full, it passes on only the
+// incoming oil left after replacing its upkeep. Outlets share equally.
+func stepPipes(s *State) {
+	for _, id := range sortedPipeIDs(s) {
+		p := s.Pipes[id]
+		p.Offered = 0
+		p.Flow = 0
+		s.Pipes[id] = p
+	}
+
+	outgoing, indegree, nodes := pipeNetwork(s)
+	order := pipeFlowOrder(outgoing, indegree, nodes)
+	capacity := make(map[int64]float64, len(nodes))
+	for _, id := range nodes {
+		capacity[id] = pipeReceiveCapacity(
+			s, id, outgoing, map[int64]bool{},
+		)
+	}
+
+	remaining := make(map[int64]float64, len(capacity))
+	for id, amount := range capacity {
+		remaining[id] = amount
+	}
+	incoming := map[int64]float64{}
+	sent := map[int64]float64{}
+
+	for _, from := range order {
+		pipes := outgoing[from]
+		if len(pipes) == 0 {
+			continue
+		}
+
+		available := tankOil(s, from) + incoming[from]
+		if isPump(s, from) {
+			b := s.Buildings[from]
+			tcol, trow := pumpTile(b)
+			available = math.Min(
+				remainingAt(s, tcol, trow), pumpLitersPerSecond/60,
+			)
+		} else if protectorReadyToPass(s, from) {
+			available = math.Max(
+				0,
+				incoming[from]-math.Min(incoming[from], tankRoom(s, from)),
+			)
+		} else if b, ok := s.Buildings[from]; ok &&
+			b.Kind == BuildingProtector {
+			available = 0
+		}
+		if available <= 0 {
+			continue
+		}
+
+		active := make([]Pipe, 0, len(pipes))
+		for _, p := range pipes {
+			if remaining[p.To] > 0 {
+				active = append(active, p)
+			}
+		}
+		if len(active) == 0 {
+			continue
+		}
+
+		share := available / float64(len(active))
+		for _, p := range active {
+			offered := math.Min(pipeLitersPerSecond/60, share)
+			flow := math.Min(offered, remaining[p.To])
+			p.Offered = offered
+			p.Flow = flow
+			p.Moved += flow
+			s.Pipes[p.ID] = p
+			incoming[p.To] += flow
+			remaining[p.To] -= flow
+			sent[from] += flow
+		}
+	}
+
+	for _, id := range order {
+		if isPump(s, id) {
+			b := s.Buildings[id]
+			tcol, trow := pumpTile(b)
+			d, _ := depositAt(tcol, trow)
+			s.Drain[depositKey(d)] -= sent[id]
+			continue
+		}
+
+		if id == coreTank {
+			s.Stock.Oil += incoming[id] - sent[id]
+			continue
+		}
+		b, ok := s.Buildings[id]
+		if !ok || tankCapOf(b.Kind) <= 0 {
+			continue
+		}
+		if b.Kind == BuildingProtector {
+			b.Oil += math.Min(incoming[id], tankRoom(s, id))
+		} else {
+			b.Oil += incoming[id] - sent[id]
+		}
+		b.Oil = math.Max(0, math.Min(tankCap(s, id), b.Oil))
+		s.Buildings[id] = b
 	}
 }

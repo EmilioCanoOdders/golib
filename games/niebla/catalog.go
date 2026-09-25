@@ -438,7 +438,7 @@ func pipeNote(s *State, p Pipe, seenFrom int64) string {
 	switch {
 	case p.Left > 0:
 		doing = fmt.Sprintf("laid %.0f%%", pipeLaidPart(p)*100)
-	case pipeFlowing(s, p):
+	case pipeFlowing(p):
 		doing = "[oil]flowing[/]"
 	}
 	return fmt.Sprintf("%s %s, %s, %s", way, pipeEndName(s, other),

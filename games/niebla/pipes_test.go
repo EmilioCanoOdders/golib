@@ -169,6 +169,10 @@ func TestALaidPipeCarriesThePoolIntoItsTank(t *testing.T) {
 	if math.Abs(p.Flow-wantFlow) > 1e-9 {
 		t.Errorf("the pipe moved %v L this tick, want %v", p.Flow, wantFlow)
 	}
+	if math.Abs(p.Offered-wantFlow) > 1e-9 {
+		t.Errorf("the pump offered %v L this tick, want %v",
+			p.Offered, wantFlow)
+	}
 	if math.Abs(p.Moved-gained) > 0.001 {
 		t.Errorf("the pipe records %v L moved, but the tank gained %v",
 			p.Moved, gained)
@@ -240,6 +244,10 @@ func TestPipeFlowAnimationFollowsDestinationDemand(t *testing.T) {
 			t.Errorf("the silo pipe moved %v L this tick, want %v",
 				p.Flow, wantFlow)
 		}
+		if math.Abs(p.Offered-wantFlow) > 1e-9 {
+			t.Errorf("the pump offered %v L this tick, want %v",
+				p.Offered, wantFlow)
+		}
 		if got := pipeFlowPhase(p.Moved); math.Abs(got) > 1e-9 {
 			t.Errorf("the pump-rate flow is at phase %v after 15 beats", got)
 		}
@@ -271,6 +279,10 @@ func TestPipeFlowAnimationFollowsDestinationDemand(t *testing.T) {
 				t.Errorf("the shared pipe moved %v L this tick, want %v",
 					p.Flow, wantFlow)
 			}
+			if math.Abs(p.Offered-wantFlow) > 1e-9 {
+				t.Errorf("the shared source offered %v L this tick, want %v",
+					p.Offered, wantFlow)
+			}
 		}
 	})
 
@@ -295,6 +307,10 @@ func TestPipeFlowAnimationFollowsDestinationDemand(t *testing.T) {
 			t.Fatalf("the full protector's pipe moved %v L this tick, want %v",
 				p.Flow, wantFlow)
 		}
+		if math.Abs(p.Offered-pumpLitersPerSecond/60) > 1e-9 {
+			t.Fatalf("the pump offered %v L this tick, want its full rate %v",
+				p.Offered, pumpLitersPerSecond/60)
+		}
 
 		moved := p.Moved
 		phase := pipeFlowPhase(moved)
@@ -312,6 +328,128 @@ func TestPipeFlowAnimationFollowsDestinationDemand(t *testing.T) {
 				phaseDelta, wantPhase)
 		}
 	})
+}
+
+func TestPipeFlowBandsTrackTheSourceOffer(t *testing.T) {
+	full := pipeFlowBandPart(pumpLitersPerSecond / 60)
+	half := pipeFlowBandPart(pumpLitersPerSecond / 120)
+	if math.Abs(full-0.9) > 1e-9 {
+		t.Errorf("a full pump offer colors %v of the gap, want 0.9", full)
+	}
+	if math.Abs(half-0.45) > 1e-9 {
+		t.Errorf("half a pump offer colors %v of the gap, want 0.45", half)
+	}
+	if got := pipeFlowBandPart(pumpLitersPerSecond); got != flowBandMaxPart {
+		t.Errorf("an offer above pump capacity colors %v of the gap", got)
+	}
+	if got := pipeFlowBandPart(-pumpLitersPerSecond / 60); got != 0 {
+		t.Errorf("a negative offer colors %v of the gap", got)
+	}
+}
+
+func TestProtectorFillsBeforePassingOilDownstream(t *testing.T) {
+	s := newGame()
+	seedStock(s)
+	arriveAll(s)
+	noRivals(s)
+	pump := pumpOn(t, s, safePool(t))
+	col, row := groundNearCore()
+	protector := raised(t, s, BuildingProtector, col, row)
+	silo := raised(t, s, BuildingSilo, col+3, row)
+	inPipe := layNow(t, s, pump.ID, protector.ID)
+	outPipe := layNow(t, s, protector.ID, silo.ID)
+
+	runTicks(s, 60*60)
+	if s.Buildings[protector.ID].Oil >= protectorOilCap-1 {
+		t.Fatal("the protector filled too soon to hold back its outlet")
+	}
+	if s.Buildings[silo.ID].Oil != 0 || s.Pipes[outPipe.ID].Flow != 0 {
+		t.Fatal("the protector passed oil before filling its reserve")
+	}
+
+	runTicks(s, 60*90)
+	if s.Buildings[protector.ID].Oil < protectorOilCap-0.01 {
+		t.Fatalf(
+			"the protector holds %v L after filling",
+			s.Buildings[protector.ID].Oil,
+		)
+	}
+	if s.Buildings[silo.ID].Oil <= 0 {
+		t.Fatal("the full protector did not pass oil into the silo")
+	}
+	wantRate := pumpLitersPerSecond - protectorOilPerSecond
+	gotRate := s.Pipes[outPipe.ID].Flow * 60
+	if math.Abs(gotRate-wantRate) > 1e-8 {
+		t.Errorf("the full protector passed %v L/s, want %v", gotRate, wantRate)
+	}
+	if s.Pipes[inPipe.ID].Flow <= s.Pipes[outPipe.ID].Flow {
+		t.Error("the protector's upkeep did not reduce downstream flow")
+	}
+}
+
+func TestProtectorChainConsumesUpkeepBeforeEachOutlet(t *testing.T) {
+	s := newGame()
+	seedStock(s)
+	arriveAll(s)
+	noRivals(s)
+	d := safePool(t)
+	pump := pumpOn(t, s, d)
+	poolKey := depositKey(d)
+	col, row := groundNearCore()
+	protectors := make([]Building, 8)
+	for i := range protectors {
+		protectors[i] = raised(
+			t, s, BuildingProtector, col+i*2, row,
+		)
+		protectors[i].Oil = protectorOilCap
+		s.Buildings[protectors[i].ID] = protectors[i]
+	}
+	silo := raised(t, s, BuildingSilo, col+len(protectors)*2, row)
+
+	from := pump.ID
+	pipes := make([]Pipe, 0, len(protectors)+1)
+	for _, protector := range protectors {
+		pipes = append(pipes, layNow(t, s, from, protector.ID))
+		from = protector.ID
+	}
+	pipes = append(pipes, layNow(t, s, from, silo.ID))
+
+	oilBefore := allOilTotal(s) + s.Drain[poolKey]
+	runTicks(s, 120)
+	wantOil := oilBefore -
+		float64(len(protectors))*protectorOilPerSecond*2
+	gotOil := allOilTotal(s) + s.Drain[poolKey]
+	if math.Abs(gotOil-wantOil) > 1e-6 {
+		t.Errorf("the chain keeps %v L including the pool, want %v",
+			gotOil, wantOil)
+	}
+	for i, p := range pipes {
+		wantRate := pumpLitersPerSecond -
+			float64(i)*protectorOilPerSecond
+		if i == len(protectors) {
+			wantRate = 0
+		}
+		gotRate := s.Pipes[p.ID].Flow * 60
+		if math.Abs(gotRate-wantRate) > 1e-8 {
+			t.Errorf("pipe %d moves %v L/s, want %v", i+1, gotRate, wantRate)
+		}
+		wantOffer := wantRate
+		if i == 0 {
+			wantOffer = pumpLitersPerSecond
+		}
+		gotOffer := s.Pipes[p.ID].Offered * 60
+		if math.Abs(gotOffer-wantOffer) > 1e-8 {
+			t.Errorf("pipe %d is offered %v L/s, want %v",
+				i+1, gotOffer, wantOffer)
+		}
+		if i > 0 && i < len(protectors) &&
+			math.Abs(
+				pipeFlowBandPart(s.Pipes[p.ID].Offered)-
+					flowBandMaxPart*wantOffer/pumpLitersPerSecond,
+			) > 1e-8 {
+			t.Errorf("pipe %d's band does not follow its thinning offer", i+1)
+		}
+	}
 }
 
 func TestOilHasAPlaceAndPipesMoveItBetweenTanks(t *testing.T) {
@@ -545,6 +683,39 @@ func TestPipesSurviveASave(t *testing.T) {
 	runTicks(&back, 60)
 	if !reflect.DeepEqual(&back, s) {
 		t.Error("a loaded pipe didn't continue its flow deterministically")
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		t.Fatalf("the state fields don't unmarshal: %v", err)
+	}
+	var oldPipes map[string]map[string]json.RawMessage
+	if err := json.Unmarshal(fields["Pipes"], &oldPipes); err != nil {
+		t.Fatalf("the pipe fields don't unmarshal: %v", err)
+	}
+	for _, oldPipe := range oldPipes {
+		delete(oldPipe, "Offered")
+		delete(oldPipe, "Flow")
+		delete(oldPipe, "Moved")
+	}
+	fields["Pipes"], err = json.Marshal(oldPipes)
+	if err != nil {
+		t.Fatalf("the old pipes don't marshal: %v", err)
+	}
+	oldData, err := json.Marshal(fields)
+	if err != nil {
+		t.Fatalf("the old state doesn't marshal: %v", err)
+	}
+	var legacy State
+	if err := json.Unmarshal(oldData, &legacy); err != nil {
+		t.Fatalf("the old state doesn't unmarshal: %v", err)
+	}
+	legacy.enterRegion()
+	runTicks(&legacy, 1)
+	if p := legacy.Pipes[p.ID];
+		math.Abs(p.Offered-pumpLitersPerSecond/60) > 1e-9 ||
+		math.Abs(p.Flow-pumpLitersPerSecond/60) > 1e-9 ||
+		math.Abs(p.Moved-p.Flow) > 1e-9 {
+		t.Errorf("an old pipe didn't resume with fresh flow data: %+v", p)
 	}
 	// A save from before the pipes has no table for them, and takes one.
 	old := newGame()
