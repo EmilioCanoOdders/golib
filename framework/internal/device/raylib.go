@@ -142,8 +142,9 @@ func SetWindowMinSize(width, height int) {
 
 // SetWindowBorder shows or hides the window's title bar and border:
 // fullscreen on Windows and Linux is a borderless window covering the
-// monitor. MeasureWindow, SystemFullscreen and FullscreenLost differ between
-// macOS, in raylib_darwin.go, and the others, in raylib_other.go.
+// monitor. MeasureWindow, HasSystemFullscreen, SetSystemFullscreen and
+// FullscreenLost differ between macOS, in raylib_darwin.go, and the others,
+// in raylib_other.go.
 func SetWindowBorder(on bool) {
 	if on {
 		rl.ClearWindowState(rl.FlagWindowUndecorated)

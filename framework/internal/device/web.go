@@ -240,11 +240,15 @@ func FullscreenLost() bool {
 	return js_().Call("fullscreenLost").Bool()
 }
 
-// SystemFullscreen reports false: a page asks for the browser's fullscreen
-// through SetWindowBorder.
-func SystemFullscreen(on bool) bool {
+// HasSystemFullscreen reports false: a page asks for the browser's
+// fullscreen through SetWindowBorder, at once, since a browser only grants it
+// while it handles a key, a click or a touch.
+func HasSystemFullscreen() bool {
 	return false
 }
+
+// SetSystemFullscreen is never called here: see HasSystemFullscreen.
+func SetSystemFullscreen(on bool) {}
 
 // MeasureWindow is nothing here: the canvas is measured every frame.
 func MeasureWindow() {}

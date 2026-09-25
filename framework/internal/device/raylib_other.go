@@ -8,11 +8,14 @@ package device
 // MeasureWindow is nothing here: raylib measures the window right.
 func MeasureWindow() {}
 
-// SystemFullscreen reports false: fullscreen here is a borderless window
+// HasSystemFullscreen reports false: fullscreen here is a borderless window
 // that golib sizes to cover the monitor, which keeps its resolution.
-func SystemFullscreen(on bool) bool {
+func HasSystemFullscreen() bool {
 	return false
 }
+
+// SetSystemFullscreen is never called here: see HasSystemFullscreen.
+func SetSystemFullscreen(on bool) {}
 
 // FullscreenLost is always false here: fullscreen is a window GoLib sizes
 // itself, and nothing but the game takes it away again. A browser is where a

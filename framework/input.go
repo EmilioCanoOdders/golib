@@ -208,6 +208,22 @@ func (q *inputQueue) readKeyboard(isDown, wasPressed func(Key) bool) {
 	}
 }
 
+// held reports whether a key or a mouse button was down when the machine was
+// last read. macOS's fullscreen waits until none is (see window.apply).
+func (q *inputQueue) held() bool {
+	for _, down := range q.down {
+		if down {
+			return true
+		}
+	}
+	for _, down := range q.mouseDown {
+		if down {
+			return true
+		}
+	}
+	return false
+}
+
 // readMouse records the mouse for the current frame: the pointer at x, y, the
 // wheel turned by wheel notches, and its buttons. isDown and wasPressed read
 // the machine's buttons; tests pass their own.

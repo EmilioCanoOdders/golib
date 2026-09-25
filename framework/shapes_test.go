@@ -130,12 +130,12 @@ func TestMouseVisibleInAWindow(t *testing.T) {
 	if IsMouseVisible() {
 		t.Error("IsMouseVisible is true after SetMouseVisible(false)")
 	}
-	w.apply()
+	w.apply(false)
 	if device.CursorVisible() {
 		t.Error("the pointer isn't hidden after the frame applies it")
 	}
 	SetMouseVisible(true)
-	w.apply()
+	w.apply(false)
 	if !device.CursorVisible() {
 		t.Error("the pointer is still hidden after SetMouseVisible(true)")
 	}

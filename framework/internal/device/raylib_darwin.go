@@ -20,7 +20,7 @@ import (
 //     elsewhere, sits below the menu bar here, so its bottom falls off the
 //     monitor. macOS has a fullscreen of its own, the one the window's green
 //     button enters: a space of its own, without the menu bar or the Dock,
-//     that Cmd+Tab leaves like any other. SystemFullscreen uses it.
+//     that Cmd+Tab leaves like any other. SetSystemFullscreen uses it.
 //
 // Both ask AppKit about the window through purego's Objective-C calls, as
 // raylib-go reaches raylib through purego.
@@ -74,18 +74,20 @@ func MeasureWindow() {
 	rl.SetWindowSize(width, height)
 }
 
-// SystemFullscreen enters or leaves macOS's own fullscreen, and reports true:
-// golib uses it instead of a borderless window (see the top of this file).
-// The window slides into place over the next frames. A hidden window, as in
-// the framework's tests, keeps the borderless one, and it reports false.
-func SystemFullscreen(on bool) bool {
-	if rl.IsWindowHidden() {
-		return false
-	}
+// HasSystemFullscreen reports true: golib uses macOS's own fullscreen
+// instead of a borderless window (see the top of this file). A hidden window,
+// as in the framework's tests, keeps the borderless one.
+func HasSystemFullscreen() bool {
+	return !rl.IsWindowHidden()
+}
+
+// SetSystemFullscreen enters or leaves macOS's own fullscreen. The window
+// slides into place over the next frames, and every key and mouse event
+// meanwhile is lost, releases too: golib only asks while nothing is held.
+func SetSystemFullscreen(on bool) {
 	if on != inSystemFullscreen() {
 		nsWindow().Send(selToggleFullScreen, objc.ID(0))
 	}
-	return true
 }
 
 // FullscreenLost reports whether the window is out of macOS's fullscreen

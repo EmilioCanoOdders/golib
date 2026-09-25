@@ -16,9 +16,11 @@ var fullscreenWanted atomic.Bool
 // its resolution. On macOS it is the system's own fullscreen, the one the
 // window's green button enters: the window slides into a space of its own,
 // without the menu bar or the Dock, and the player can leave it with that
-// button too. The screen games draw on keeps its size either way: Run
-// scales it to fit, with black bars where the shapes differ. Call it from
-// Update, for example on F11 or Alt+Enter:
+// button too. There the switch waits until no key or mouse button is held,
+// such as the Enter that asked for it, because macOS loses a release that
+// comes while the window slides. The screen games draw on keeps its size
+// either way: Run scales it to fit, with black bars where the shapes differ.
+// Call it from Update, for example on F11 or Alt+Enter:
 //
 //	altEnter := input.KeyDown(golib.KeyLeftAlt) && input.KeyPressed(golib.KeyEnter)
 //	if input.KeyPressed(golib.KeyF11) || altEnter {
@@ -98,8 +100,9 @@ type window struct {
 }
 
 // apply switches the window to match fullscreenWanted, and shows or hides the
-// mouse pointer to match mouseHiddenWanted.
-func (w *window) apply() {
+// mouse pointer to match mouseHiddenWanted. held is whether a key or a mouse
+// button was down when the input was last read.
+func (w *window) apply(held bool) {
 	if hide := mouseHiddenWanted.Load(); hide != w.mouseHidden {
 		device.SetCursorVisible(!hide)
 		w.mouseHidden = hide
@@ -119,8 +122,15 @@ func (w *window) apply() {
 	}
 	// Where the system has a fullscreen of its own that games should use,
 	// macOS's, the backend switches it; elsewhere golib covers the monitor.
-	if device.SystemFullscreen(want) {
-		w.fullscreen = want
+	// macOS drops every key and mouse event while its fullscreen slides in or
+	// out, so a key released meanwhile, such as the Enter that asked for the
+	// switch, would stay down until pressed again: the switch waits until
+	// nothing is held.
+	if device.HasSystemFullscreen() {
+		if !held {
+			device.SetSystemFullscreen(want)
+			w.fullscreen = want
+		}
 		return
 	}
 	if want {

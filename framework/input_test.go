@@ -34,6 +34,28 @@ func TestInputQueueDeliversEachPressOnce(t *testing.T) {
 	}
 }
 
+func TestInputQueueSaysWhetherAnythingIsHeld(t *testing.T) {
+	var queue inputQueue
+	queue.readKeyboard(noKey, noKey)
+	queue.readMouse(0, 0, 0, noButton, noButton)
+	if queue.held() {
+		t.Error("held() with nothing down")
+	}
+	queue.readKeyboard(onlySpace, onlySpace)
+	if !queue.held() {
+		t.Error("held() false with Space down")
+	}
+	queue.readKeyboard(noKey, noKey)
+	queue.readMouse(0, 0, 0, onlyLeftButton, onlyLeftButton)
+	if !queue.held() {
+		t.Error("held() false with the left button down")
+	}
+	queue.readMouse(0, 0, 0, noButton, noButton)
+	if queue.held() {
+		t.Error("held() still true after everything was let go")
+	}
+}
+
 func TestInputQueueKeepsPressesUntilAnUpdateRuns(t *testing.T) {
 	var queue inputQueue
 	var input Input

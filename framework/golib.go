@@ -257,7 +257,7 @@ func runWindow(game Game, config Config) error {
 	scene := game
 	last := device.Time()
 	for !device.WindowShouldClose() {
-		display.apply()
+		display.apply(queue.held())
 		focused := device.WindowFocused()
 		windowUnfocused.Store(!focused)
 		device.MeasureWindow() // on macOS, raylib can keep a wrong size from while the window opened
