@@ -355,6 +355,16 @@ only for editing and rendering the art, never for building or playing the
 game.
 
 ## Sounds
+Mix adjustment (2026-09-25): the oil drops keep to the ground. Their
+bloops - the drip and its thicker cousin - play at half volume, and a
+zoom gate (`dropHushZoom` 28, `dropHushSpan` 4) stills them as soon as
+the view rises off the closest stop, so zooming out no longer carries
+them over the whole region. The mineral ring wears an amplitude
+modulation of `ringCycle` 20 s (`ringSwell`): it swells up, falls silent
+and swells again, a little while sounding every so often, instead of
+droning on. The crystal ping is 6 dB up (`tinkVolume` `0.2125 / 24`),
+still almost inaudible by design.
+
 Mix adjustment (2026-09-24): the crystal ping is four times quieter and
 has a six-pulse-per-second amplitude modulation; the continuous mineral
 resonance is down from 0.28 to 0.05. Ordinary world sounds now use a
@@ -418,9 +428,12 @@ Landed (2026-09-22), in `audio.go`, all of it view: the world speaks where it ha
 ## Tuning
 In `audio.go`: `audioFalloff` 3.2 and `audioViewReach` 1.5 for world
 sounds, capped at `audioReach` 2800 m; cannon reports use `shellFalloff`
-1.3 and `shellReach` 3800 m. `tinkVolume` is `0.2125 / 48`, and
-`ringVolume` is 0.05. `uiClickPitch` 0.72, `placeVolume` 0.7 and
-`alertVolume` 0.65 set the interface mix.
+1.3 and `shellReach` 3800 m. `tinkVolume` is `0.2125 / 24`, and
+`ringVolume` is 0.05 under the ring's `ringCycle` 20 s swell. The oil
+drops are `dripVolume` 0.3 and `gurgleVolume` 0.275, and keep to the
+closest stops: `dropHushZoom` 28 stills them and `dropHushSpan` 4 fades
+them up to whole voice - provisional, to tune by ear. `uiClickPitch`
+0.72, `placeVolume` 0.7 and `alertVolume` 0.65 set the interface mix.
 
 Lost colony units leave `unitWreckRefund` 0.25 of each resource: build
 cost, cargo and remaining tank. The wreck is a pile on their cell

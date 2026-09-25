@@ -131,6 +131,30 @@ func TestTheOreSoundsOnlyWhereTheViewStands(t *testing.T) {
 	}
 }
 
+func TestTheOilDropsKeepToTheGround(t *testing.T) {
+	if got := dropHush(zoomOfStop(zoomIn)); got < 1 {
+		t.Fatalf("on the ground the drops sound at %g, want whole voice", got)
+	}
+	if got := dropHush(zoomOfStop(zoomIn - 1)); got > 0 {
+		t.Fatalf("one notch up the drops still sound at %g, want silence", got)
+	}
+	if got := dropHush(zoomOfStop(zoomOut)); got > 0 {
+		t.Fatalf("over the whole region the drops sound at %g, want silence", got)
+	}
+}
+
+func TestTheMineralRingSwellComesAndGoes(t *testing.T) {
+	if got := ringSwell(0); got < 0.99 {
+		t.Fatalf("the swell starts at %g, want 1", got)
+	}
+	if got := ringSwell(ringCycle / 2); got > 0.01 {
+		t.Fatalf("half a cycle in the ring still sounds at %g, want silence", got)
+	}
+	if got := ringSwell(ringCycle); got < 0.99 {
+		t.Fatalf("a whole cycle in the swell is at %g, want 1", got)
+	}
+}
+
 func TestAudioFallsWithViewDistanceAndZoom(t *testing.T) {
 	s := newPlayScene(nil)
 	x, y := float64(2500), float64(2500)

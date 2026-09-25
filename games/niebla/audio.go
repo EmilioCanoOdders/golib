@@ -15,41 +15,44 @@ import (
 // tools/soundgen; whistles and impacts are made in code.
 
 const (
-	uiClickVolume  = 0.8         // a press of the interface
-	uiClickPitch   = 0.72        // a deeper press than the source recording
-	placeVolume    = 0.7         // a site marked on the ground
-	alertVolume    = 0.65        // a new rival report
-	shellVolume    = 1.0         // the colony's artillery speaking
-	shellFarVolume = 0.9         // a rival city's mobile artillery
-	gunVolume      = 0.9         // small arms, the colony's and the rivals'
-	gunCooldown    = 4           // ticks between two small-arm sounds at most
-	burstVolume    = 1.0         // a shell landing
-	whistleVolume  = 0.18        // a shell coming down where the view stands
-	whistleCount   = 8           // independent incoming shells at once
-	dripVolume     = 0.6         // an oil pool's bloop
-	gurgleVolume   = 0.55        // its rarer, thicker cousin
-	tinkVolume     = 0.2125 / 48 // a lilac vein's crystal ping
-	ringVolume     = 0.05        // the vein's continuous resonance
-	tinkCrowdBoost = 0.15        // how much every extra audible vein lifts a ping
-	tinkCrowdHurry = 0.5         // and how much it hurries the next one along
-	windFarVolume  = 0.18        // the wind, the whole region in view
-	windNearVolume = 0.04        // the wind, the ground in view
-	poolBedVolume  = 1.0         // the pool's buried seethe, up close
-	dripSoonest    = 120         // ticks between two drips at the least: 2 s
-	dripLatest     = 420         // and at the most: 7 s
-	gurgleSoonest  = 600         // ticks between gurgles: 10 s
-	gurgleLatest   = 1500        // 25 s
-	tinkSoonest    = 12          // ticks between two pings at the least: 0.2 s
-	tinkLatest     = 75          // and at the most: 1.25 s
-	nearZoomSpan   = 2.0         // zooms of glide from a whisper to a full world
-	nearZoomFloor  = 0.35        // the weight the world keeps at the farthest stop
-	audioReach     = 2800.0      // ordinary world max range, meters
-	audioViewReach = 1.5         // view radii ordinary sounds carry
-	shellReach     = 3800.0      // a cannon carries farther than small arms
-	audioFalloff   = 3.2         // nearby sounds dominate the general mix
-	shellFalloff   = 1.3         // cannon reports keep more of their distance
-	audioHigh      = 2100.0      // cannon listener height at the farthest zoom
-	audioFloor     = 0.02        // quieter than this and a sound doesn't start
+	uiClickVolume  = 0.8       // a press of the interface
+	uiClickPitch   = 0.72      // a deeper press than the source recording
+	placeVolume    = 0.7       // a site marked on the ground
+	alertVolume    = 0.65      // a new rival report
+	shellVolume    = 1.0       // the colony's artillery speaking
+	shellFarVolume = 0.9       // a rival city's mobile artillery
+	gunVolume      = 0.9       // small arms, the colony's and the rivals'
+	gunCooldown    = 4         // ticks between two small-arm sounds at most
+	burstVolume    = 1.0       // a shell landing
+	whistleVolume  = 0.18      // a shell coming down where the view stands
+	whistleCount   = 8         // independent incoming shells at once
+	dripVolume     = 0.3       // an oil pool's bloop
+	gurgleVolume   = 0.275     // its rarer, thicker cousin
+	tinkVolume     = 0.32 / 24 // a lilac vein's crystal ping
+	ringVolume     = 0.1       // the vein's resonance at its loudest
+	dropHushZoom   = 28        // zoom where the oil drops fall silent
+	dropHushSpan   = 4         // zooms of fade from that silence up
+	ringCycle      = 20 * 60   // ticks of one ring's swell: 20 s
+	tinkCrowdBoost = 0.15      // how much every extra audible vein lifts a ping
+	tinkCrowdHurry = 0.5       // and how much it hurries the next one along
+	windFarVolume  = 0.18      // the wind, the whole region in view
+	windNearVolume = 0.04      // the wind, the ground in view
+	poolBedVolume  = 1.0       // the pool's buried seethe, up close
+	dripSoonest    = 120       // ticks between two drips at the least: 2 s
+	dripLatest     = 420       // and at the most: 7 s
+	gurgleSoonest  = 600       // ticks between gurgles: 10 s
+	gurgleLatest   = 1500      // 25 s
+	tinkSoonest    = 12        // ticks between two pings at the least: 0.2 s
+	tinkLatest     = 75        // and at the most: 1.25 s
+	nearZoomSpan   = 2.0       // zooms of glide from a whisper to a full world
+	nearZoomFloor  = 0.35      // the weight the world keeps at the farthest stop
+	audioReach     = 2800.0    // ordinary world max range, meters
+	audioViewReach = 1.5       // view radii ordinary sounds carry
+	shellReach     = 3800.0    // a cannon carries farther than small arms
+	audioFalloff   = 3.2       // nearby sounds dominate the general mix
+	shellFalloff   = 1.3       // cannon reports keep more of their distance
+	audioHigh      = 2100.0    // cannon listener height at the farthest zoom
+	audioFloor     = 0.02      // quieter than this and a sound doesn't start
 )
 
 type audioField struct {
@@ -141,6 +144,21 @@ func nearness(zoom float32) float32 {
 		(1-nearZoomFloor)*golib.Clamp((zoom-1)/nearZoomSpan, 0, 1)
 }
 
+// dropHush says how much the oil drops sound at a zoom: whole voice on
+// the ground, and silence as soon as the view rises past dropHushZoom,
+// so the bloops keep to the closest stops whatever the view covers.
+func dropHush(zoom float32) float32 {
+	return golib.Clamp((zoom-dropHushZoom)/dropHushSpan, 0, 1)
+}
+
+// ringSwell is the ring's amplitude modulation: one slow, whole wave of
+// ringCycle ticks, so the vein's resonance swells up, falls silent and
+// swells again - a little while sounding every so often.
+func ringSwell(ticks int64) float32 {
+	phase := 2 * math.Pi * float64(ticks%ringCycle) / float64(ringCycle)
+	return float32(0.5 + 0.5*math.Cos(phase))
+}
+
 // audible weighs an ordinary world sound by its distance from the view
 // and the size of the ground currently on screen.
 func (a *audioField) audible(s *playScene, x, y, base float64) float32 {
@@ -206,14 +224,19 @@ func (a *audioField) update(s *playScene, ticks int) {
 	if _, _, heard, _ := a.nearestDeposit(s, kindOil); heard > 0 {
 		a.oilBed.SetVolume(float32(math.Sqrt(float64(heard))) * poolBedVolume)
 		a.oilBed.Loop()
+		hush := dropHush(s.zoom)
 		a.dripIn -= ticks
 		a.gurgleIn -= ticks
 		if a.dripIn <= 0 {
-			a.drip.PlayWith(heard*dripVolume, golib.RandomFloat(0.7, 1.1))
+			if v := heard * dripVolume * hush; v >= audioFloor {
+				a.drip.PlayWith(v, golib.RandomFloat(0.7, 1.1))
+			}
 			a.dripIn = dripSoonest + golib.RandomInt(0, dripLatest-dripSoonest)
 		}
 		if a.gurgleIn <= 0 {
-			a.gurgle.PlayWith(heard*gurgleVolume, golib.RandomFloat(0.9, 1.1))
+			if v := heard * gurgleVolume * hush; v >= audioFloor {
+				a.gurgle.PlayWith(v, golib.RandomFloat(0.9, 1.1))
+			}
 			a.gurgleIn = gurgleSoonest + golib.RandomInt(0, gurgleLatest-gurgleSoonest)
 		}
 	} else {
@@ -222,7 +245,7 @@ func (a *audioField) update(s *playScene, ticks int) {
 	}
 
 	if _, _, heard, crowd := a.nearestDeposit(s, kindLilac); heard > 0 {
-		a.ring.SetVolume(heard * ringVolume)
+		a.ring.SetVolume(heard * ringVolume * ringSwell(s.state.Ticks))
 		a.ring.Loop()
 		a.tinkIn -= ticks
 		if a.tinkIn <= 0 {

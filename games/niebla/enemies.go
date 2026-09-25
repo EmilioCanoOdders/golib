@@ -340,7 +340,7 @@ func reportWords(r Report) string {
 	case ReportRazed:
 		return fmt.Sprintf("[danger]A shell brought a building down, %s.[/] Half of it lies there as a pile.", where)
 	case ReportPumpEaten:
-		return "[danger]Oops: mites ate the pump![/] Build a protector over the pool first."
+		return "[danger]mites ate the pump![/] Build a protector over the pool first."
 	}
 	return ""
 }
