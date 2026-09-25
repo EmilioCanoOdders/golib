@@ -42,7 +42,7 @@ func TestDevSpawnRobotPutsAFreeBuiltRobotOnTheSpot(t *testing.T) {
 	}
 }
 
-func TestDevResetWorldDealsTheRegionAgain(t *testing.T) {
+func TestDevResetWorldReplaysSeedAndResetsState(t *testing.T) {
 	s := newGame()
 	Apply(s, DevSpawnRobot{X: 500, Y: 700})
 	runTicks(s, 120)
@@ -64,6 +64,25 @@ func TestDevResetWorldDealsTheRegionAgain(t *testing.T) {
 	Apply(newGame(), Tick{})
 	if land.Seed != defaultSeed {
 		t.Errorf("a tick on the default region ran on the ground of seed %d", land.Seed)
+	}
+}
+
+func TestDistinctWorldSeedNeverRepeatsTheCurrentSeed(t *testing.T) {
+	tests := []struct {
+		previous, candidate, want int64
+	}{
+		{previous: 0, candidate: 7, want: 7},
+		{previous: 7, candidate: 7, want: 8},
+		{previous: math.MaxInt32 - 1, candidate: math.MaxInt32 - 1,
+			want: math.MaxInt32},
+		{previous: math.MaxInt32, candidate: math.MaxInt32, want: 1},
+	}
+	for _, test := range tests {
+		got := distinctWorldSeed(test.previous, test.candidate)
+		if got == test.previous || got != test.want {
+			t.Errorf("distinctWorldSeed(%d, %d) = %d, want %d",
+				test.previous, test.candidate, got, test.want)
+		}
 	}
 }
 

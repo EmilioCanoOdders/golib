@@ -259,14 +259,20 @@ screen; they never move the camera or take input.
 ## Dev tools
 For whoever works on the game, not for the player: in the region, hold Control and click the game's name twice (within `devDoubleClickTicks` 24 updates) and a strip of buttons opens under the HUD, in two rows, `dev` beside the name; the same gesture closes it, and it stays open across a trip to the menu. The strip is view (`dev.go`), and what its buttons do are actions like any other, so a log with them in it still replays:
 - **hold a swell / let the swell go** (`DevHoldSwell`): raises a swell at once and holds it up - `Fog.Held`, under which a swell doesn't drain - until the button lets it go, which ends it. A held swell is not one of the fog's own: `Fog.Swells` doesn't count it, so the swells to come are no sooner, longer or deeper for it. While it is held the calm's countdown waits.
-- **reset world** and **new world** (`DevResetWorld`): deal the region again from nothing - the first on the seed the state already has, the second on a seed of its own, which `dev   seed N` beside the name shows - and save at once, so the old base is gone from the database too. What the scene held of the old region (the picked cell, an open menu, a pipe in hand, the mites) goes with it. It is the way out of a save whose ground the generator has since changed.
+- **reset world** and **replay seed** (`DevResetWorld`): reset world deals
+  the region again from nothing on a random seed different from the current
+  one; replay seed uses the current seed to deal the same map again. The seed
+  shows beside `dev`. Both save at once, so the old base is gone from the
+  database too. What the scene held of the old region (the picked cell, an
+  open menu, a pipe in hand, the mites) goes with it. It is the way out of a
+  save whose ground the generator has since changed.
 - **rivals: next visit** (`DevNextVisit`): brings the next timed arrival now, the scout/intro raid before the cities and a city crawler afterward. It waits while a non-settled party is moving.
 - **rivals: stop waiting** (`DevHurryRivals`): ends the wait of a camped intro party or city battalion, so it moves on the next tick.
 - **rivals: new city** (`DevNewCity`): establishes a city now, up to `cityLimit` 3.
 - **finish city build** (`DevFinishCityBuilding`): completes one next building in the oldest city.
 - **finish battalion** (`DevFinishCityBattalion`): creates the oldest city's next complete force, assembled and waiting.
 - **send battalion** (`DevSendCityBattalion`): ends that city's current assembly wait; it starts moving on the next tick.
-- **fast forward x8**, under `new world`: the play scene sends `devFastTicks` 8 ticks an update instead of one until the button is pressed again, so a wait passes sooner. It is view, not state: the ticks are the same ones, so a game played fast is the same game.
+- **fast forward x8**, under `replay seed`: the play scene sends `devFastTicks` 8 ticks an update instead of one until the button is pressed again, so a wait passes sooner. It is view, not state: the ticks are the same ones, so a game played fast is the same game.
 - **place robots** (`DevSpawnRobot`): arms the pointer, and every left click on the region puts a built robot there, its tank full, for nothing - in the fog too, which is what it is for. The button again, or a right click, disarms it. While armed, clicks don't inspect or open the build menu.
 
 ## Rules (MVP)

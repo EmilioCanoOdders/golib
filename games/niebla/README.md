@@ -122,7 +122,7 @@ In the region, hold Control and click the game's name twice: a strip
 opens under the HUD, in two rows. The first: **hold a swell** (the fog
 presses in and stays until the button lets it go), **place robots**
 (every click on the region drops a free built robot there; a right click
-disarms), **reset world**, **new world**, **rivals: next visit**,
+disarms), **reset world**, **replay seed**, **rivals: next visit**,
 **rivals: stop waiting**, **fast forward x8** and **next schematics**.
 The second row: **rivals: new city**, **finish city build**,
 **finish battalion** and **send battalion**. In a scripted shot:
@@ -134,9 +134,10 @@ The second row: **rivals: new city**, **finish city build**,
   Mouse@18:204,77 MouseLeft@19 Mouse@22:250,330 MouseLeft@23"
 ```
 
-`reset world` deals the region again on the seed it has and `new world`
-on another (`DevResetWorld`), saving at once; the seed stands beside
-`dev`. `Mouse@50:460,77 MouseLeft@51` presses `new world` in a shot.
+`reset world` deals the region again on a different seed; **replay seed**
+resets the colony on the same map (`DevResetWorld`). Both save at once;
+the seed stands beside `dev`. In a shot, click `reset world` at `332,77`
+or `replay seed` at `460,77`.
 `rivals: next visit` brings the next scheduled arrival in immediately
 (`DevNextVisit`): the scout, the introductory raid or, after the
 introduction, a crawler on its way to found a city. It waits while a
@@ -199,7 +200,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `inspect.go` | The inspection panel: layout, hit testing, painting, clickable paginated worker portraits, remotely opened robot cards, individual recall and return buttons, other card actions and the integrity line of a damaged building; the cell's outline (`cellDiamond`) |
 | `mites.go` | The fog's wear, for looks only: mites of darkness orbiting whatever stands in the mist, by its volume, trailing walkers and closing in on what stands still; view, never state |
 | `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, orange bands sized by offered flow and animated by liters moved) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
-| `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset/new world, next arrival, create city, finish one city building, finish/send a battalion, fast-forward and next schematics —; view only, acting through `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
+| `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset/replay the world, next arrival, create city, finish one city building, finish/send a battalion, fast-forward and next schematics —; view only, acting through `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
 | `tech.go` | The schematics on the screen: the badge over the core - breathing halos around the drop's mark - while an unopened drop waits, the callout its click opens (`techWords`, `techWrap`) with a square per thing the drop brings (`techBrings`, `drawTechSquares`), and the words (`techWords`) and ink (`techInk`) of each drop; view, never state |
 | `guides.go` | Screen-edge arrows for an offscreen rival report or pending schematics, with layout kept clear of the HUD and the two guides separated when they point the same way; view, never state |
 | `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and amplitude-modulated crystal pings, gunfire and shell impacts, low interface clicks, a site-marking thump and a low fanfare for new rival reports. Ordinary world emitters fade steeply with distance and become quiet beyond the view; cannon reports keep their longer, gentler range. Individual shell whistles track their own positions through the descending half of flight. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |

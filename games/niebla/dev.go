@@ -24,11 +24,11 @@ const (
 
 	devSwellButton           = 0
 	devRobotButton           = 1
-	devResetButton           = 2 // the same region, dealt again
-	devWorldButton           = 3 // another region, from a seed of its own
+	devResetButton           = 2 // another region, with a different seed
+	devReplayButton          = 3 // the same region, dealt again
 	devVisitButton           = 4 // the rivals' next visit, now
 	devHurryButton           = 5 // a camped party stops waiting; it sits under the visit's
-	devFastButton            = 6 // the game at devFastTicks a frame; under new world's
+	devFastButton            = 6 // the game at devFastTicks a frame; under replay seed
 	devTechButton            = 7
 	devCityButton            = 8
 	devBuildCityButton       = 9
@@ -110,11 +110,14 @@ func (d *devTools) update(s *playScene, input *golib.Input) bool {
 		return true
 	}
 	if devButtonBounds(devResetButton).Contains(mx, my) {
-		d.resetWorld(s, s.state.Seed)
+		d.resetWorld(s, distinctWorldSeed(
+			s.state.Seed,
+			int64(golib.RandomInt(1, math.MaxInt32)),
+		))
 		return true
 	}
-	if devButtonBounds(devWorldButton).Contains(mx, my) {
-		d.resetWorld(s, int64(golib.RandomInt(1, math.MaxInt32)))
+	if devButtonBounds(devReplayButton).Contains(mx, my) {
+		d.resetWorld(s, s.state.Seed)
 		return true
 	}
 	if devButtonBounds(devVisitButton).Contains(mx, my) {
@@ -158,6 +161,13 @@ func (d *devTools) update(s *playScene, input *golib.Input) bool {
 	return false
 }
 
+func distinctWorldSeed(previous, candidate int64) int64 {
+	if candidate != previous {
+		return candidate
+	}
+	return candidate%math.MaxInt32 + 1
+}
+
 // resetWorld deals the region again on a seed and saves it at once, so
 // the base that was is gone from the database too. What the scene held
 // of the old region - the picked cell, an open menu, a pipe in hand, the
@@ -199,7 +209,7 @@ func (d *devTools) draw(s *playScene, screen *golib.Screen) {
 		devSwellButton:           swell,
 		devRobotButton:           robot,
 		devResetButton:           "reset world",
-		devWorldButton:           "new world",
+		devReplayButton:          "replay seed",
 		devVisitButton:           "rivals: next visit",
 		devHurryButton:           "rivals: stop waiting",
 		devCityButton:            "rivals: new city",
@@ -213,7 +223,7 @@ func (d *devTools) draw(s *playScene, screen *golib.Screen) {
 		devSwellButton:           s.state.Fog.Held,
 		devRobotButton:           d.placing,
 		devResetButton:           false,
-		devWorldButton:           false,
+		devReplayButton:          false,
 		devVisitButton:           len(s.state.Parties) > 0,
 		devHurryButton:           false,
 		devCityButton:            len(s.state.Cities) >= cityLimit,
