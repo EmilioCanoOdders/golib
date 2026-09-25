@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"reflect"
@@ -96,14 +97,147 @@ func TestAPumpStandsOnAPoolAndAPoolTakesOne(t *testing.T) {
 	if canPlace(s, BuildingPump, pc+1, pr) {
 		t.Error("a pool with a pump rising took a second one")
 	}
-	for _, far := range land.deposits {
-		if far.Kind != kindOil || far == d {
+}
+
+func TestExternalPumpIsEatenUnlessProtected(t *testing.T) {
+	s := newGame()
+	seedStock(s)
+	arriveAll(s)
+	noRivals(s)
+	safe := safePool(t)
+	var far Deposit
+	for _, d := range land.deposits {
+		if d.Kind != kindOil || d == safe {
 			continue
 		}
-		if fc, fr := pumpCell(far); canPlace(s, BuildingPump, fc, fr) {
-			t.Errorf("the pool at %d, %d took a pump outside every bubble",
-				far.Col, far.Row)
+		x, y := cellCenterUnits(d.HeartCol, d.HeartRow)
+		if !inSafeZone(s, x, y) {
+			far = d
+			break
 		}
+	}
+	if far.Kind == 0 {
+		t.Fatal("no oil pool outside the core's bubble")
+	}
+	col, row := pumpCell(far)
+	panel := tooltipLayout(s, newPlayScene(s).camera,
+		col, row, map[string]bool{})
+	if panel.findButton(buttonBuildPump) == nil {
+		t.Fatal("the outside pool doesn't offer its pump")
+	}
+	Apply(s, MarkBuilding{Kind: BuildingPump, Col: col, Row: row})
+	if len(s.Jobs) != 1 {
+		t.Fatal("the outside pool refused its pump site")
+	}
+	if !tickUntil(s, 60*180, func() bool {
+		_, built := buildingAt(s, col, row)
+		return built
+	}) {
+		t.Fatal("robots never raised the outside pump")
+	}
+	pump, _ := buildingAt(s, col, row)
+	runTicks(s, pumpFogTicks/2)
+	if _, stands := s.Buildings[pump.ID]; !stands {
+		t.Fatal("the pump vanished before mites could be seen eating it")
+	}
+	if s.Buildings[pump.ID].Damage <= 0 {
+		t.Error("the unprotected pump has no damage")
+	}
+	mites := newMiteField()
+	mites.update(s, 1.0/60)
+	host := mites.hosts[fmt.Sprintf("building:%d", pump.ID)]
+	if host == nil || host.Wanted == 0 {
+		t.Error("no mites gather on the exposed pump")
+	}
+	runTicks(s, pumpFogTicks/2)
+	if _, stands := s.Buildings[pump.ID]; stands {
+		t.Fatal("the unprotected pump survived the mites")
+	}
+	if lastReport(s).Kind != ReportPumpEaten {
+		t.Errorf("no explanation for the lost pump: %+v", s.Reports)
+	}
+	if pile, ok := pileAt(s, col, row); !ok ||
+		pile.Lilac != pumpCostLilac*wreckRefund {
+		t.Errorf("the pump left pile %v, found %v", pile, ok)
+	}
+	if canPlace(s, BuildingPump, col, row) {
+		t.Error("the wreck does not hold the pump cell")
+	}
+}
+
+func TestProtectorKeepsExternalPumpSafe(t *testing.T) {
+	s := newGame()
+	seedStock(s)
+	arriveAll(s)
+	noRivals(s)
+	safe := safePool(t)
+	var far Deposit
+	for _, d := range land.deposits {
+		if d.Kind == kindOil && d != safe {
+			far = d
+			break
+		}
+	}
+	if far.Kind == 0 {
+		t.Fatal("no second oil pool")
+	}
+	col, row := pumpCell(far)
+	pump := pumpOn(t, s, far)
+	runTicks(s, pumpFogTicks/2)
+	if s.Buildings[pump.ID].Damage == 0 {
+		t.Fatal("the external pump has not begun to be digested")
+	}
+	pc, pr, found := protectorSite(far)
+	if !found {
+		t.Fatal("no ground for a protector near the second pool")
+	}
+	protector := raised(t, s, BuildingProtector, pc, pr)
+	if x, y := cellCenterUnits(col, row); !inSafeZone(s, x, y) {
+		t.Fatalf("protector %d does not cover the pump", protector.ID)
+	}
+	mites := newMiteField()
+	mites.update(s, 1.0/60)
+	host := mites.hosts[fmt.Sprintf("building:%d", pump.ID)]
+	if host != nil && host.Wanted != 0 {
+		t.Error("mites still swarm a sheltered pump")
+	}
+	damage := s.Buildings[pump.ID].Damage
+	runTicks(s, pumpFogTicks)
+	if b, ok := s.Buildings[pump.ID]; !ok || b.Damage != damage {
+		t.Errorf("the protected pump didn't survive unchanged: %+v, %v", b, ok)
+	}
+}
+
+func TestWriteExternalPumpShotState(t *testing.T) {
+	path := os.Getenv("NIEBLA_PUMP_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_PUMP_SHOT_STATE to write the pump shot state")
+	}
+	s := newGame()
+	seedStock(s)
+	arriveAll(s)
+	noRivals(s)
+	safe := safePool(t)
+	placed := false
+	for _, d := range land.deposits {
+		if d.Kind != kindOil || d == safe {
+			continue
+		}
+		pump := pumpOn(t, s, d)
+		pump.Damage = buildingHealth(pump.Kind) / 3
+		s.Buildings[pump.ID] = pump
+		placed = true
+		break
+	}
+	if !placed {
+		t.Fatal("no second oil pool for the shot")
+	}
+	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 

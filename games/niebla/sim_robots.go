@@ -45,6 +45,7 @@ func stepSim(s *State) {
 	stepFactories(s)
 	stepPipes(s)
 	stepProtectors(s)
+	stepPumpExposure(s)
 	stepSquads(s)
 	stepEnemies(s)
 	stepGuards(s)

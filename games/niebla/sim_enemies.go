@@ -163,6 +163,7 @@ const (
 	ReportGun          ReportKind = "gun"
 	ReportBaseDown     ReportKind = "basedown" // a base fell
 	ReportRazed        ReportKind = "razed"    // a shell brought a building down
+	ReportPumpEaten    ReportKind = "pumpeaten"
 	ReportSortie       ReportKind = "sortie"
 	ReportCityIncoming ReportKind = "cityincoming"
 	ReportCityBuilding ReportKind = "citybuilding"

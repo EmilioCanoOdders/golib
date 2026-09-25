@@ -20,6 +20,8 @@ const (
 	mitesPerCubicUnit = 0.04 // mites per u3 of body, in full fog
 	mitesMaxPerHost   = 400
 	mitesBornPerTick  = 3 // how fast a swarm gathers around a newcomer
+	pumpMitesMin      = 15
+	pumpMitesMax      = 100
 
 	miteLagSeconds   = 0.6  // how late a mite follows its orbit
 	miteGripSeconds  = 2.0  // standing still this long, the swarm has closed in
@@ -106,6 +108,20 @@ func (f *miteField) update(s *State, dt float32) {
 		h := f.host(siteMiteKey(job.Col, job.Row), x, y, dt)
 		h.Across, h.Height = buildingSize(job.Kind)
 		h.want(s)
+	}
+	for _, id := range sortedBuildingIDs(s) {
+		b := s.Buildings[id]
+		if b.Kind != BuildingPump {
+			continue
+		}
+		x, y := cellCenterUnits(b.Col, b.Row)
+		h := f.host(fmt.Sprintf("building:%d", id), x, y, dt)
+		h.Across, h.Height = buildingSize(b.Kind)
+		h.want(s)
+		if !inSafeZone(s, x, y) {
+			h.Wanted = pumpMitesMin + int(float64(pumpMitesMax-pumpMitesMin)*
+				b.Damage/buildingHealth(b.Kind))
+		}
 	}
 	for _, id := range sortedPileIDs(s) {
 		p := s.Piles[id]

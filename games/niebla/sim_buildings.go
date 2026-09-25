@@ -12,14 +12,15 @@ const (
 	// Raising a building, paid from the stores the moment it is marked.
 	// Every building asks lilac; those that need an initial oil supply
 	// also ask for it here.
-	factoryCostLilac   = 200.0 // kg
-	chargerCostLilac   = 120.0 // kg
-	chargerCostOil     = 40.0  // L
-	siloCostLilac      = 100.0 // kg
-	warehouseCostLilac = 100.0 // kg
-	protectorCostLilac = 180.0 // kg
-	protectorCostOil   = 40.0  // L: the protector's initial charge
-	pumpCostLilac      = 150.0 // kg
+	factoryCostLilac   = 200.0   // kg
+	chargerCostLilac   = 120.0   // kg
+	chargerCostOil     = 40.0    // L
+	siloCostLilac      = 100.0   // kg
+	warehouseCostLilac = 100.0   // kg
+	protectorCostLilac = 180.0   // kg
+	protectorCostOil   = 40.0    // L: the protector's initial charge
+	pumpCostLilac      = 150.0   // kg
+	pumpFogTicks       = 10 * 60 // ticks an unprotected pump survives
 
 	buildingWorkTicks = 600 // ticks of robot work to raise any building: 10 s
 
@@ -169,8 +170,8 @@ func buildableGround(col, row int) bool {
 // canPlace reports whether a kind may be marked on a cell: ground that
 // takes it - the pump is the one kind that stands on oil instead, on a
 // pool with oil left in it and no pump yet - a flat cell, nothing else
-// on it, and a bubble over it, which the protector alone is built to
-// stand outside of.
+// on it, and a bubble over it, except for pumps and protectors. A pump
+// can be raised outside a bubble, but the mites will digest it.
 func canPlace(s *State, kind BuildingKind, col, row int) bool {
 	if col < 0 || row < 0 || col >= regionCellCols || row >= regionCellRows {
 		return false
@@ -199,7 +200,28 @@ func canPlace(s *State, kind BuildingKind, col, row int) bool {
 		return false // loose items hold the cell until they are hauled off
 	}
 	x, y := cellCenterUnits(col, row)
-	return kind == BuildingProtector || inSafeZone(s, x, y)
+	return kind == BuildingProtector || kind == BuildingPump ||
+		inSafeZone(s, x, y)
+}
+
+func stepPumpExposure(s *State) {
+	for _, id := range sortedBuildingIDs(s) {
+		b := s.Buildings[id]
+		if b.Kind != BuildingPump {
+			continue
+		}
+		x, y := cellCenterUnits(b.Col, b.Row)
+		if inSafeZone(s, x, y) {
+			continue
+		}
+		b.Damage += buildingHealth(b.Kind) / pumpFogTicks
+		if b.Damage < buildingHealth(b.Kind) {
+			s.Buildings[id] = b
+			continue
+		}
+		s.takeDown(b, wreckRefund)
+		s.report(ReportPumpEaten, 0, x, y)
+	}
 }
 
 // inSafeZone reports whether a world point stands inside a bubble: the

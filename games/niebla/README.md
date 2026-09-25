@@ -68,6 +68,17 @@ The test prints where the badge stands on the screen for the current
 layout. `NIEBLA_TECH_PIPES_SHOT_STATE` writes the frontier kit instead,
 with the pipes' square among the blueprints; both may be written at once.
 
+To inspect a pump being eaten outside every bubble, write its state and
+take shots before and after the mites finish it:
+
+```text
+NIEBLA_PUMP_SHOT_STATE=../../build/niebla/pump.json \
+  ./golib go -C games/niebla test \
+  -run TestWriteExternalPumpShotState
+./golib shot niebla 120 600 --save build/niebla/pump.json \
+  --input "Enter@1 Mouse@2:904,361 MouseWheel@3:3"
+```
+
 A shot starts on the menu; `Enter@1` presses Play (or click it: `Mouse@5:640,390
 MouseLeft@6`). Inside the region:
 
@@ -164,7 +175,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `actions.go` | The actions (`Tick`, `SendRobot`, ID-specific `RecallRobot`, `MarkBuilding`, `QueueRobot`, `QueueMechanic`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
 | `sim_robots.go` | The workers' rules and tuning: `robotDay`, the task priorities — haul, refuel, mechanic repairs, loading, protector jobs before other construction, pipe, piles, post, squad or idle —, `postRobots` and `pickRobot` for shared deposits, movement's saved facing octant, pipe-section claims and idle ranks |
 | `sim_piles.go` | Demolition, unit wrecks and loose items: `canDemolish`, the 25% unit recovery (`dropRobotWreck`), the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
-| `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, protector upkeep and radius fade, storage caps, refuel spots, production costs and duration for workers, troopers and mechanics |
+| `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, unprotected pump exposure, protector upkeep and radius fade, storage caps, refuel spots, production costs and duration for workers, troopers and mechanics |
 | `sim_oil.go` | Oil's spendable tanks and dedicated protector reserves: `oilTotal`, `oilCap`, `payOil`, all physical tank capacity, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
 | `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus`; protectors fill before passing surplus, and each pipe records offered, moved and cumulative liters for the view |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
@@ -208,7 +219,11 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `world_test.go` | The simulation driven directly: starting robots, hauling, multiple workers sharing a deposit, individual recall, priority, dry deposits, determinism, JSON round trip |
 | `economy_test.go` | The deterministic economy probe: safe harvesting, worker growth and a protected oil outpost over three seeds, sampled each minute into an opt-in CSV report with protector fuel separated from spendable oil |
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
+<<<<<<< HEAD
 | `pipes_test.go` | Pumps and pipes driven directly: a pump stands on a pool and a pool takes one, pump and site cards stay on the pump cell while the deposit card spans its patch, the pump body is clickable, pipes are paid by section and laid by robots, who claim a section each - the nearest free one - and stand by it until it is laid, a half-laid pipe from an old save keeps its work, a laid pipe carries the pool into its tank and stops at a full one or a dry pool, protectors fill before passing surplus and each keeps its upkeep, source outlets share equally, bands reflect offered flow while movement follows actual flow, oil has a place and pipes move it between tanks, robots carry oil to a tank with room and refill where there is oil, what `LayPipe` refuses, a pipe leaves with its ends and its cost falls as a pile, the curve passes through its bends, pipes survive and resume a save deterministically; can write a pump-versus-protector flow fixture with `NIEBLA_PIPE_FLOW_SHOT_STATE` |
+=======
+| `pipes_test.go` | Pumps and pipes driven directly: a pump stands on a pool and a pool takes one, outside pumps are offered and consumed by mites unless sheltered, pump and site cards stay on the pump cell while the deposit card spans its patch, the pump body is clickable, pipes are paid by section and laid by robots, who claim a section each - the nearest free one - and stand by it until it is laid, a half-laid pipe from an old save keeps its work, a laid pipe carries the pool into its tank and stops at a full one or a dry pool, oil has a place and pipes move it between tanks (shares, ports, payments, a demolished tank's oil), robots carry oil to a tank with room and refill where there is oil, what `LayPipe` refuses, a pipe leaves with its ends and its cost falls as a pile, the curve passes through its bends, pipes survive a save |
+>>>>>>> d69071e (niebla: watch the mites erupt after eating your pump)
 | `protector_test.go` | Protector fuel: upkeep drains its dedicated tank, radius fades below the configured threshold and vanishes empty, robots and pipes refill it, the reserve stays unavailable to other costs, old saves migrate once with starting charge, and an opt-in state fixture supports visual shots |
 | `mites_test.go` | The mites driven with no window: counted by volume and only in the fog, tight on what stands still and trailing a walker, fading over what is gone, the falloff's layers |
 | `dev_test.go` | The dev actions: a held swell stays up and doesn't count, a placed robot is built, the city tool buttons have separate hit boxes, `unitsAtWorld` undoes `project` |
@@ -309,9 +324,11 @@ shows the part already built in solid colors inside a **wireframe** of
 the whole body, with the work's progress bar under the cell, drawn over
 the fog so a site in the mist stays visible.
 
-The fog's law, in `canPlace` and `inSafeZone`: nothing but a protector
-may be marked outside a bubble, so expansion is protector first, then
-the infrastructure it shelters. A protector is a dedicated 200 L tank
+The fog's law, in `canPlace` and `inSafeZone`: protectors and pumps
+may be marked outside a bubble; a finished pump there is swarmed by mites
+and digested in 10 seconds unless a protector shelters it. The loss is
+reported and half the pump's cost falls as a pile. Other infrastructure
+must be marked under a bubble. A protector is a dedicated 200 L tank
 (`protectorOilCap`), initially charged with the 40 L paid for its blueprint;
 it burns `protectorOilPerSecond` every second. Its full 400 m radius starts
 fading below `protectorRadiusFadeBelow` (5% of capacity), reaches zero when
@@ -339,7 +356,7 @@ takes no more until it is used or piped away.
 
 The **pump** (`BuildingPump`) is the one kind `canPlace` takes on oil
 instead of ground: on a pool with oil left and no pump yet
-(`patchPumped`), inside a bubble. It isn't in the radial menu - a click on
+(`patchPumped`), even outside a bubble. It isn't in the radial menu - a click on
 a pool inspects it - so the pool's card carries `build pump`, which marks
 it on `pumpCell`, the patch's middle. The pump and its site appear only on
 that cell; the rest of the pool keeps its deposit card. The patch still

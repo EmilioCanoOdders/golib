@@ -89,7 +89,7 @@ This is what makes pipes infrastructure rather than a shortcut: a silo beside a 
 ## Pumps and pipes
 The game has no belts and never will, but oil flows through pipes, so it stops riding in robots' arms where a pipe runs.
 
-**The pump comes first.** A pump is a building that stands on an oil pool instead of on ground: the pool's card carries a `build pump` button (its cost beside it) while the stores can pay and its schematics have arrived, and the pump rises on the pool's middle like any site. A pool takes one pump, a dry pool none, and the fog's law holds: a far pool needs a protector over it first. A pump with no pipe does nothing, and a pool keeps its robot post, pump or not.
+**The pump comes first.** A pump is a building that stands on an oil pool instead of on ground: the pool's card carries a `build pump` button (its cost beside it) while the stores can pay and its schematics have arrived, and the pump rises on the pool's middle like any site. A pool takes one pump, a dry pool none. A far pool can take an unprotected pump, but mites gather on the finished pump and digest it in 10 seconds without a protector's active bubble; a news plate explains the loss and half its cost falls as a pile. A protector raised in time halts the damage. A pump with no pipe does nothing, and a pool keeps its robot post, pump or not.
 
 **A network, by ports.** A pipe carries oil one way, from a pump or a tank
 into a tank: pool to silo, silo to another silo, silo to a charger or
@@ -431,6 +431,10 @@ has `mechanicHealth` 60 health and repairs at `repairPerSecond` 6
 damage/s for `repairOilPerPoint` 0.2 L per damage (`sim_squads.go`,
 `sim_shots.go`).
 
+An unprotected finished pump loses its full health over `pumpFogTicks`
+600 ticks (10 s) in `sim_buildings.go`; `pumpMitesMin` 15 to
+`pumpMitesMax` 100 in `mites.go` grows its visible swarm as it fails.
+
 Pinned as code lands, all at the top of the sim files with units in the name: `fogCycleTicks`, `protectorOilPerSecond`, `robotChargeSeconds`, `robotMoveSpeed` (units/s), `oilPerPoolUnit`, `lilacPerVeinUnit`, blueprint costs. Pinned so far, in `region.go`: `regionCols`/`regionRows` (25x25 tiles), `tileW`/`tileH` (48x24 px at 2K/2), `unitsPerTile` 200 (the world's unit is a meter: a tile is 200 m across, the region 5 km; a robot is 6 u across, the core's monolith 16 u, a future building 40 u, a deposit patch of four tiles is 400 m aside), `coreBubbleRadius` 4 tiles, `fogLineRadius` 10.5 tiles, `fogFadeTiles` 2.4 tiles. In `play.go`: `zoomOut`/`zoomIn`, the wheel's stops, each twice the last: 1, 2, 4, 8, 16, 32 (stop 0 shows the whole region as icons, stop 5 about 80 m of ground; at 32 a robot's 6 u is about 46 screen px), `zoomGlide` 0.1 s (the zoom glides from stop to stop instead of jumping, keeping the point under the cursor under it; only at rest is the zoom a whole power of two), `panSpeed` 480 screen px/s, constant on the screen at every zoom; the right button drags the view, grab style. The camera is view, not state: it lives in the play scene and never serializes. In `draw.go`: `propZoom` 4, the zoom from which the rocks and bushes are drawn; they are world-sized (6 u across), so zooming in grows them from pebbles to boulders. Robots draw at their world size but never under about 3 screen px (`dotRadius`): far out, everything alive is a point, R.U.S.E.-style. The core draws as a dark monolith on its tile's middle (`drawCore`), broad face to the right, a seam of light down it and a top in the core's warm white, the part the glow filter picks; it obeys the buildings' icon law and sorts by depth among them, and its pad, the whole tile, lies on the ground under the robots. Deposits draw as one continuous body per patch - a pool as one sheet of oil, a vein as one shelf with crystal clusters over its tiles - shrinking as the patch drains, one big scar when dry. The fog's shape and speed are the feel of the game: their section is [The fog](#the-fog), and their dials are pinned, in `sim_fog.go`: `fogCycleTicks` 1800 (30 s a cycle), `fogSwellPeriod` 18 cycles (the first swell at 9 min), `fogSwellQuickener` 0.90 (each swell shortens the next calm; `fogSwellMinPeriod` 4 cycles), `fogSwellTicks` 900 (15 s) growing `fogSwellTicksGrowth` 180 apiece to `fogSwellTicksMax` 3600 (a minute), `fogSwellReach` 2.0 tiles growing `fogSwellGrowth` 0.35 apiece, capped by `fogSwellMargin` 0.75 tiles the line never takes off the bubble, `fogSwellSpeedFactor` 0.25 in the pushed band (fog that was already there keeps `fogSpeedFactor` 0.5) and `fogSwellBurn` 1.5x outside the bubbles.
 
 In `sim_tech.go`: `techFrontierTicks` 5:30 is the ladder's clock drop;
@@ -531,6 +535,7 @@ rules are in [Rules (MVP)](#rules-mvp).
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+<<<<<<< HEAD
 - 2026-09-25: pipe bands show each source's offered flow as orange length,
   with 90% orange at a pump's full 2 L/s; their phase follows liters moved,
   so a sink's limit slows them and a blocked pipe turns gray. Protectors
@@ -540,6 +545,14 @@ rules are in [Rules (MVP)](#rules-mvp).
   `Pipe.Moved` are saved for deterministic drawing and replay. Pinned by
   `pipes_test.go`, including filling before pass-through, the thinning
   protector chain, equal pump shares and flow-phase persistence.
+=======
+- 2026-09-25: pumps can now be marked on outside oil pools without a
+  protector. Once raised, an exposed pump is swarmed by mites and digested
+  in ten seconds, leaving half its cost as a pile and a news plate that
+  explains why; a protector over the pool stops the damage. The second
+  pool's button, exposure, shelter and report have simulation tests, and
+  shots check the swarm and the aftermath.
+>>>>>>> d69071e (niebla: watch the mites erupt after eating your pump)
 - 2026-09-25: the first delivered haul now brings the robot factory;
   infrastructure follows the first worker it produces. The opening can
   grow its workforce during the wait for the first scout instead of

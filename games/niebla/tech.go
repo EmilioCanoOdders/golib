@@ -11,7 +11,7 @@ import (
 // unopened drop waits, and the callout that opens on its click. All of
 // it reads the state and draws — the badge breathes with the state's
 // tick, so it freezes with the game — and nothing here is state; the
-// click that opens a drop goes through AckTech like any actijkon.
+// click that opens a drop goes through AckTech like any action.
 
 // Tuning, in screen pixels and ticks.
 const (
