@@ -11,15 +11,12 @@ package main
 // exactly what it has earned; only "opened" is written down, in
 // State.Tech, so a save with the badge unclicked keeps it.
 
-// Tuning: when the clock drops come in, with units in the name. They
-// sit in the long calm between the scout's leaving and the first raid's
-// camp. The other teeth answer events: the first delivery brings the
-// infrastructure in; the guard post comes when the scout's drawing has
-// become inevitable - a rival drinking at the tanks, or the mark already
-// on the ground - too late to stop it, in time for the next visit.
+// Tuning: the frontier kit's clock drop sits in the calm before the first
+// raid. The first delivery brings the factory; its first worker brings
+// infrastructure. The guard post answers the scout's inevitable theft.
 const (
-	techFrontierTicks = 5*60*60 + 30*60 // mid-valley, two minutes before the raid camps
-	techIndustryTicks = 7 * 60 * 60     // the valley's last tooth, before the raid camps
+	techFrontierTicks       = 5*60*60 + 30*60 // mid-valley, before the first raid
+	legacyTechIndustryTicks = 7 * 60 * 60     // old saves' factory unlock
 )
 
 // The drops' names. Treat them as identifiers, not prose: the view keys
@@ -46,8 +43,10 @@ type techDrop struct {
 // build menu, so it rides with the frontier kit; so do the pipes, whose
 // LayPipe asks for the frontier drop by name.
 var techLadder = []techDrop{
-	{techInfraID, []BuildingKind{BuildingSilo, BuildingWarehouse, BuildingCharger},
+	{techIndustryID, []BuildingKind{BuildingFactory},
 		func(s *State) bool { return s.Deliveries > 0 }},
+	{techInfraID, []BuildingKind{BuildingSilo, BuildingWarehouse, BuildingCharger},
+		hasBuiltWorker},
 	{techGuardID, []BuildingKind{BuildingGuard},
 		func(s *State) bool {
 			if len(s.Marks) > 0 {
@@ -62,8 +61,6 @@ var techLadder = []techDrop{
 		}},
 	{techFrontierID, []BuildingKind{BuildingProtector, BuildingPump},
 		func(s *State) bool { return s.Ticks >= techFrontierTicks }},
-	{techIndustryID, []BuildingKind{BuildingFactory},
-		func(s *State) bool { return s.Ticks >= techIndustryTicks }},
 	{techMobileID, []BuildingKind{BuildingWarFactory},
 		func(s *State) bool { return s.Raids.Visits >= 2 }},
 	{techArtilleryID, []BuildingKind{BuildingArtillery},
@@ -77,6 +74,31 @@ var techLadder = []techDrop{
 		}},
 }
 
+func hasBuiltWorker(s *State) bool {
+	for _, id := range sortedRobotIDs(s) {
+		if s.Robots[id].Kind == RobotBuilt {
+			return true
+		}
+	}
+	return false
+}
+
+// legacyTechArrived preserves the old ladder for saves without its ledger.
+func legacyTechArrived(s *State, id string) bool {
+	switch id {
+	case techInfraID:
+		return s.Deliveries > 0
+	case techIndustryID:
+		return s.Ticks >= legacyTechIndustryTicks
+	}
+	for i := range techLadder {
+		if techLadder[i].id == id {
+			return techLadder[i].trigger(s)
+		}
+	}
+	return false
+}
+
 // stepTech writes down what has arrived, and is the first thing the
 // simulation does each tick, so no rule ever sees a stale ladder.
 func stepTech(s *State) {
@@ -87,8 +109,9 @@ func stepTech(s *State) {
 			// already earned stands opened, so nobody clicks through a
 			// pile of badges after the update.
 			for i := range techLadder {
-				if techLadder[i].trigger(s) {
-					s.Tech[techLadder[i].id] = true
+				id := techLadder[i].id
+				if legacyTechArrived(s, id) {
+					s.Tech[id] = true
 				}
 			}
 		}

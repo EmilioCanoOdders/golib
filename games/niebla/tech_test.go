@@ -18,7 +18,7 @@ func arriveAll(s *State) {
 	}
 }
 
-func TestSchematicsArriveWithTheFirstDelivery(t *testing.T) {
+func TestFactorySchematicsArriveWithTheFirstDelivery(t *testing.T) {
 	s := newGame()
 	if techPending(s) != "" {
 		t.Fatalf("a new game has schematics waiting before their time: %q",
@@ -44,22 +44,124 @@ func TestSchematicsArriveWithTheFirstDelivery(t *testing.T) {
 	if !tickUntil(s, 60*120, func() bool { return s.Deliveries > 0 }) {
 		t.Fatal("the robot never delivered its first load")
 	}
-	if techPending(s) != techInfraID {
+	if techPending(s) != techIndustryID {
 		t.Fatalf("the first delivery brought %q, want %q",
-			techPending(s), techInfraID)
+			techPending(s), techIndustryID)
 	}
-	for _, kind := range (kinds{BuildingSilo, BuildingWarehouse, BuildingCharger}) {
-		if !kindUnlocked(s, kind) {
-			t.Errorf("%s did not arrive with infrastructure", kind)
+	if !kindUnlocked(s, BuildingFactory) {
+		t.Fatal("the first delivery did not bring the robot factory")
+	}
+	for _, kind := range (kinds{
+		BuildingSilo, BuildingWarehouse, BuildingCharger, BuildingGuard,
+		BuildingProtector, BuildingPump, BuildingWarFactory,
+		BuildingArtillery,
+	}) {
+		if kindUnlocked(s, kind) {
+			t.Errorf("the first delivery also unlocked %s", kind)
 		}
 	}
-	if kindUnlocked(s, BuildingGuard) || kindUnlocked(s, BuildingPump) {
-		t.Error("infrastructure brought the guard post or the pump with it")
+	if hasBuiltWorker(s) {
+		t.Fatal("a new colony already has a factory-built worker")
 	}
 }
 
 // kinds is a list of building kinds, so a test can loop over one.
 type kinds []BuildingKind
+
+func TestTheFirstFactoryWorkerBringsInfrastructureBeforeTheScout(t *testing.T) {
+	s := newGame()
+	oilCol, oilRow, ok := nearestTileOf(kindOil)
+	if !ok {
+		t.Fatal("the starting region has no oil pool")
+	}
+	lilacCol, lilacRow, ok := nearestTileOf(kindLilac)
+	if !ok {
+		t.Fatal("the starting region has no lilac vein")
+	}
+	Apply(s, SendRobot{Col: oilCol, Row: oilRow})
+	Apply(s, SendRobot{Col: lilacCol, Row: lilacRow})
+	factoryCol, factoryRow := groundNearCore()
+
+	var deliveryAt, factoryAt, workerAt, infrastructureAt int64
+	factoryMarked, workerQueued := false, false
+	for s.Ticks < raidFirstScoutTicks {
+		if s.Deliveries > 0 && deliveryAt == 0 {
+			deliveryAt = s.Ticks
+		}
+		if kindUnlocked(s, BuildingFactory) && !factoryMarked {
+			Apply(s, MarkBuilding{
+				Kind: BuildingFactory, Col: factoryCol, Row: factoryRow,
+			})
+			if len(s.Jobs) == 0 {
+				t.Fatal("the factory could not be marked after its schematics")
+			}
+			factoryAt, factoryMarked = s.Ticks, true
+			Apply(s, AckTech{ID: techIndustryID})
+		}
+		if factoryMarked && !workerQueued {
+			if factory, raised := buildingAt(s, factoryCol, factoryRow); raised {
+				Apply(s, QueueRobot{Building: factory.ID})
+				if s.Buildings[factory.ID].Work > 0 {
+					workerQueued = true
+				}
+			}
+		}
+
+		Apply(s, Tick{})
+		if hasBuiltWorker(s) && workerAt == 0 {
+			workerAt = s.Ticks
+		}
+		if kindUnlocked(s, BuildingCharger) && infrastructureAt == 0 {
+			infrastructureAt = s.Ticks
+		}
+		if len(s.Enemies) > 0 {
+			break
+		}
+	}
+
+	if deliveryAt == 0 {
+		t.Fatal("the opening plan made no first delivery")
+	}
+	if factoryAt == 0 {
+		t.Fatal("the opening plan did not mark the unlocked factory")
+	}
+	if !workerQueued {
+		t.Fatal("the opening plan could not order a factory worker")
+	}
+	if workerAt == 0 {
+		t.Fatal("the factory did not finish its first worker")
+	}
+	if infrastructureAt == 0 {
+		t.Fatal("the first factory worker did not unlock infrastructure")
+	}
+	if infrastructureAt >= raidFirstScoutTicks {
+		t.Fatalf("infrastructure arrived at tick %d, not before the scout at %d",
+			infrastructureAt, raidFirstScoutTicks)
+	}
+	t.Logf(
+		"opening milestones (seconds): delivery %.1f, factory %.1f, " +
+			"worker %.1f, infrastructure %.1f, scout %.1f",
+		float64(deliveryAt)/60,
+		float64(factoryAt)/60,
+		float64(workerAt)/60,
+		float64(infrastructureAt)/60,
+		float64(raidFirstScoutTicks)/60,
+	)
+}
+
+func TestOpeningCalloutsExplainTheNextStep(t *testing.T) {
+	title, body := techWords(techIndustryID)
+	if title != "robot factory" ||
+		body != "Build it on clear ground, then use its card to build a robot." {
+		t.Fatalf("factory callout is %q, %q", title, body)
+	}
+	title, body = techWords(techInfraID)
+	if title != "infrastructure" ||
+		body != "Silos hold oil, warehouses hold lilac, and " +
+			"chargers refill worker tanks." {
+		t.Fatalf("infrastructure callout is %q, %q", title, body)
+	}
+}
 
 func TestTheGuardPostAnswersTheMark(t *testing.T) {
 	s := newGame()
@@ -95,18 +197,11 @@ func TestTheGuardPostAnswersTheMark(t *testing.T) {
 	}
 }
 
-func TestTheFrontierKitAndTheFactoryComeOnTheirClock(t *testing.T) {
+func TestTheFrontierKitComesOnItsClock(t *testing.T) {
 	s := newGame()
 	runTicks(s, techFrontierTicks)
 	if !kindUnlocked(s, BuildingProtector) || !kindUnlocked(s, BuildingPump) {
 		t.Fatal("the frontier kit never arrived at its tick")
-	}
-	if kindUnlocked(s, BuildingFactory) {
-		t.Fatal("the factory came with the frontier kit")
-	}
-	runTicks(s, techIndustryTicks-techFrontierTicks)
-	if !kindUnlocked(s, BuildingFactory) {
-		t.Fatal("the factory never arrived at its tick")
 	}
 }
 
@@ -186,15 +281,15 @@ func TestTheBadgeOpensAndAStaleAckDoesNothing(t *testing.T) {
 	s := newGame()
 	Apply(s, DevNextTech{})
 	runTicks(s, 1)
-	if got := techPending(s); got != techInfraID {
-		t.Fatalf("pending %q, want %q", got, techInfraID)
+	if got := techPending(s); got != techIndustryID {
+		t.Fatalf("pending %q, want %q", got, techIndustryID)
 	}
 	Apply(s, AckTech{ID: techArtilleryID})
 	if _, ok := s.Tech[techArtilleryID]; ok {
 		t.Fatal("an ack opened schematics that never arrived")
 	}
-	Apply(s, AckTech{ID: techInfraID})
-	if opened := s.Tech[techInfraID]; !opened {
+	Apply(s, AckTech{ID: techIndustryID})
+	if opened := s.Tech[techIndustryID]; !opened {
 		t.Fatal("the ack did not open the drop")
 	}
 	if techPending(s) != "" {
@@ -291,11 +386,13 @@ func TestTechCalloutHitboxCoversItsSquares(t *testing.T) {
 func TestASaveFromBeforeTheSchematicsOpensWhatItEarned(t *testing.T) {
 	s := newGame()
 	s.Deliveries = 3
-	s.Ticks = techIndustryTicks + 60
+	s.Ticks = legacyTechIndustryTicks + 60
 	s.Raids.Visits = 2
 	s.Tech = nil
 	Apply(s, Tick{})
-	for _, id := range []string{techInfraID, techFrontierID, techIndustryID, techMobileID} {
+	for _, id := range []string{
+		techIndustryID, techInfraID, techFrontierID, techMobileID,
+	} {
 		if s.Tech[id] != true {
 			t.Errorf("the old save's %s is %v, want opened", id, s.Tech[id])
 		}
@@ -318,6 +415,28 @@ func TestASaveFromBeforeTheSchematicsOpensWhatItEarned(t *testing.T) {
 	}
 	if techPending(s) != techGuardID {
 		t.Errorf("the mark's badge is %q, want the guard post's", techPending(s))
+	}
+}
+
+func TestAnExistingInfrastructureUnlockIsNotRevoked(t *testing.T) {
+	for _, opened := range []bool{false, true} {
+		s := newGame()
+		s.Tech = map[string]bool{techInfraID: opened}
+		Apply(s, Tick{})
+		if !kindUnlocked(s, BuildingCharger) {
+			t.Errorf(
+				"opened=%v: an existing infrastructure unlock was revoked",
+				opened,
+			)
+		}
+		if s.Tech[techInfraID] != opened {
+			t.Errorf("opened=%v: save changed infrastructure to %v", opened,
+				s.Tech[techInfraID])
+		}
+		if !opened && techPending(s) != techInfraID {
+			t.Errorf("the unacknowledged infrastructure badge became %q",
+				techPending(s))
+		}
 	}
 }
 
@@ -379,7 +498,7 @@ func TestTheTechSurvivesARoundTrip(t *testing.T) {
 	s := newGame()
 	Apply(s, DevNextTech{})
 	runTicks(s, 1)
-	Apply(s, AckTech{ID: techInfraID})
+	Apply(s, AckTech{ID: techIndustryID})
 	data, err := json.Marshal(s)
 	if err != nil {
 		t.Fatalf("the state does not marshal: %v", err)

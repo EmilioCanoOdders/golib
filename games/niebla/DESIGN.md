@@ -91,13 +91,37 @@ The game has no belts and never will, but oil flows through pipes, so it stops r
 
 **The pump comes first.** A pump is a building that stands on an oil pool instead of on ground: the pool's card carries a `build pump` button (its cost beside it) while the stores can pay and its schematics have arrived, and the pump rises on the pool's middle like any site. A pool takes one pump, a dry pool none, and the fog's law holds: a far pool needs a protector over it first. A pump with no pipe does nothing, and a pool keeps its robot post, pump or not.
 
-**A network, by ports.** A pipe carries oil one way, from a pump or a tank into a tank: pool to silo, silo to another silo, silo to a charger or protector, anything to the core or out of it. Buildings are the junctions: each takes `pipePorts` 3 pipes, in and out together (the core `corePipePorts` 6), and two ends take one pipe between them. Multiplexers and mixers were the other option and wait: ports on the buildings that already exist ask for no new building, and a silo is already a mixer with a buffer. A pipe moves up to `pipeLitersPerSecond` 4 L/s, as much as its source gives and its end has room for; the pipes that leave one source share what it gives in equal parts, so a silo that feeds two pipes feeds both, and a pump's pipes share the `pumpLitersPerSecond` 2 L/s it draws. A full tank at the end stops the pipe, and nothing is ever lost.
+**A network, by ports.** A pipe carries oil one way, from a pump or a tank
+into a tank: pool to silo, silo to another silo, silo to a charger or
+protector, anything to the core or out of it. Buildings are the junctions:
+each takes `pipePorts` 3 pipes, in and out together (the core
+`corePipePorts` 6), and two ends take one pipe between them. Multiplexers
+and mixers were the other option and wait: ports on the buildings that
+already exist ask for no new building, and a silo is already a mixer with a
+buffer. A pipe moves at most `pipeLitersPerSecond` 4 L/s, limited by its
+source and its end's room. A source divides its supply equally among
+outlets that can accept oil: a silo with two open pipes feeds both, and a
+pump divides its `pumpLitersPerSecond` 2 L/s among its pipes. A
+protector fills its own tank before passing oil onward. Once full, it
+retains `protectorOilPerSecond` 0.25 L/s to stay powered and shares the
+surplus equally among its outlets. A full protector without an outlet
+receives only its upkeep; nothing is lost.
 
 **Laying a pipe** is drawing it. The card of a pump, a silo, a charger, a protector or the core carries `lay pipe` while it has a port free, which arms the pointer: every left click on the ground adds a **bend**, a click on a tank - anywhere on its body; every one the pipe may end at wears a ring, and the label by the pointer says `to silo` before the click - ends the pipe there and marks it, and a right click takes the last bend back, or puts the pointer away when there is none. A building within reach wins over the core beside it, whose monolith is tall and would steal the click. A click on the pipe's **last node** (its last bend, or its source while it has none) opens a small menu around it: `connect`, which ends the pipe at the tank nearest that node, the curve, the price and the tank's name showing it before the pick; `undo`, which takes the node back; and `cancel`, which drops the pipe in hand. The pipe is a curve through the clicks - a centripetal Catmull-Rom spline, which passes through every bend and never loops between a short span and a long one - and with no bends at all it sags a little to one side instead of running like a ruler's line.
 
 **The price is by the section** (`pipeSectionMeters` 25 m, a cell's side; `pipeSectionLilac` 5 kg apiece), paid when the pipe is marked. Marking is building here too, and it is work for many hands: a robot **claims a section** - of the oldest unlaid pipe's sections nobody else holds, the nearest to it -, tells the others by the claim itself, which is state (`Robot.Pipe`, `Robot.Section`), walks to the section's middle and **stands by it** for two seconds of work (`pipeSectionWorkTicks` 120), then claims another. So a pipe is laid in patches, by as many robots as it has free sections, the laid sections standing on their posts among the ghost of the rest, and the robots a pipe has no section for go on with their day. A claim lasts while the robot's task is the build line and dies with the robot, so a section is never orphaned. A pipe through the mist costs what walking and standing in the mist costs. Laying pipe is part of the build line of the robot's day, after the sites.
 
-**It shows.** A pipe runs above the ground (`pipeLiftUnits` 9 m, never under 5 px), on posts a section apart, and casts its shadow on the ground, leaning away from the sun the buildings' faces imply. Blobs of oil run down a pipe only while oil actually moves; their phase follows the pipe's accumulated liters. At a pump's full `pumpLitersPerSecond` 2 L/s, they keep the original 40-tick beat. A silo with room takes that full output when it is the pump's only outlet. A full protector takes only its `protectorOilPerSecond` 0.25 L/s upkeep, so its pipe's blobs move eight times slower. Pipes may cross anything, the fog too, and are drawn over it like the sites.
+**It shows.** A pipe runs above the ground (`pipeLiftUnits` 9 m, never
+under 5 px), on posts a section apart, and casts its shadow on the ground,
+leaning away from the sun the buildings' faces imply. Its orange bands show
+what the source offers: at the pump's full `pumpLitersPerSecond` 2 L/s,
+orange fills 90% of each gap and leaves 10% steel gray to show motion. A
+band moves by the liters actually transferred, so a sink that accepts less
+slows it and a blocked or dry pipe stays gray. A protector fills before
+passing oil; after that, it keeps 0.25 L/s for upkeep before sharing the
+rest onward. Each protector in a chain narrows the bands by its upkeep.
+Their phase follows the pipe's accumulated liters and survives saves.
+Pipes may cross anything, the fog too, and are drawn over it like the sites.
 
 **Taking it up.** The card of either end lists its pipes, each with where it goes or comes from, its length, what it is doing, and a `remove` button; demolishing a building takes its pipes with it. Either way a pipe's whole cost falls as a pile - by the building it started at, or on the demolished cell - and comes home as a haul.
 
@@ -239,7 +263,7 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - **place robots** (`DevSpawnRobot`): arms the pointer, and every left click on the region puts a built robot there, its tank full, for nothing - in the fog too, which is what it is for. The button again, or a right click, disarms it. While armed, clicks don't inspect or open the build menu.
 
 ## Rules (MVP)
-- The buildings arrive as remote schematics, one drop per valley of the difficulty saw: infrastructure (silo, warehouse, charger) with the first delivery home, the guard post once the scout's theft is inevitable, the frontier kit (protector, pump, pipes) at 5:30, the factory at 7:00, the war factory after the introductory raid, and artillery when a rival city completes its war factory. A drop's badge waits over the core until opened; nothing unreachable is ever offered - the menu only shows what the cell could really take, and what the stores can't pay stands washed out with its shortfall boxed in red (see [Construction model](#construction-model)).
+- The buildings arrive as remote schematics, one drop per valley of the difficulty saw: the robot factory with the first delivery home, infrastructure (silo, warehouse, charger) after it produces its first worker, the guard post once the scout's theft is inevitable, the frontier kit (protector, pump, pipes) at 5:30, the war factory after the introductory raid, and artillery when a rival city completes its war factory. A drop's badge waits over the core until opened; nothing unreachable is ever offered - the menu only shows what the cell could really take, and what the stores can't pay stands washed out with its shortfall boxed in red (see [Construction model](#construction-model)).
 - One generated region, a pure function of `State.Seed` (`worldgen.go`): a gentle relief with great plains, ground cover in zones, oil pools and lilac veins that thin out toward their rims, fog everywhere else. Buildings ask for a flat cell.
 - The core starts with two robots, free of charge: one can watch the oil, the other the lilac. Robots built later will cost oil each cycle.
 - Sending is by card: expand an oil or lilac card and press send robot; the nearest free robot takes the whole deposit as its post (all busy, the nearest worker from another deposit is retasked). Repeat to assign more workers; a worker already at that deposit is never assigned twice. A vein is one thing however many tiles it spans: one card, many workers, one shared amount. Its card shows up to eight clickable robot portraits per page; each opens that worker's card, where recall removes only that robot's post. A dry deposit releases every worker still assigned to it.
@@ -409,7 +433,12 @@ damage/s for `repairOilPerPoint` 0.2 L per damage (`sim_squads.go`,
 
 Pinned as code lands, all at the top of the sim files with units in the name: `fogCycleTicks`, `protectorOilPerSecond`, `robotChargeSeconds`, `robotMoveSpeed` (units/s), `oilPerPoolUnit`, `lilacPerVeinUnit`, blueprint costs. Pinned so far, in `region.go`: `regionCols`/`regionRows` (25x25 tiles), `tileW`/`tileH` (48x24 px at 2K/2), `unitsPerTile` 200 (the world's unit is a meter: a tile is 200 m across, the region 5 km; a robot is 6 u across, the core's monolith 16 u, a future building 40 u, a deposit patch of four tiles is 400 m aside), `coreBubbleRadius` 4 tiles, `fogLineRadius` 10.5 tiles, `fogFadeTiles` 2.4 tiles. In `play.go`: `zoomOut`/`zoomIn`, the wheel's stops, each twice the last: 1, 2, 4, 8, 16, 32 (stop 0 shows the whole region as icons, stop 5 about 80 m of ground; at 32 a robot's 6 u is about 46 screen px), `zoomGlide` 0.1 s (the zoom glides from stop to stop instead of jumping, keeping the point under the cursor under it; only at rest is the zoom a whole power of two), `panSpeed` 480 screen px/s, constant on the screen at every zoom; the right button drags the view, grab style. The camera is view, not state: it lives in the play scene and never serializes. In `draw.go`: `propZoom` 4, the zoom from which the rocks and bushes are drawn; they are world-sized (6 u across), so zooming in grows them from pebbles to boulders. Robots draw at their world size but never under about 3 screen px (`dotRadius`): far out, everything alive is a point, R.U.S.E.-style. The core draws as a dark monolith on its tile's middle (`drawCore`), broad face to the right, a seam of light down it and a top in the core's warm white, the part the glow filter picks; it obeys the buildings' icon law and sorts by depth among them, and its pad, the whole tile, lies on the ground under the robots. Deposits draw as one continuous body per patch - a pool as one sheet of oil, a vein as one shelf with crystal clusters over its tiles - shrinking as the patch drains, one big scar when dry. The fog's shape and speed are the feel of the game: their section is [The fog](#the-fog), and their dials are pinned, in `sim_fog.go`: `fogCycleTicks` 1800 (30 s a cycle), `fogSwellPeriod` 18 cycles (the first swell at 9 min), `fogSwellQuickener` 0.90 (each swell shortens the next calm; `fogSwellMinPeriod` 4 cycles), `fogSwellTicks` 900 (15 s) growing `fogSwellTicksGrowth` 180 apiece to `fogSwellTicksMax` 3600 (a minute), `fogSwellReach` 2.0 tiles growing `fogSwellGrowth` 0.35 apiece, capped by `fogSwellMargin` 0.75 tiles the line never takes off the bubble, `fogSwellSpeedFactor` 0.25 in the pushed band (fog that was already there keeps `fogSpeedFactor` 0.5) and `fogSwellBurn` 1.5x outside the bubbles.
 
-In `sim_tech.go`: `techFrontierTicks` 5:30 and `techIndustryTicks` 7:00 (the valley's two clock teeth, pinned between the scout's leaving and the first raid's camp; the other teeth answer the first delivery home and the first party driving in), and the view's `techBadgeR` 22 px, `techPulseTicks` 90 (one breath of the glow, from the state's tick) and `techCalloutW` 280 px.
+In `sim_tech.go`: `techFrontierTicks` 5:30 is the ladder's clock drop;
+the first delivery unlocks the factory and its first built worker unlocks
+infrastructure. `legacyTechIndustryTicks` keeps the former 7:00 factory
+trigger for migrating saves without a tech ledger. The view's
+`techBadgeR` is 22 px, `techPulseTicks` is 90 (one breath of the glow,
+from the state's tick) and `techCalloutW` is 280 px.
 
 In `guides.go`, offscreen arrows sit `guideEdgeInset` 28 px from the
 side edges, 78 px below the top and 52 px above the bottom, clear of the
@@ -460,6 +489,11 @@ faint smoke every `shellSmokeStepUnits` 30 m, fading as it rises.
 ## Prototype scope
 The prototype is done when these five have landed, on top of the debts under [Later](#later) (decided 2026-09-21). Each is a heading to design, not a design, until its turn comes: they are discussed and landed one at a time. Enemies and battles is under way and nearly whole; the other four are not started.
 
+The introduction note below records the first ladder from 2026-09-22. Its
+unlock order was revised on 2026-09-25: the factory arrives with the first
+delivery, and infrastructure arrives when it produces a worker. The live
+rules are in [Rules (MVP)](#rules-mvp).
+
 - **Enemies and battles.** The swell is pressure, but it is only weather: resources should also buy war. **Under way**: the design and what has landed are in [The rivals](#the-rivals). Decided (2026-09-21): no walls, ever, and war that is good to watch, R.U.S.E.-style (artillery, an enemy that builds a base in the region); a repulsor repels the fog and nothing else; rivals steal, and later destroy; they ride vehicles under a crawler's mobile repulsor, which is never usable loot; wrecks drop loot; many kinds in time, humans for now; positioning is coarse - posts (preventive) and small squads, never units placed by hand one by one; an enemy that settles is a warning with a clock, and a head-on attack is at a disadvantage. Landed: the scout and its mark, the camped raids, the fog's due, loot, the guard post, the war factory and its squad, rivals that shoot back at troopers, the settled enemy and its gun, buildings that fall and are mended, the colony's artillery, bullets and shells with their light and their bursts.
 - **Economy analysis and balance.** Times, yields, costs and rates looked at as one system, so that the decisions are interesting instead of obvious: how long a deposit lasts, what a robot pays back and when, what a pipe saves against the legs it replaces, what a swell costs. `economy_test.go` is the first instrument: it plays the real, deterministic simulation for an hour over three seeds and records each minute in CSV. It compares safe harvesting, worker growth and a protected oil outpost with a pump, pipe and guard; it does not duplicate the rules in a spreadsheet. The first report (2026-09-22) says two core robots bring about 60 L and 40 kg a minute from the safe patches; the core oil tank fills around minute 13 and its lilac store around minute 44. The outpost opening reaches its protector around minute 2, pump around minute 5, guard around minute 11 and laid pipe around minute 17, so those are measured hypotheses, not tuning targets yet. Next reports change one dial or opening policy at a time, and compare the times to each milestone, reserves, resources mined, losses and whether the player had a usable answer before the threat. What remains deliberately unbalanced (2026-09-22): every dial of [The rivals](#the-rivals) was set by eye, a level 2 base razes a small outpost in a few minutes, and oil got much cheaper the day the tank stopped burning while a robot walks empty-handed. Reference: [Difficulty curves](https://www.davetech.co.uk/difficultycurves) (Dave Tech) - the **difficulty saw**: difficulty is not one rising line but a tooth per mechanic, a spike when it is introduced and a slope down as it is mastered, and later mechanics call back to earlier ones as foundations. It bears on the economy (the swells' growth is the base line the teeth ride on) and on the introduction below (the order of the unlocks is the order of the teeth).
 - **Economy analysis and balance.** Times, yields, costs and rates looked at as one system, so that the decisions are interesting instead of obvious: how long a deposit lasts, what a robot pays back and when, what a pipe saves against the legs it replaces, what a swell costs. `economy_test.go` is the first instrument: it plays the real, deterministic simulation for an hour over three seeds and records each minute in CSV, including dedicated protector oil separately from spendable oil. It compares safe harvesting, worker growth and a protected oil outpost with a pump, protector-fed pipes and a guard; it does not duplicate the rules in a spreadsheet. The first report (2026-09-22) predates protector upkeep: it says two core robots bring about 60 L and 40 kg a minute from the safe patches; the core oil tank fills around minute 13 and its lilac store around minute 44. The outpost opening reaches its protector around minute 2, pump around minute 5, guard around minute 11 and laid pipe around minute 17, so those are historical measurements, not current tuning targets. Next reports change one dial or opening policy at a time, and compare the times to each milestone, reserves, resources mined, losses and whether the player had a usable answer before the threat. What remains deliberately unbalanced (2026-09-22): every dial of [The rivals](#the-rivals) was set by eye, a level 2 base razes a small outpost in a few minutes, and oil got much cheaper the day the tank stopped burning while a robot walks empty-handed. Reference: [Difficulty curves](https://www.davetech.co.uk/difficultycurves) (Dave Tech) - the **difficulty saw**: difficulty is not one rising line but a tooth per mechanic, a spike when it is introduced and a slope down as it is mastered, and later mechanics call back to earlier ones as foundations. It bears on the economy (the swells' growth is the base line the teeth ride on) and on the introduction below (the order of the unlocks is the order of the teeth).
@@ -497,17 +531,22 @@ The prototype is done when these five have landed, on top of the debts under [La
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
-- 2026-09-25: pipe blobs now follow the liters actually moved by each
-  pipe, rather than advancing with the global tick. A pump feeding a silo
-  as its only outlet keeps the old speed at 2 L/s; once a protector is
-  full, its pipe slows to the 0.25 L/s upkeep it replaces, and a blocked
-  or dry pipe stops.
-  `Pipe.Flow` and `Pipe.Moved` are saved simulation state, so the picture
-  stays deterministic across saves and replays. Pinned by
-  `TestPipeFlowAnimationFollowsDestinationDemand` (including shared pump
-  outlets) and `TestPipesSurviveASave`. `TestWritePipeFlowShotStates` and
-  three scripted frames show the pump-to-silo and core-to-protector rates
-  side by side.
+- 2026-09-25: pipe bands show each source's offered flow as orange length,
+  with 90% orange at a pump's full 2 L/s; their phase follows liters moved,
+  so a sink's limit slows them and a blocked pipe turns gray. Protectors
+  fill before passing oil, then retain 0.25 L/s for upkeep and pass the
+  surplus equally among their outlets. A chain of protectors narrows the
+  bands by one upkeep per pylon. `Pipe.Offered`, `Pipe.Flow` and
+  `Pipe.Moved` are saved for deterministic drawing and replay. Pinned by
+  `pipes_test.go`, including filling before pass-through, the thinning
+  protector chain, equal pump shares and flow-phase persistence.
+- 2026-09-25: the first delivered haul now brings the robot factory;
+  infrastructure follows the first worker it produces. The opening can
+  grow its workforce during the wait for the first scout instead of
+  waiting for a factory schematic at 7:00. The old clock trigger remains
+  only to migrate saves with no tech ledger. A deterministic opening test
+  measures delivery, factory, worker and infrastructure against the
+  scout's four-minute arrival.
 - 2026-09-24: the schematics callout shows what a drop brings as squares,
   in the likeness of the workers' portraits a deposit's card holds: the
   rendered icon of each construction above and its name below, one square

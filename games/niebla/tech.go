@@ -11,7 +11,7 @@ import (
 // unopened drop waits, and the callout that opens on its click. All of
 // it reads the state and draws — the badge breathes with the state's
 // tick, so it freezes with the game — and nothing here is state; the
-// click that opens a drop goes through AckTech like any action.
+// click that opens a drop goes through AckTech like any actijkon.
 
 // Tuning, in screen pixels and ticks.
 const (
@@ -159,7 +159,8 @@ func techWords(id string) (title, body string) {
 	switch id {
 	case techInfraID:
 		return "infrastructure",
-			"Schematics received. Click empty ground to raise a building."
+			"Silos hold oil, warehouses hold lilac, and " +
+				"chargers refill worker tanks."
 	case techGuardID:
 		return "guard post",
 			"They are at the tanks: the mark they leave is their claim. A guard post would stop the next visit."
@@ -168,7 +169,7 @@ func techWords(id string) (title, body string) {
 			"Grow the safe ground and draw oil without legs. Pipes come with them."
 	case techIndustryID:
 		return "robot factory",
-			"More hands for the colony."
+			"Build it on clear ground, then use its card to build a robot."
 	case techMobileID:
 		return "war factory",
 			"Troopers are its squad. Keys 1-9 give the order."

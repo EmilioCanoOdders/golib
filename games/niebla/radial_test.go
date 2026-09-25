@@ -154,8 +154,8 @@ func TestRadialGoesBackARingAndThenCloses(t *testing.T) {
 }
 
 // The menu only offers what the cell could take: a fresh colony's rings
-// are empty, infrastructure alone shows one group, and the military ring
-// holds only the guard post once a party drives in. The stores are not
+// are empty, the factory arrives first, then infrastructure after a
+// worker exists, and the guard post answers the scout. The stores are not
 // part of the offer: what they can't pay stands on its ring washed out.
 func TestTheRadialOnlyOffersWhatArrived(t *testing.T) {
 	s := newPlayScene(newGame())
@@ -166,30 +166,28 @@ func TestTheRadialOnlyOffersWhatArrived(t *testing.T) {
 	Apply(s.state, DevNextTech{})
 	runTicks(s.state, 1)
 	groups := radialGroupLayout(s)
-	if len(groups) != 1 || groups[0].group != groupLogistics {
-		t.Fatalf("infrastructure alone shows %d groups, want logistics only",
+	if len(groups) != 1 || groups[0].group != groupIndustry {
+		t.Fatalf("the factory alone shows %d groups, want industry only",
 			len(groups))
 	}
-	s.radialGroup, s.radialLevel = groupLogistics, 1
-	if leaves := radialLeafLayout(s); len(leaves) != 3 {
-		t.Fatalf("infrastructure offers %d logistics options, want 3",
-			len(leaves))
+	s.radialGroup, s.radialLevel = groupIndustry, 1
+	if leaves := radialLeafLayout(s); len(leaves) != 1 ||
+		leaves[0].kind != BuildingFactory {
+		t.Fatalf("industry offers %v, want only the factory", leaves)
 	}
 	// What the stores can't pay stays on the rings, washed out.
 	lilac := s.state.Stock.Lilac
 	s.state.Stock.Lilac = 0
 	groups = radialGroupLayout(s)
-	if len(groups) != 1 || groups[0].group != groupLogistics || groups[0].afford {
-		t.Fatalf("an empty store left %v, want logistics washed out", groups)
+	if len(groups) != 1 || groups[0].group != groupIndustry || groups[0].afford {
+		t.Fatalf("an empty store left %v, want industry washed out", groups)
 	}
 	leaves := radialLeafLayout(s)
-	if len(leaves) != 3 {
-		t.Fatalf("an empty store left %d logistics options, want 3", len(leaves))
+	if len(leaves) != 1 {
+		t.Fatalf("an empty store left %d industry options, want one", len(leaves))
 	}
-	for _, leaf := range leaves {
-		if leaf.afford {
-			t.Errorf("%s reads as affordable over an empty store", leaf.kind)
-		}
+	if leaves[0].afford {
+		t.Error("the factory reads as affordable over an empty store")
 	}
 	s.state.Stock.Lilac = lilac
 	// The guard post comes with the scout's mark on the ground, alone.
@@ -200,7 +198,7 @@ func TestTheRadialOnlyOffersWhatArrived(t *testing.T) {
 	}
 	groups = radialGroupLayout(s)
 	if len(groups) != 2 {
-		t.Fatalf("infrastructure and the guard show %d groups, want 2", len(groups))
+		t.Fatalf("industry and the guard show %d groups, want 2", len(groups))
 	}
 	s.radialGroup, s.radialLevel = groupMilitary, 1
 	leaves = radialLeafLayout(s)
@@ -209,6 +207,19 @@ func TestTheRadialOnlyOffersWhatArrived(t *testing.T) {
 	}
 	if !leaves[0].afford {
 		t.Error("the guard post reads as unaffordable over full stores")
+	}
+	worker := s.state.Robots[1]
+	worker.Kind = RobotBuilt
+	s.state.Robots[worker.ID] = worker
+	runTicks(s.state, 1)
+	groups = radialGroupLayout(s)
+	if len(groups) != 3 || groups[2].group != groupLogistics {
+		t.Fatalf("the first worker left %v, want logistics as the third group", groups)
+	}
+	s.radialGroup, s.radialLevel = groupLogistics, 1
+	if leaves = radialLeafLayout(s); len(leaves) != 3 {
+		t.Fatalf("infrastructure offers %d logistics options, want 3",
+			len(leaves))
 	}
 }
 

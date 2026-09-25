@@ -170,7 +170,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
 | `sim_enemies.go` | The introduction and rival movement: `Enemy` with its saved facing octant, `Party`, `Raids`, `Mark` and `Report`; scout and introductory raid, saved entry bearing, timed city arrivals, party stages, siphoning and return, fog exposure, wrecks, guard posts and the state's PRNG |
 | `sim_cities.go` | Rival cities: serializable production, deterministic building order, finite local oil/mineral reserves, city arrival and old-save migration, city-produced sorties and mobile artillery |
-| `sim_tech.go` | The schematics: the ladder of drops that brings the buildings in little by little, each with its trigger (first delivery, the scout's theft, clocks, the first raid, a city factory) - `techLadder`, `stepTech`, `kindUnlocked`, `dropArrived`, `techPending`; arrival is derived from the state, only "opened" is kept (`State.Tech`, an old save wakes with what it earned) |
+| `sim_tech.go` | The schematics: first delivery unlocks the robot factory, its first produced worker unlocks infrastructure, then the scout's theft, frontier clock, first raid and rival factory trigger their drops - `techLadder`, `stepTech`, `kindUnlocked`, `dropArrived`, `techPending`; arrival is derived from the state, only "opened" is kept (`State.Tech`, old saves keep their previously earned drops) |
 | `sim_squads.go` | The military units' law and tuning: troopers (`RobotCombat`) and mechanics (`RobotRepair`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), the war factory's capacity (`squadRoom`, `mechanicRoom`), and rivals targeting defenders (`stepEnemyGuns`) |
 | `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right with a trooper icon, unit count and key (`drawSquadStrip`, `drawTrooperIcon`, `squadBoxRect`, `squadBoxAt`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the marks that pick a squad where it stands (`squadMarkAt`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
 | `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), vulnerable colony units, building health and oil-paid mechanic repairs, what the colony sees (`seen`) and its artillery (`stepArtillery`) |
@@ -216,7 +216,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `fog_test.go` | The fog driven directly: cycles, the first swell on schedule, the pressed line, the bubble's margin, the pushed band's drag, the swell's burn, the HUD's forecast |
 | `identity_test.go` | The identity derived from a machine ID: stable, distinct, and the parsers of what `reg query`, `ioreg` and the machine-id files say |
 | `store_test.go` | The database driven directly: an identity kept across runs, the fallback one too, the token column waiting empty, a base saved and loaded back whole, a second save replacing the first, one player's save invisible to another, the DB path's rules |
-| `tech_test.go` | The schematics driven directly: the clock and visit triggers fire on time and not before, `MarkBuilding` and `LayPipe` refuse what hasn't arrived, the badge opens by `AckTech` and a stale ack does nothing, an old save wakes with what it earned and owes no clicks, `DevNextTech` brings the ladder in order, the ledger survives a round trip, the cards' dimmed buttons |
+| `tech_test.go` | The schematics driven directly: the factory arrives with the first delivery, its first worker brings infrastructure before the scout, later clock and visit triggers fire on time, `MarkBuilding` and `LayPipe` refuse what hasn't arrived, old saves keep earned drops, `DevNextTech` brings the ladder in order, and the ledger survives a round trip |
 
 ## Architecture
 
@@ -277,9 +277,10 @@ Marking is building, and building is earned: the blueprints arrive as
 and the callout). A drop lights a pulsing **badge over the core** while
 it waits — the HUD adds `schematics at the core` —, its click opens a
 callout that says what came in, and the blueprints join the menu; the
-first drop comes with the first haul a robot delivers home, and the
-guard post when the scout's drawing is inevitable - a rival drinking
-at the tanks, or the mark already sprayed. The menu offers only
+robot factory comes with the first haul a robot delivers home, and
+infrastructure follows its first built worker. The guard post comes
+when the scout's drawing is inevitable - a rival drinking at the tanks,
+or the mark already sprayed. The menu offers only
 what the cell could really take - what the schematics, the ground or
 the fog refuse is not on the rings, and before the first drop the menu
 doesn't open at all. The stores don't take options off: a blueprint
