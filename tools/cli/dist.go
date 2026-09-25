@@ -19,7 +19,7 @@ import (
 // in build/<game>/dist/ with the executable, the libraries it loads and the
 // licenses of the third-party software in it, and a zip of that folder to
 // share. On Windows the executable carries the game's icon and version
-// information.
+// information; on macOS it goes inside an app that carries them.
 func (c *cli) dist(options []string) int {
 	var names []string
 	web := false
@@ -45,9 +45,10 @@ func (c *cli) dist(options []string) int {
 	return c.summary("dist")
 }
 
-// distGame makes the dist build of game, reporting each step. It returns
-// false after reporting a failure.
-func (c *cli) distGame(game string) bool {
+// distGame makes the dist build of game, reporting each step, and returns the
+// path of its executable, inside the app on macOS. It returns "" after
+// reporting a failure.
+func (c *cli) distGame(game string) string {
 	dir := c.path("games", game)
 	shown := "games/" + game // how messages name the game's folder
 	// Windows and Linux games load raylib and libffi from the executable's
@@ -64,14 +65,14 @@ func (c *cli) distGame(game string) bool {
 	packages, err := c.listPackages(dir, tags)
 	if err != nil {
 		c.check("fail", "could not inspect "+shown+" (see the Go errors above)")
-		return false
+		return ""
 	}
 	if isDir(filepath.Join(dir, "assets")) && !embedsAssets(packages) {
 		// A game embeds its assets from assets.go (see golib.EmbedAssets).
 		// Without it, the executable would build fine and fail on the
 		// player's machine.
 		c.check("fail", shown+"/assets/ would be missing from the dist build: add "+shown+"/assets.go, as the golib.EmbedAssets documentation shows")
-		return false
+		return ""
 	}
 
 	distDir := c.path("build", game, "dist")
@@ -80,24 +81,31 @@ func (c *cli) distGame(game string) bool {
 	exe := c.executable(game)
 	if err := os.RemoveAll(distDir); err != nil {
 		c.check("fail", fmt.Sprintf("cannot empty build/%s/dist/ (is the game still running?): %v", game, err))
-		return false
+		return ""
 	}
 	if err := os.MkdirAll(folder, 0o755); err != nil {
 		c.check("fail", fmt.Sprintf("cannot create %s: %v", shownFolder, err))
-		return false
+		return ""
 	}
 
 	info, ok := c.buildExecutable(game, tags, filepath.Join(folder, exe))
 	if !ok {
-		return false
+		return ""
 	}
-	c.check("ok", fmt.Sprintf("built %s into %s%s", shown, shownFolder, exe))
+	built, exePath := exe, filepath.Join(folder, exe)
+	if c.goos == "darwin" {
+		if built = c.makeApp(game, folder, exe, info); built == "" {
+			return ""
+		}
+		exePath = filepath.Join(folder, built, "Contents", "MacOS", exe)
+	}
+	c.check("ok", fmt.Sprintf("built %s into %s%s", shown, shownFolder, built))
 
 	modules := thirdPartyModules(packages)
 	libraries, err := findLibraries(c.goos+"/"+c.goarch, modules)
 	if err != nil {
 		c.check("fail", "cannot find the libraries the game loads: "+err.Error())
-		return false
+		return ""
 	}
 	var names []string
 	for _, l := range libraries {
@@ -107,7 +115,7 @@ func (c *cli) distGame(game string) bool {
 		for _, l := range libraries {
 			if err := l.copyTo(folder); err != nil {
 				c.check("fail", fmt.Sprintf("cannot copy %s next to the executable: %v", l.name, err))
-				return false
+				return ""
 			}
 		}
 		c.check("ok", fmt.Sprintf("copied %s next to it: the game loads them when it starts", joinWords(names)))
@@ -123,7 +131,7 @@ func (c *cli) distGame(game string) bool {
 	}
 	if err != nil {
 		c.check("fail", "cannot write "+noticesFile+": "+err.Error())
-		return false
+		return ""
 	}
 	var titles []string
 	for _, n := range notices {
@@ -139,7 +147,7 @@ func (c *cli) distGame(game string) bool {
 	size, err := zipFolder(folder, filepath.Join(distDir, zipName))
 	if err != nil {
 		c.check("fail", "cannot zip "+shownFolder+": "+err.Error())
-		return false
+		return ""
 	}
 	c.check("ok", fmt.Sprintf("zipped %s into build/%s/dist/%s (%.1f MB): share this file", shownFolder, game, zipName, float64(size)/1e6))
 
@@ -149,14 +157,14 @@ func (c *cli) distGame(game string) bool {
 	case "linux":
 		c.check("info", fmt.Sprintf("players unzip it and start %s, which needs the files next to it, and libX11.so.6, libGL.so.1 and libffi.so.8 from their system. What the game saves with golib.SaveData goes in ~/.config/GoLib games/%s", exe, game))
 	default:
-		c.check("info", fmt.Sprintf("players unzip it and start %s. On macOS it carries %s inside, and copies them into the player's ~/Library/Caches folder when it first starts. What the game saves with golib.SaveData goes in ~/Library/Application Support/GoLib games/%s", exe, joinWords(names), game))
+		c.check("info", fmt.Sprintf("players unzip it and open %s, which carries %s inside, and copies them into the player's ~/Library/Caches folder when it first starts. What the game saves with golib.SaveData goes in ~/Library/Application Support/GoLib games/%s. No Apple developer account signs the app, so the first time macOS stops it: players open it from System Settings, Privacy & Security, Open Anyway", built, joinWords(names), game))
 	}
-	return true
+	return exePath
 }
 
 // buildExecutable builds game's executable into output with the build tags
 // tags, and returns what game.json says. On Windows it adds the game's
-// icon and version information. It returns false after reporting a failure.
+// icon and version information; on macOS it reports what the app will say. It returns false after reporting a failure.
 func (c *cli) buildExecutable(game, tags, output string) (gameInfo, bool) {
 	dir := c.path("games", game)
 	// golib.SaveData saves in a folder named after the game.
@@ -175,6 +183,9 @@ func (c *cli) buildExecutable(game, tags, output string) (gameInfo, bool) {
 		// folder too.
 		ldflags += " -r $ORIGIN"
 		info, ok = c.checkGameFiles(game)
+	case "darwin":
+		// The app distGame puts the executable in carries both files.
+		info, _, _, ok = c.readGameFiles(game, true)
 	default:
 		info, ok = c.checkGameFiles(game)
 	}
@@ -303,7 +314,7 @@ func (c *cli) addWindowsResources(game string, describe bool) (info gameInfo, re
 func (c *cli) checkGameFiles(game string) (gameInfo, bool) {
 	info, _, found, ok := c.readGameFiles(game, false)
 	if ok && found {
-		c.check("info", "only Windows builds carry the icon from icon.png and the details from game.json so far")
+		c.check("info", "only Windows and macOS builds carry the icon from icon.png and the details from game.json so far")
 	}
 	return info, ok
 }
@@ -338,12 +349,16 @@ func (c *cli) readGameFiles(game string, describe bool) (info gameInfo, icon *im
 		c.check("fail", fmt.Sprintf("%s/%s: %v", shown, iconFile, err))
 		return info, nil, false, false
 	}
+	sizes, system := iconSizes, "Windows'"
+	if c.goos == "darwin" {
+		sizes, system = macIconSizes, "macOS's"
+	}
 	switch {
 	case describe && iconFound:
 		size := icon.Bounds().Dx()
-		c.check("ok", fmt.Sprintf("%s/%s (%d by %d pixels): the game's icon, in %d sizes from %d to %d pixels", shown, iconFile, size, size, len(iconSizes), iconSizes[0], iconSizes[len(iconSizes)-1]))
+		c.check("ok", fmt.Sprintf("%s/%s (%d by %d pixels): the game's icon, in %d sizes from %d to %d pixels", shown, iconFile, size, size, len(sizes), sizes[0], sizes[len(sizes)-1]))
 	case describe:
-		c.check("info", fmt.Sprintf("%s has no %s, so the game shows Windows' default icon: add a square PNG, ideally 256 by 256 pixels", shown, iconFile))
+		c.check("info", fmt.Sprintf("%s has no %s, so the game shows %s default icon: add a square PNG, ideally 256 by 256 pixels", shown, iconFile, system))
 	}
 	return info, icon, infoFound || iconFound, true
 }

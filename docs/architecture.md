@@ -38,7 +38,7 @@ games/
     main.go         Entry point (package main)
     DESIGN.md       Design brief: the game's memory across sessions
     game.json       Title, version and author: the Windows executable's details, and the dist zip's version (optional)
-    icon.png        The game's icon, a square PNG, for the executables golib builds on Windows (optional)
+    icon.png        The game's icon, a square PNG, for the executables golib builds on Windows and the apps it makes on macOS (optional)
     assets/         Content: maps, sprites, models, sounds, fonts; read with golib.ReadAsset
     assets.go       Embeds assets/ in golib dist builds; needed only when assets/ exists
     sources/        Files the game doesn't load, such as .blend or .psd; committed, not shipped (optional)

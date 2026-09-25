@@ -3,13 +3,15 @@
 package device
 
 import (
+	"unsafe"
+
 	"github.com/ebitengine/purego/objc"
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-// macOS needs two things of the raylib backend that Windows and Linux don't,
-// both about the window. They were found on a Retina iMac, 2560 by 1440
-// points on a 5120 by 2880 screen:
+// macOS needs three things of the raylib backend that Windows and Linux
+// don't. The first two, about the window, were found on a Retina iMac, 2560
+// by 1440 points on a 5120 by 2880 screen:
 //
 //   - While the window opens, and golib.Run enlarges it, AppKit can measure
 //     it in Retina pixels, twice its size in points, and raylib keeps that
@@ -21,17 +23,25 @@ import (
 //     monitor. macOS has a fullscreen of its own, the one the window's green
 //     button enters: a space of its own, without the menu bar or the Dock,
 //     that Cmd+Tab leaves like any other. SetSystemFullscreen uses it.
+//   - A debug build is a bare executable, which the Dock shows with the
+//     generic icon for programs, and raylib's SetWindowIcon does nothing on
+//     macOS. SetAppIcon gives the Dock the game's icon.
 //
-// Both ask AppKit about the window through purego's Objective-C calls, as
-// raylib-go reaches raylib through purego.
+// They ask AppKit through purego's Objective-C calls, as raylib-go reaches
+// raylib through purego.
 
-// The Objective-C messages the backend sends the window, registered once.
+// The Objective-C messages the backend sends, registered once.
 var (
-	selContentView          = objc.RegisterName("contentView")
-	selFrame                = objc.RegisterName("frame")
-	selConvertRectToBacking = objc.RegisterName("convertRectToBacking:")
-	selStyleMask            = objc.RegisterName("styleMask")
-	selToggleFullScreen     = objc.RegisterName("toggleFullScreen:")
+	selContentView             = objc.RegisterName("contentView")
+	selFrame                   = objc.RegisterName("frame")
+	selConvertRectToBacking    = objc.RegisterName("convertRectToBacking:")
+	selStyleMask               = objc.RegisterName("styleMask")
+	selToggleFullScreen        = objc.RegisterName("toggleFullScreen:")
+	selSharedApplication       = objc.RegisterName("sharedApplication")
+	selSetApplicationIconImage = objc.RegisterName("setApplicationIconImage:")
+	selDataWithBytesLength     = objc.RegisterName("dataWithBytes:length:")
+	selAlloc                   = objc.RegisterName("alloc")
+	selInitWithData            = objc.RegisterName("initWithData:")
 )
 
 // nsWindowStyleMaskFullScreen is the bit of an NSWindow's styleMask that is
@@ -95,6 +105,23 @@ func SetSystemFullscreen(on bool) {
 // window's green button.
 func FullscreenLost() bool {
 	return !rl.IsWindowHidden() && !inSystemFullscreen()
+}
+
+// SetAppIcon shows png, a PNG image, as the game's icon in the Dock while it
+// runs. golib gives it the game's icon.png in debug builds, which are bare
+// executables that the Dock shows with the generic icon for programs; the
+// app golib dist makes carries its own icon. An image macOS can't read
+// leaves the icon as it was.
+func SetAppIcon(png []byte) {
+	if len(png) == 0 {
+		return
+	}
+	data := objc.ID(objc.GetClass("NSData")).Send(selDataWithBytesLength, unsafe.Pointer(&png[0]), uint(len(png)))
+	image := objc.ID(objc.GetClass("NSImage")).Send(selAlloc).Send(selInitWithData, data)
+	if image == 0 {
+		return
+	}
+	objc.ID(objc.GetClass("NSApplication")).Send(selSharedApplication).Send(selSetApplicationIconImage, image)
 }
 
 // inSystemFullscreen reports whether the window is in macOS's fullscreen, or

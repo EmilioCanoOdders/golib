@@ -224,8 +224,8 @@ A game published on itch.io is opened on phones, so ask the user whether theirs 
 
 On Windows, the executable also carries what players see in Explorer, the title bar and the taskbar:
 
-- `game.json`, which `golib new` writes, holds the title, version and author. Keep `title` the same as `Config.Title`, fill in `author` when the user says who they are, and raise `version` (major.minor.patch) each time the user shares a new build. [docs/tooling.md](../tooling.md#icon-and-version-information-windows) lists every field.
-- `icon.png`, next to it, is the icon: a square PNG, ideally 256 by 256 pixels, transparent around the shape. Ask the user for one, for example drawn in Aseprite, when they want to share the game; never download one. Without it, Windows shows its default icon.
+- `game.json`, which `golib new` writes, holds the title, version and author. Keep `title` the same as `Config.Title`, fill in `author` when the user says who they are, and raise `version` (major.minor.patch) each time the user shares a new build. [docs/tooling.md](../tooling.md#icon-and-version-information-windows-and-macos) lists every field.
+- `icon.png`, next to it, is the icon: a square PNG, ideally 256 by 256 pixels, transparent around the shape. Ask the user for one, for example drawn in Aseprite, when they want to share the game; never download one. Without it, Windows and macOS show their default icon.
 
 `golib dist` prints what it used. When either file has a mistake, `golib build`, `run`, `shot` and `dist` stop with a `[fail]` line that says what to fix.
 

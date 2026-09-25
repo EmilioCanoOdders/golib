@@ -250,6 +250,9 @@ func HasSystemFullscreen() bool {
 // SetSystemFullscreen is never called here: see HasSystemFullscreen.
 func SetSystemFullscreen(on bool) {}
 
+// SetAppIcon is nothing here: a page's icon is the page's own.
+func SetAppIcon(png []byte) {}
+
 // MeasureWindow is nothing here: the canvas is measured every frame.
 func MeasureWindow() {}
 

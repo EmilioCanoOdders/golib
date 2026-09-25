@@ -33,6 +33,9 @@ type testProject struct {
 	gameHangs  bool // games run until they are stopped
 	gameFails  bool // games don't start
 	shotsTaken int  // how many of the requested screenshots games save; -1 for all
+
+	signed    []string // the macOS apps signed, by path
+	signError error    // what signing an app returns
 }
 
 // newTestProject returns a project that builds for goos on amd64 processors,
@@ -81,6 +84,10 @@ func newTestProject(t *testing.T, goos string, games ...string) *testProject {
 	}
 	p.runGame = func(run gameRun) (int, bool, error) {
 		return tp.fakeGame(t, run)
+	}
+	p.signApp = func(app string) error {
+		tp.signed = append(tp.signed, app)
+		return tp.signError
 	}
 	tp.c = &cli{project: p, stdout: &tp.stdout, stderr: &tp.stderr}
 	return tp

@@ -286,6 +286,17 @@ func TestRunDist(t *testing.T) {
 		t.Errorf("LD_LIBRARY_PATH = %q, want the player's own /opt/lib", got)
 	}
 
+	// On macOS the executable runs from inside the app, as it does when
+	// players open the app.
+	tp = newTestProject(t, "darwin", "rocks")
+	writeFile(t, tp.c.path("games", "rocks", gameInfoFile), `{"title": "Rocks"}`)
+	if code := tp.c.run([]string{"--dist"}); code != 0 {
+		t.Fatalf("macOS: exit code %d, output:\n%s%s", code, tp.stdout.String(), tp.stderr.String())
+	}
+	if want := tp.c.path("build", "rocks", "dist", "rocks", "Rocks.app", "Contents", "MacOS", "rocks"); len(tp.games) != 1 || tp.games[0].exe != want {
+		t.Errorf("macOS: game runs = %+v, want %s", tp.games, want)
+	}
+
 	// A dist build that fails leaves no game running.
 	tp = newTestProject(t, "windows", "rocks")
 	tp.failing = "build"

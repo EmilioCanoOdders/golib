@@ -230,6 +230,7 @@ func runWindow(game Game, config Config) error {
 		return err
 	}
 	defer device.CloseWindow()
+	showGameIcon()
 	device.SetTargetFPS(targetFPS)
 	audio.open()
 	defer audio.close()
