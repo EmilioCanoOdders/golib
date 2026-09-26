@@ -200,7 +200,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `sim_piles.go` | Demolition, unit wrecks and loose items: `canDemolish`, the 25% unit recovery (`dropRobotWreck`), the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, unprotected pump exposure, protector upkeep, storage, refueling and production choices for builders, workers, troopers and mechanics |
 | `sim_oil.go` | Oil's spendable tanks and dedicated protector reserves: `oilTotal`, `oilCap`, `payOil`, all physical tank capacity, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
-| `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus`; protectors fill before passing surplus, and each pipe records offered, moved and cumulative liters for the view |
+| `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus`; tanks fill from pipes at a shared 1.6 L/s limit and pass excess onward, while protectors keep their reserve and upkeep; each pipe records offered, moved and cumulative liters for the view |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
 | `sim_enemies.go` | The introduction and rival movement: `Enemy` with its saved facing octant, `Party`, `Raids`, `Mark` and `Report`; scout and introductory raid, saved entry bearing, timed city arrivals, party stages, siphoning and return, fog exposure, wrecks, guard posts and the state's PRNG |
 | `sim_cities.go` | Rival cities: serializable production, deterministic building order, finite local oil/mineral reserves, city arrival and old-save migration, city-produced sorties and mobile artillery |
@@ -244,7 +244,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `world_test.go` | The simulation driven directly: the starting builder, explicit individual assignment, worker-only auto-assignment, role-specific carrying, loot and construction priorities, migration, dry deposits, determinism and JSON round trip |
 | `economy_test.go` | The deterministic economy probe: safe harvesting, worker growth and a protected oil outpost over three seeds, sampled each minute into an opt-in CSV report with protector fuel separated from spendable oil |
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
-| `pipes_test.go` | Pumps and pipes driven directly: pump and site cards stay on the pump cell, an exposed pump is eaten unless sheltered, pipes are paid and laid by sections, robots claim one section each, protectors fill before passing surplus and keep their upkeep, source outlets share flow, bands show offered versus actual flow, pipes move oil between tanks, workers haul and refuel, illegal pipe actions are refused, pipe removal drops its cost as a pile, curves follow bends, and saves resume deterministically; can write a pump/protector flow fixture with `NIEBLA_PIPE_FLOW_SHOT_STATE` |
+| `pipes_test.go` | Pumps and pipes driven directly: pump and site cards stay on the pump cell, an exposed pump is eaten unless sheltered, pipes are paid and laid by sections, robots claim one section each, tanks share their pipe-fill limit across inlets and pass excess through a chain, protectors keep their reserve and upkeep, source outlets share flow, blocked tanks throttle pumps, bands show offered versus actual flow, pipes move oil between tanks, workers haul and refuel, illegal pipe actions are refused, pipe removal drops its cost as a pile, curves follow bends, and saves resume deterministically; can write a pump/protector flow fixture with `NIEBLA_PIPE_FLOW_SHOT_STATE` |
 | `protector_test.go` | Protector fuel: upkeep drains its dedicated tank, radius fades below the configured threshold and vanishes empty, robots and pipes refill it, the reserve stays unavailable to other costs, old saves migrate once with starting charge, and an opt-in state fixture supports visual shots |
 | `mites_test.go` | The mites driven with no window: counted by volume and only in the fog, tight on what stands still and trailing a walker, fading over what is gone, the falloff's layers |
 | `dev_test.go` | The dev actions: a held swell stays up and doesn't count, a placed robot is built, the city tool buttons have separate hit boxes, `unitsAtWorld` undoes `project` |
@@ -438,14 +438,18 @@ loads. `building` claims a robot only while it holds a section or one is
 free, so the robots a pipe has no section for go on with their day.
 `stepPipes` runs after the factories, in source-to-destination order. A
 source divides its available oil equally among laid outlets that can
-accept it; each pipe carries up to `pipeLitersPerSecond`, and a tank
-accepts only what fits.
-Pumps draw up to `pumpLitersPerSecond` from `State.Drain`. A protector
-fills its own reserve first and does not feed its outlets until full.
-Afterward, it takes incoming oil to replace the `protectorOilPerSecond`
-that upkeep will drain at the end of the tick, then shares any surplus
-equally among its outlets. This lets a full chain pass oil onward without
-ever spending the protectors' stored reserve. A full protector with no
+accept it; each pipe carries up to `pipeLitersPerSecond`. Every tank takes
+at most `tankFillPerSecond` 1.6 L/s from pipes, shared across its inlets.
+The tank stores what fits within that rate and passes excess through its
+outlets in the same tick; a full tank can pass oil without storing it.
+When no outlet can accept the excess, the source is throttled to the
+network's capacity, so no oil disappears. Robot unloading is unchanged.
+Non-protector tanks can also feed their outlets from oil already stored in
+them. Pumps draw up to `pumpLitersPerSecond` from `State.Drain`. A protector
+passes only incoming oil beyond its fill amount, never its stored reserve.
+When full, it takes incoming oil to replace the
+`protectorOilPerSecond` that upkeep drains at the end of the tick, then
+shares any surplus equally among its outlets. A full protector with no
 outlet takes only its upkeep from its incoming pipe.
 
 `Pipe.Offered` records the source's share before the destination limits

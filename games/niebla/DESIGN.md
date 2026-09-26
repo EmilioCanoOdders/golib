@@ -102,13 +102,21 @@ each takes `pipePorts` 3 pipes, in and out together (the core
 and mixers were the other option and wait: ports on the buildings that
 already exist ask for no new building, and a silo is already a mixer with a
 buffer. A pipe moves at most `pipeLitersPerSecond` 4 L/s, limited by its
-source and its end's room. A source divides its supply equally among
-outlets that can accept oil: a silo with two open pipes feeds both, and a
-pump divides its `pumpLitersPerSecond` 2 L/s among its pipes. A
-protector fills its own tank before passing oil onward. Once full, it
-retains `protectorOilPerSecond` 0.25 L/s to stay powered and shares the
-surplus equally among its outlets. A full protector without an outlet
-receives only its upkeep; nothing is lost.
+source and what the network can accept. Every tank takes at most
+`tankFillPerSecond` 1.6 L/s from pipes, shared among all its inlets; this
+is 80% of a pump's `pumpLitersPerSecond` 2 L/s. Incoming oil fills the tank
+at that rate, and any excess passes through its outlets in the same tick.
+A full tank can pass oil onward without taking more in. If there is no
+outlet with room, the source sends only what the tank can store, so oil is
+not lost. A silo can also feed its outlets from oil already stored in it.
+Robots still unload at their existing rate. A source divides its supply
+equally among outlets that can accept oil: a silo with two open pipes feeds
+both, and a pump divides its supply among its pipes. A
+protector never forwards its stored reserve: while it fills at the shared
+tank rate, it passes only the excess; when full, it retains
+`protectorOilPerSecond` 0.25 L/s to stay powered and shares the surplus
+equally among its outlets. A full protector without an outlet receives
+only its upkeep; nothing is lost.
 
 **Laying a pipe** is drawing it. The card of a pump, a silo, a charger, a protector or the core carries `lay pipe` while it has a port free, which arms the pointer: every left click on the ground adds a **bend**, a click on a tank - anywhere on its body; every one the pipe may end at wears a ring, and the label by the pointer says `to silo` before the click - ends the pipe there and marks it, and a right click takes the last bend back, or puts the pointer away when there is none. A building within reach wins over the core beside it, whose monolith is tall and would steal the click. A click on the pipe's **last node** (its last bend, or its source while it has none) opens a small menu around it: `connect`, which ends the pipe at the tank nearest that node, the curve, the price and the tank's name showing it before the pick; `undo`, which takes the node back; and `cancel`, which drops the pipe in hand. The pipe is a curve through the clicks - a centripetal Catmull-Rom spline, which passes through every bend and never loops between a short span and a long one - and with no bends at all it sags a little to one side instead of running like a ruler's line.
 
@@ -120,10 +128,11 @@ leaning away from the sun the buildings' faces imply. Its orange bands show
 what the source offers: at the pump's full `pumpLitersPerSecond` 2 L/s,
 orange fills 90% of each gap and leaves 10% steel gray to show motion. A
 band moves by the liters actually transferred, so a sink that accepts less
-slows it and a blocked or dry pipe stays gray. A protector fills before
-passing oil; after that, it keeps 0.25 L/s for upkeep before sharing the
-rest onward. Each protector in a chain narrows the bands by its upkeep.
-Their phase follows the pipe's accumulated liters and survives saves.
+slows it and a blocked or dry pipe stays gray. A protector passes only the
+excess beyond its fill rate; once full, it keeps 0.25 L/s for upkeep before
+sharing the rest onward. Each protector in a chain narrows the bands by its
+upkeep. Their phase follows the pipe's accumulated liters and survives
+saves.
 Pipes may cross anything, the fog too, and are drawn over it like the sites.
 
 **Taking it up.** The card of either end lists its pipes, each with where it goes or comes from, its length, what it is doing, and a `remove` button; demolishing a building takes its pipes with it. Either way a pipe's whole cost falls as a pile - by the building it started at, or on the demolished cell - and comes home as a haul.
@@ -618,6 +627,16 @@ gift, and the first delivery brings infrastructure. The live rules are in
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-26: oil entering a tank through pipes now fills it at up to
+  `tankFillPerSecond` 1.6 L/s, 80% of a pump's 2 L/s, shared by all its
+  inlets. The excess passes through outlets immediately, so each tank's
+  fill limit shapes how flow reaches the next link. This applies
+  to the core, silos, chargers and protectors; robots still unload at their
+  existing rate. A blocked network throttles the pump without losing oil.
+  Protectors pass the excess while filling, never their reserve, and keep
+  their upkeep before passing surplus once full. Pinned by
+  `pipes_test.go`, including a two-silo chain, shared inlets and the
+  protector upkeep chain.
 - 2026-09-26: workers assigned to deposits no longer leave their posts to
   collect loose items. Builders and unassigned workers still collect them;
   builders carry only a third of a worker's load. Pinned by

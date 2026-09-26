@@ -13,8 +13,10 @@ import (
 // player's clicks, paid in lilac by the section and laid by the robots,
 // a section each.
 const (
-	pumpLitersPerSecond = 2.0 // L/s a pump draws, shared by its pipes
-	pipeLitersPerSecond = 4.0 // L/s one pipe carries at the most
+	pumpLitersPerSecond = 2.0                       // L/s a pump draws, shared by its pipes
+	pipeLitersPerSecond = 4.0                       // L/s one pipe carries at the most
+	// Maximum pipe inflow each tank absorbs before passing excess onward.
+	tankFillPerSecond   = 0.8 * pumpLitersPerSecond
 
 	pipePorts     = 3 // the pipes a building takes, in and out together
 	corePipePorts = 6 // and the core
@@ -460,14 +462,18 @@ const (
 )
 
 // pumpStatus says what a pump is doing, in the order the rules ask: a
-// pipe, laid, a pool with oil left in it, and room at a pipe's end.
+// pipe, laid, a pool with oil left in it, and an accepting network.
 func pumpStatus(s *State, b Building) string {
 	pipes := pipesOf(s, b.ID)
-	laid, room := false, false
+	laid, acceptsOil := false, false
+	outgoing, _, _ := pipeNetwork(s)
+	capacity := make(map[int64]float64)
 	for _, p := range pipes {
 		if p.Left == 0 {
 			laid = true
-			room = room || tankRoom(s, p.To) > 0
+			acceptsOil = acceptsOil || pipeReceiveCapacity(
+				s, p.To, outgoing, map[int64]bool{}, capacity,
+			) > 0
 		}
 	}
 	tcol, trow := pumpTile(b)
@@ -478,7 +484,7 @@ func pumpStatus(s *State, b Building) string {
 		return pumpLaying
 	case remainingAt(s, tcol, trow) <= 0:
 		return pumpDry
-	case !room:
+	case !acceptsOil:
 		return pumpBlocked
 	}
 	return pumpPumping
@@ -565,23 +571,25 @@ func pipeFlowOrder(
 	return order
 }
 
-func protectorReadyToPass(s *State, id int64) bool {
-	b, ok := s.Buildings[id]
-	if !ok || b.Kind != BuildingProtector {
-		return false
-	}
-	return tankRoom(s, id) <= protectorOilPerSecond/60+1e-9
+func tankFillCapacity(s *State, id int64) float64 {
+	return math.Min(tankRoom(s, id), tankFillPerSecond/60)
 }
 
+// pipeReceiveCapacity includes a tank's fill allowance and the oil its
+// outlets can pass onward in the same tick.
 func pipeReceiveCapacity(
 	s *State,
 	id int64,
 	outgoing map[int64][]Pipe,
 	visiting map[int64]bool,
+	capacity map[int64]float64,
 ) float64 {
-	room := tankRoom(s, id)
-	if !protectorReadyToPass(s, id) || visiting[id] {
-		return room
+	fill := tankFillCapacity(s, id)
+	if visiting[id] {
+		return fill
+	}
+	if cached, ok := capacity[id]; ok {
+		return cached
 	}
 
 	visiting[id] = true
@@ -590,7 +598,7 @@ func pipeReceiveCapacity(
 	for _, p := range outgoing[id] {
 		cap := math.Min(
 			pipeLitersPerSecond/60,
-			pipeReceiveCapacity(s, p.To, outgoing, visiting),
+			pipeReceiveCapacity(s, p.To, outgoing, visiting, capacity),
 		)
 		if cap <= 0 {
 			continue
@@ -599,15 +607,18 @@ func pipeReceiveCapacity(
 		outlets++
 	}
 	delete(visiting, id)
+	capacity[id] = fill
 	if outlets == 0 {
-		return room
+		return capacity[id]
 	}
-	return room + float64(outlets)*shareCap
+	capacity[id] += float64(outlets) * shareCap
+	return capacity[id]
 }
 
 // stepPipes moves oil through laid pipes from sources toward their ends.
-// A protector fills its own tank first; once full, it passes on only the
-// incoming oil left after replacing its upkeep. Outlets share equally.
+// Tanks absorb oil up to their fill rate and pass the excess onward. A
+// protector never sends its stored reserve and keeps its upkeep when full.
+// Outlets share the source's flow equally.
 func stepPipes(s *State) {
 	for _, id := range sortedPipeIDs(s) {
 		p := s.Pipes[id]
@@ -619,9 +630,10 @@ func stepPipes(s *State) {
 	outgoing, indegree, nodes := pipeNetwork(s)
 	order := pipeFlowOrder(outgoing, indegree, nodes)
 	capacity := make(map[int64]float64, len(nodes))
+	receiveCapacity := make(map[int64]float64, len(nodes))
 	for _, id := range nodes {
 		capacity[id] = pipeReceiveCapacity(
-			s, id, outgoing, map[int64]bool{},
+			s, id, outgoing, map[int64]bool{}, receiveCapacity,
 		)
 	}
 
@@ -645,14 +657,13 @@ func stepPipes(s *State) {
 			available = math.Min(
 				remainingAt(s, tcol, trow), pumpLitersPerSecond/60,
 			)
-		} else if protectorReadyToPass(s, from) {
-			available = math.Max(
-				0,
-				incoming[from]-math.Min(incoming[from], tankRoom(s, from)),
-			)
-		} else if b, ok := s.Buildings[from]; ok &&
-			b.Kind == BuildingProtector {
-			available = 0
+		} else {
+			fill := math.Min(incoming[from], tankFillCapacity(s, from))
+			available = math.Max(0, incoming[from]-fill)
+			if b, ok := s.Buildings[from]; !ok ||
+				b.Kind != BuildingProtector {
+				available += tankOil(s, from)
+			}
 		}
 		if available <= 0 {
 			continue
@@ -699,11 +710,7 @@ func stepPipes(s *State) {
 		if !ok || tankCapOf(b.Kind) <= 0 {
 			continue
 		}
-		if b.Kind == BuildingProtector {
-			b.Oil += math.Min(incoming[id], tankRoom(s, id))
-		} else {
-			b.Oil += incoming[id] - sent[id]
-		}
+		b.Oil += incoming[id] - sent[id]
 		b.Oil = math.Max(0, math.Min(tankCap(s, id), b.Oil))
 		s.Buildings[id] = b
 	}

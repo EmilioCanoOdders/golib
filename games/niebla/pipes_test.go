@@ -293,19 +293,20 @@ func TestALaidPipeCarriesThePoolIntoItsTank(t *testing.T) {
 	oil, pool := s.Stock.Oil, s.Drain[depositKey(d)]
 	runTicks(s, 600)
 	gained := s.Stock.Oil - oil
-	wantGained := pumpLitersPerSecond * 10
+	wantGained := tankFillPerSecond * 10
 	if math.Abs(gained-wantGained) > 0.001 {
 		t.Errorf("ten seconds of pumping brought %v L, want %v",
 			gained, wantGained)
 	}
 	p = s.Pipes[p.ID]
-	wantFlow := pumpLitersPerSecond / 60
+	wantFlow := tankFillPerSecond / 60
 	if math.Abs(p.Flow-wantFlow) > 1e-9 {
 		t.Errorf("the pipe moved %v L this tick, want %v", p.Flow, wantFlow)
 	}
-	if math.Abs(p.Offered-wantFlow) > 1e-9 {
+	wantOffer := pumpLitersPerSecond / 60
+	if math.Abs(p.Offered-wantOffer) > 1e-9 {
 		t.Errorf("the pump offered %v L this tick, want %v",
-			p.Offered, wantFlow)
+			p.Offered, wantOffer)
 	}
 	if math.Abs(p.Moved-gained) > 0.001 {
 		t.Errorf("the pipe records %v L moved, but the tank gained %v",
@@ -355,8 +356,75 @@ func TestALaidPipeCarriesThePoolIntoItsTank(t *testing.T) {
 	}
 }
 
+func TestPipeFillsEachTankBeforePassingExcess(t *testing.T) {
+	s := newGame()
+	seedStock(s)
+	arriveAll(s)
+	noRivals(s)
+	pump := pumpOn(t, s, safePool(t))
+	col, row := groundNearCore()
+	first := raised(t, s, BuildingSilo, col, row)
+	second := raised(t, s, BuildingSilo, col+3, row)
+	intoFirst := layNow(t, s, pump.ID, first.ID)
+	between := layNow(t, s, first.ID, second.ID)
+	intoCore := layNow(t, s, second.ID, coreTank)
+
+	stepPipes(s)
+
+	got, want := s.Pipes[intoFirst.ID].Flow*60, pumpLitersPerSecond
+	if math.Abs(got-want) > 1e-8 {
+		t.Errorf("the pump sent %v L/s, want %v", got, want)
+	}
+	got, want = s.Buildings[first.ID].Oil*60, tankFillPerSecond
+	if math.Abs(got-want) > 1e-8 {
+		t.Errorf("the first tank filled at %v L/s, want %v", got, want)
+	}
+	got, want = s.Pipes[between.ID].Flow*60,
+		pumpLitersPerSecond-tankFillPerSecond
+	if math.Abs(got-want) > 1e-8 {
+		t.Errorf("the first tank passed %v L/s, want %v", got, want)
+	}
+	got, want = s.Buildings[second.ID].Oil*60,
+		pumpLitersPerSecond-tankFillPerSecond
+	if math.Abs(got-want) > 1e-8 {
+		t.Errorf("the second tank filled at %v L/s, want %v", got, want)
+	}
+	if got := s.Pipes[intoCore.ID].Flow; got != 0 {
+		t.Errorf("the core received %v L before the second tank filled", got)
+	}
+	firstTank := s.Buildings[first.ID]
+	firstTank.Oil = siloOilCap
+	s.Buildings[first.ID] = firstTank
+	if got := pumpStatus(s, pump); got != pumpPumping {
+		t.Errorf("a full tank with a free outlet reports %q", got)
+	}
+}
+
+func TestTankFillRateIsSharedAcrossIncomingPipes(t *testing.T) {
+	s := newGame()
+	seedStock(s)
+	arriveAll(s)
+	noRivals(s)
+	pump := pumpOn(t, s, safePool(t))
+	col, row := groundNearCore()
+	silo := raised(t, s, BuildingSilo, col, row)
+	corePipe := layNow(t, s, coreTank, silo.ID)
+	pumpPipe := layNow(t, s, pump.ID, silo.ID)
+
+	runTicks(s, 60)
+	totalFlow := s.Pipes[corePipe.ID].Moved + s.Pipes[pumpPipe.ID].Moved
+	if math.Abs(totalFlow-tankFillPerSecond) > 1e-8 {
+		t.Errorf("the tank received %v L in one second, want %v",
+			totalFlow, tankFillPerSecond)
+	}
+	if math.Abs(s.Buildings[silo.ID].Oil-tankFillPerSecond) > 1e-8 {
+		t.Errorf("the tank holds %v L after one second, want %v",
+			s.Buildings[silo.ID].Oil, tankFillPerSecond)
+	}
+}
+
 func TestPipeFlowAnimationFollowsDestinationDemand(t *testing.T) {
-	t.Run("silo receives the pump rate", func(t *testing.T) {
+	t.Run("a silo receives at its fill rate", func(t *testing.T) {
 		s := newGame()
 		seedStock(s)
 		arriveAll(s)
@@ -368,19 +436,20 @@ func TestPipeFlowAnimationFollowsDestinationDemand(t *testing.T) {
 
 		runTicks(s, 600)
 		p = s.Pipes[p.ID]
-		wantMoved := pumpLitersPerSecond * 10
+		wantMoved := tankFillPerSecond * 10
 		if math.Abs(p.Moved-wantMoved) > 0.001 {
 			t.Errorf("the pipe moved %v L in ten seconds, want %v",
 				p.Moved, wantMoved)
 		}
-		wantFlow := pumpLitersPerSecond / 60
+		wantFlow := tankFillPerSecond / 60
 		if math.Abs(p.Flow-wantFlow) > 1e-9 {
 			t.Errorf("the silo pipe moved %v L this tick, want %v",
 				p.Flow, wantFlow)
 		}
-		if math.Abs(p.Offered-wantFlow) > 1e-9 {
+		wantOffer := pumpLitersPerSecond / 60
+		if math.Abs(p.Offered-wantOffer) > 1e-9 {
 			t.Errorf("the pump offered %v L this tick, want %v",
-				p.Offered, wantFlow)
+				p.Offered, wantOffer)
 		}
 		if got := pipeFlowPhase(p.Moved); math.Abs(got) > 1e-9 {
 			t.Errorf("the pump-rate flow is at phase %v after 15 beats", got)
@@ -430,7 +499,12 @@ func TestPipeFlowAnimationFollowsDestinationDemand(t *testing.T) {
 		protector := raised(t, s, BuildingProtector, col, row)
 		p := layNow(t, s, pump.ID, protector.ID)
 
-		runTicks(s, 60*100)
+		if !tickUntil(s, 60*180, func() bool {
+			return s.Buildings[protector.ID].Oil >= protectorOilCap-0.01
+		}) {
+			t.Fatal("the protector never filled without an outlet")
+		}
+		runTicks(s, 120)
 		protector = s.Buildings[protector.ID]
 		p = s.Pipes[p.ID]
 		if protector.Oil < protectorOilCap-0.01 {
@@ -481,7 +555,7 @@ func TestPipeFlowBandsTrackTheSourceOffer(t *testing.T) {
 	}
 }
 
-func TestProtectorFillsBeforePassingOilDownstream(t *testing.T) {
+func TestProtectorFillsAtItsRateAndPassesExcess(t *testing.T) {
 	s := newGame()
 	seedStock(s)
 	arriveAll(s)
@@ -490,18 +564,39 @@ func TestProtectorFillsBeforePassingOilDownstream(t *testing.T) {
 	col, row := groundNearCore()
 	protector := raised(t, s, BuildingProtector, col, row)
 	silo := raised(t, s, BuildingSilo, col+3, row)
+	reserve := raised(t, s, BuildingSilo, col+6, row)
 	inPipe := layNow(t, s, pump.ID, protector.ID)
 	outPipe := layNow(t, s, protector.ID, silo.ID)
+	tailPipe := layNow(t, s, silo.ID, reserve.ID)
+	initialOil := s.Buildings[protector.ID].Oil
 
 	runTicks(s, 60*60)
-	if s.Buildings[protector.ID].Oil >= protectorOilCap-1 {
-		t.Fatal("the protector filled too soon to hold back its outlet")
+	wantOil := initialOil +
+		(tankFillPerSecond-protectorOilPerSecond)*60
+	if math.Abs(s.Buildings[protector.ID].Oil-wantOil) > 1e-6 {
+		t.Errorf("the protector holds %v L, want %v after one minute",
+			s.Buildings[protector.ID].Oil, wantOil)
 	}
-	if s.Buildings[silo.ID].Oil != 0 || s.Pipes[outPipe.ID].Flow != 0 {
-		t.Fatal("the protector passed oil before filling its reserve")
+	got, want := s.Pipes[outPipe.ID].Flow*60,
+		pumpLitersPerSecond-tankFillPerSecond
+	if math.Abs(got-want) > 1e-8 {
+		t.Fatalf("the filling protector passed %v L/s, want %v", got, want)
+	}
+	if s.Buildings[silo.ID].Oil <= 0 || s.Buildings[reserve.ID].Oil <= 0 {
+		t.Fatal("the passing excess did not reach the second silo")
+	}
+	got, want = s.Pipes[tailPipe.ID].Flow*60,
+		pumpLitersPerSecond-tankFillPerSecond
+	if math.Abs(got-want) > 1e-8 {
+		t.Errorf("the second silo received %v L/s, want %v", got, want)
 	}
 
-	runTicks(s, 60*90)
+	if !tickUntil(s, 60*200, func() bool {
+		return s.Buildings[protector.ID].Oil >= protectorOilCap-0.01
+	}) {
+		t.Fatal("the protector never filled its reserve")
+	}
+	runTicks(s, 120)
 	if s.Buildings[protector.ID].Oil < protectorOilCap-0.01 {
 		t.Fatalf(
 			"the protector holds %v L after filling",
@@ -519,6 +614,11 @@ func TestProtectorFillsBeforePassingOilDownstream(t *testing.T) {
 	if s.Pipes[inPipe.ID].Flow <= s.Pipes[outPipe.ID].Flow {
 		t.Error("the protector's upkeep did not reduce downstream flow")
 	}
+	got, want = s.Pipes[tailPipe.ID].Flow*60, tankFillPerSecond
+	if math.Abs(got-want) > 1e-8 {
+		t.Errorf("the reserve received %v L/s, want its fill limit %v",
+			got, want)
+	}
 }
 
 func TestProtectorChainConsumesUpkeepBeforeEachOutlet(t *testing.T) {
@@ -535,7 +635,7 @@ func TestProtectorChainConsumesUpkeepBeforeEachOutlet(t *testing.T) {
 		protectors[i] = raised(
 			t, s, BuildingProtector, col+i*2, row,
 		)
-		protectors[i].Oil = protectorOilCap
+		protectors[i].Oil = protectorOilCap - protectorOilPerSecond/60
 		s.Buildings[protectors[i].ID] = protectors[i]
 	}
 	silo := raised(t, s, BuildingSilo, col+len(protectors)*2, row)
@@ -846,7 +946,7 @@ func TestPipesSurviveASave(t *testing.T) {
 	legacy.enterRegion()
 	runTicks(&legacy, 1)
 	if p := legacy.Pipes[p.ID]; math.Abs(p.Offered-pumpLitersPerSecond/60) > 1e-9 ||
-		math.Abs(p.Flow-pumpLitersPerSecond/60) > 1e-9 ||
+		math.Abs(p.Flow-tankFillPerSecond/60) > 1e-9 ||
 		math.Abs(p.Moved-p.Flow) > 1e-9 {
 		t.Errorf("an old pipe didn't resume with fresh flow data: %+v", p)
 	}
