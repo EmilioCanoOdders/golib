@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"math"
+	"os"
 	"testing"
 
 	"golib"
@@ -31,14 +32,43 @@ func tickUntil(s *State, ticks int, done func() bool) bool {
 	return done()
 }
 
+// workOffDemolition works a building's demolition order off the way a
+// builder standing at its side would, without letting the world tick in
+// between: the tests that use it pin what a takedown leaves, not the
+// walk up to it.
+func workOffDemolition(s *State, id int64) {
+	for i := 0; i < demolishWorkTicks; i++ {
+		s.workDemolish(id)
+	}
+}
+
+// demolishNow orders a building down and works the order off.
+func demolishNow(t *testing.T, s *State, id int64) {
+	t.Helper()
+	Apply(s, Demolish{Building: id})
+	workOffDemolition(s, id)
+	if _, stands := s.Buildings[id]; stands {
+		t.Fatalf("building %d still stands after its demolition", id)
+	}
+}
+
 func TestDemolishingLeavesTheCostAsAPileAndTheRobotsHaulItHome(t *testing.T) {
 	s := newGame()
 	col, row := groundNearCore()
 	b := raised(t, s, BuildingCharger, col, row)
 	before := s.Stock
 	Apply(s, Demolish{Building: b.ID})
-	if _, stands := buildingAt(s, col, row); stands {
-		t.Fatal("the charger still stands after its demolition")
+	if _, stands := buildingAt(s, col, row); !stands {
+		t.Fatal("the charger fell the instant it was ordered")
+	}
+	if _, littered := pileAt(s, col, row); littered {
+		t.Fatal("the ordered charger already left its pile")
+	}
+	if !tickUntil(s, 60*600, func() bool {
+		_, stands := buildingAt(s, col, row)
+		return !stands
+	}) {
+		t.Fatal("no builder walked over to take the charger down")
 	}
 	if s.Stock != before {
 		t.Errorf("the stores went from %v to %v: a refund is a haul, never a transfer",
@@ -83,7 +113,7 @@ func TestDemolishingAFactoryRefundsItsMechanicInProgress(t *testing.T) {
 	col, row := groundNearCore()
 	home := raised(t, s, BuildingWarFactory, col, row)
 	Apply(s, QueueMechanic{Building: home.ID})
-	Apply(s, Demolish{Building: home.ID})
+	demolishNow(t, s, home.ID)
 	pile, found := pileAt(s, col, row)
 	if !found {
 		t.Fatal("the demolished factory left no pile")
@@ -102,7 +132,7 @@ func TestDemolishingAFactoryCancelsItsRobot(t *testing.T) {
 	b := raised(t, s, BuildingFactory, col, row)
 	Apply(s, QueueRobot{Building: b.ID})
 	robots := len(s.Robots)
-	Apply(s, Demolish{Building: b.ID})
+	demolishNow(t, s, b.ID)
 	p, _ := pileAt(s, col, row)
 	if p.Lilac != factoryCostLilac+robotCostLilac || p.Oil != robotCostOil {
 		t.Errorf("the pile holds %v kg and %v L, want the factory's and its robot's cost",
@@ -123,7 +153,7 @@ func TestDemolishingASiloSpillsWhatItsTankHeld(t *testing.T) {
 	s.Stock.Oil = coreOilCap
 	b.Oil = 400
 	s.Buildings[b.ID] = b
-	Apply(s, Demolish{Building: b.ID})
+	demolishNow(t, s, b.ID)
 	if s.Stock.Oil != coreOilCap {
 		t.Errorf("the core holds %v L in a tank of %v", s.Stock.Oil, float64(coreOilCap))
 	}
@@ -183,10 +213,10 @@ func TestAProtectorStaysWhileItAloneSheltersABuilding(t *testing.T) {
 	charger := raised(t, s, BuildingCharger, col+2, row)
 	Apply(s, Demolish{Building: protector.ID})
 	if _, stands := s.Buildings[protector.ID]; !stands {
-		t.Fatal("the protector went while it alone sheltered a charger")
+		t.Fatal("the protector took its order while it alone sheltered a charger")
 	}
-	Apply(s, Demolish{Building: charger.ID})
-	Apply(s, Demolish{Building: protector.ID})
+	demolishNow(t, s, charger.ID)
+	demolishNow(t, s, protector.ID)
 	if len(s.Buildings) != 0 {
 		t.Errorf("%d buildings stand, want the outpost gone, protector last",
 			len(s.Buildings))
@@ -196,9 +226,45 @@ func TestAProtectorStaysWhileItAloneSheltersABuilding(t *testing.T) {
 	first := raised(t, s, BuildingProtector, col, row)
 	raised(t, s, BuildingProtector, col+4, row)
 	raised(t, s, BuildingCharger, col+2, row)
-	Apply(s, Demolish{Building: first.ID})
+	demolishNow(t, s, first.ID)
 	if _, stands := s.Buildings[first.ID]; stands {
 		t.Error("a protector stayed though another bubble shelters the charger")
+	}
+}
+
+func TestAnOrderedBuildingSaysDemolishingOnItsCard(t *testing.T) {
+	s := newGame()
+	col, row := groundNearCore()
+	b := raised(t, s, BuildingSilo, col, row)
+	Apply(s, Demolish{Building: b.ID})
+	thing := buildingThing(s.Buildings[b.ID])
+	if thing.Caption != "demolishing, 5 s" {
+		t.Errorf("the card reads %q, want %q", thing.Caption, "demolishing, 5 s")
+	}
+	if trash, blocked := trashFor(s, thing); trash || blocked {
+		t.Error("a building ordered down still wears a trash can")
+	}
+}
+
+func TestAnOrderedProtectorWaitsWhileItAloneSheltersABuilding(t *testing.T) {
+	s := newGame()
+	col, row := groundInTheFog()
+	protector := raised(t, s, BuildingProtector, col, row)
+	Apply(s, Demolish{Building: protector.ID})
+	// A building raised under its bubble alone holds the work up: the
+	// fog's law can't be broken by a takedown already ordered.
+	charger := raised(t, s, BuildingCharger, col+2, row)
+	workOffDemolition(s, protector.ID)
+	if _, stands := s.Buildings[protector.ID]; !stands {
+		t.Fatal("the protector fell while it alone sheltered a charger")
+	}
+	if s.Buildings[protector.ID].Demolish != demolishWorkTicks {
+		t.Error("the protector's work went in though its order can't finish")
+	}
+	demolishNow(t, s, charger.ID)
+	workOffDemolition(s, protector.ID)
+	if _, stands := s.Buildings[protector.ID]; stands {
+		t.Error("the protector stands though nothing leans on its bubble")
 	}
 }
 
@@ -320,5 +386,47 @@ func TestALoadEndsItsWalkAtTheNearestStore(t *testing.T) {
 		if x, y := storeSpot(s, r); !near(x, y, sx, sy) {
 			t.Errorf("%s by its %s unloads at %v, %v, want its side", cargo, store.Kind, x, y)
 		}
+	}
+}
+
+// TestWriteDemolishShotState writes the region the demolition shot
+// starts from: NIEBLA_DEMOLISH_SHOT_STATE for a silo standing near the
+// core with one builder at the ranks. Skipped otherwise, the way tests
+// write nothing.
+func TestWriteDemolishShotState(t *testing.T) {
+	path := os.Getenv("NIEBLA_DEMOLISH_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_DEMOLISH_SHOT_STATE to write a demolition shot state")
+	}
+	s := newGame()
+	noRivals(s)
+	seedStock(s)
+	col, row := groundNearCore()
+	raised(t, s, BuildingSilo, col, row)
+
+	camera := golib.NewCamera(screenWidth, screenHeight)
+	camera.Bounds = regionOnScreen()
+	camera.Zoom = zoomOfStop(zoomOut)
+	camera.Snap()
+	x, y := cellCenterUnits(col, row)
+	px, py := project(float32(x), float32(y))
+	point := camera.ToScreen(golib.Vector2{X: px, Y: py})
+	t.Logf("silo cell click: %0.0f,%0.0f", point.X, point.Y)
+	world := camera.ToWorld(point.X, point.Y)
+	cellCol, cellRow, _ := cellAtWorld(float64(world.X), float64(world.Y))
+	panel := tooltipLayout(s, camera, cellCol, cellRow, map[string]bool{})
+	for _, r := range panel.rows {
+		if r.trash {
+			t.Logf("trash can click: %0.0f,%0.0f",
+				r.bx+r.bw/2, r.by+r.bh/2)
+		}
+	}
+
+	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+	if err != nil {
+		t.Fatalf("the state doesn't marshal: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
 	}
 }

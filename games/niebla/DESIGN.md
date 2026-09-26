@@ -66,14 +66,14 @@ jobs.
 ## Demolition and loose items
 What is built can be unbuilt, and nothing is lost but the walking. (What a rival shell brings down goes the same way with half the refund: see [The rivals](#the-rivals).)
 
-**The trash button.** The card of a building, and of a site still being raised, carries a small button with a trash can, at the right of the card's header. The core has none: it is indestructible both ways. The button asks twice: the first press arms it (the can turns red, the card says `demolish?`), the second demolishes, and a click anywhere else disarms it. Arming is view, not state; only the second press sends the action (`Demolish` for a building, `CancelJob` for a site).
+**The trash button.** The card of a building, and of a site still being raised, carries a small button with a trash can, at the right of the card's header. The core has none: it is indestructible both ways. The button asks twice: the first press arms it (the can turns red, the card says `demolish?`), the second orders the building taken down - or cancels the site at once, which is bookkeeping and needs no one - and a click anywhere else disarms it. Arming is view, not state; only the second press sends the action (`Demolish` for a building, `CancelJob` for a site). A building already ordered down wears no can: its headline counts the work down (`demolishing, 4 s`).
 
-**What demolishing does**, all in one action:
-1. The building leaves the state at once - no work asked of the robots, no ruin left behind. A site leaves the job queue the same way.
+**Taking it down is work, like raising it.** The order stands on the building (`Building.Demolish`, the ticks of work left) and a builder walks over and stands by it, working it down for `demolishWorkTicks` 300 - 5 s, half of raising's 10. The order joins the builders' line after the sites and before the pipes, so it waits its turn like a marking, and several builders stack on one takedown as they do on one site. The building works on until it falls: a factory whose robot is nearly done may well roll it out before the builder arrives. The fall itself is what cancels its tasks and leaves the ground:
+1. The building leaves the state - no ruin left behind. A site leaves the job queue at the button, no work asked.
 2. Every task it had under way is cancelled: a factory's half-built robot never rolls out, a site's progress is gone. Robots carry no plan, so nobody has to be told: a builder finds no job the next tick, a robot refueling at a charger that is gone walks to the next nearest post.
 3. Everything the building was made of or held falls to the ground where it stood, as one **pile**: its whole blueprint cost (`demolishRefund` 1.0, a dial), plus the cost of the robot a factory was building, plus whatever the stores no longer have a roof for - the stores are one stock under many roofs, so a silo or a warehouse "contains" the part of the stock that stops fitting when its roof goes, and that overflow leaves `State.Stock` and joins the pile. Nothing goes straight back to the stores: a refund is a haul.
 
-**A protector is the one exception to the button**: it is dimmed while any other building or site stands under that protector's bubble alone, so the fog's law (nothing but a protector outside a bubble) can never be broken by taking one away. Demolish the outpost first, the protector last. Robots under it take their chances.
+**A protector is the one exception to the button**: it is dimmed while any other building or site stands under that protector's bubble alone, so the fog's law (nothing but a protector outside a bubble) can never be broken by taking one away. The law holds through the work too: a protector already ordered down stops working the moment its bubble is the only one over another building, and picks the work up again when that is no longer so. Demolish the outpost first, the protector last. Robots under it take their chances.
 
 **The pile**, not a scatter. Loose items are one entity per demolished cell, a container drawn on the cell's middle that stands for everything lying there: a small heap of crates and drums, lilac or amber by what it holds, never under the dot size when far out, with a card of its own (`loose items`, its liters and kilograms, open by itself like any primary thing). It has no mass, no health and no capacity: it is bookkeeping with a picture, and the moment a robot takes the last of it, it is gone from the state. Scattering the items over the footprint was the other option and lost: a cell is 25 m across, so at any zoom but the closest a scatter reads as noise or as nothing, it multiplies entities and cards for no decision the player can take, and one pile keeps the state a small table (`State.Piles`, by ID: cell, oil, lilac). Until it is emptied a pile holds its cell - nothing can be marked there - and robots walk through it as they walk through everything. The fog leaves piles alone for now; whether it should nibble at what is left outside a bubble is an open dial, not a rule.
 
@@ -112,7 +112,7 @@ receives only its upkeep; nothing is lost.
 
 **Laying a pipe** is drawing it. The card of a pump, a silo, a charger, a protector or the core carries `lay pipe` while it has a port free, which arms the pointer: every left click on the ground adds a **bend**, a click on a tank - anywhere on its body; every one the pipe may end at wears a ring, and the label by the pointer says `to silo` before the click - ends the pipe there and marks it, and a right click takes the last bend back, or puts the pointer away when there is none. A building within reach wins over the core beside it, whose monolith is tall and would steal the click. A click on the pipe's **last node** (its last bend, or its source while it has none) opens a small menu around it: `connect`, which ends the pipe at the tank nearest that node, the curve, the price and the tank's name showing it before the pick; `undo`, which takes the node back; and `cancel`, which drops the pipe in hand. The pipe is a curve through the clicks - a centripetal Catmull-Rom spline, which passes through every bend and never loops between a short span and a long one - and with no bends at all it sags a little to one side instead of running like a ruler's line.
 
-**The price is by the section** (`pipeSectionMeters` 25 m, a cell's side; `pipeSectionLilac` 5 kg apiece), paid when the pipe is marked. Marking is building here too, and it is work for many hands: a robot **claims a section** - of the oldest unlaid pipe's sections nobody else holds, the nearest to it -, tells the others by the claim itself, which is state (`Robot.Pipe`, `Robot.Section`), walks to the section's middle and **stands by it** for two seconds of work (`pipeSectionWorkTicks` 120), then claims another. So a pipe is laid in patches, by as many robots as it has free sections, the laid sections standing on their posts among the ghost of the rest, and the robots a pipe has no section for go on with their day. A claim lasts while the robot's task is the build line and dies with the robot, so a section is never orphaned. A pipe through the mist costs what walking and standing in the mist costs. Laying pipe is part of the build line of the robot's day, after the sites.
+**The price is by the section** (`pipeSectionMeters` 25 m, a cell's side; `pipeSectionLilac` 5 kg apiece), paid when the pipe is marked. Marking is building here too, and it is work for many hands: a robot **claims a section** - of the oldest unlaid pipe's sections nobody else holds, the nearest to it -, tells the others by the claim itself, which is state (`Robot.Pipe`, `Robot.Section`), walks to the section's middle and **stands by it** for two seconds of work (`pipeSectionWorkTicks` 120), then claims another. So a pipe is laid in patches, by as many robots as it has free sections, the laid sections standing on their posts among the ghost of the rest, and the robots a pipe has no section for go on with their day. A claim lasts while the robot's task is the build line and dies with the robot, so a section is never orphaned. A pipe through the mist costs what walking and standing in the mist costs. Laying pipe is part of the build line of the robot's day, after the sites and the takedowns.
 
 **It shows.** A pipe runs above the ground (`pipeLiftUnits` 9 m, never
 under 5 px), on posts a section apart, and casts its shadow on the ground,
@@ -210,8 +210,9 @@ static data generated from `State.Seed`, never state. `play.go` and
     or right-click to cancel. This includes assigning a builder to a
     deposit when the colony is in trouble; it carries only a third of a
     worker's load.
-  - A building's or site's card has a trash can button. Demolished
-    buildings leave their cost and overflow on their cell as a pile
+  - A building's or site's card has a trash can button. A building
+    ordered down wears none and counts its work down in the headline;
+    when it falls it leaves its cost and overflow on its cell as a pile
     with a card of its own (see [Demolition and loose items](#demolition-and-loose-items)).
   - While rivals are in the region, the HUD says in red what they are
     doing and where (`raiders camped east, moving in 2:40`, `rival base
@@ -265,7 +266,7 @@ screen; they never move the camera or take input.
 | Mouse left, after a war factory's `give order` | On a rival vehicle: the squad attacks its party, that vehicle first. On the ground: the squad guards that spot. Right click: the order away |
 | 1-9 | Call a squad: 1 is the first war factory raised, 2 the next. The key arms the order the same way `give order` does (one click orders, right click puts it away); the same key again takes it back. A squad's box at the top right - tank icon, unit count, the key below - calls it too |
 | Mouse left, on a squad's pennant or ring | Call that squad, where it stands |
-| Mouse left, on a card's trash can | First press arms it (`demolish?`), the second demolishes; a click anywhere else disarms |
+| Mouse left, on a card's trash can | First press arms it (`demolish?`), the second orders the building taken down - a builder goes and works it - or cancels a site; a click anywhere else disarms |
 | Mouse right, clicked | Close the menu / deselect |
 | Esc | In the region: save and return to the menu. In the menu: quit |
 | F11 or Alt+Enter | Fullscreen on and off |
@@ -305,13 +306,14 @@ For whoever works on the game, not for the player: in the region, hold Control a
   bubble, it is digested. The factory builds either another builder or a
   blue worker for the same lilac and oil cost and 12 seconds of work.
 - Builders first bring home any load they already carry and refuel when
-  low, then raise buildings and lay pipes before collecting piles or
-  working their own deposit post. Workers carry loads home, refuel, finish
-  loading, collect piles, work their assigned post and idle; they never
-  build or lay pipes. Both kinds have the same speed and tank. A builder
-  carries only one third of a worker's oil or lilac load, enough for an
-  emergency, not routine hauling. Troopers follow their squad; mechanics
-  repair the oldest damaged building and then wait at their war factory.
+  low, then raise buildings, take ordered ones down and lay pipes before
+  collecting piles or working their own deposit post. Workers carry loads
+  home, refuel, finish loading, collect piles, work their assigned post
+  and idle; they never build or lay pipes. Both kinds have the same speed
+  and tank. A builder carries only one third of a worker's oil or lilac
+  load, enough for an emergency, not routine hauling. Troopers follow
+  their squad; mechanics repair the oldest damaged building and then wait
+  at their war factory.
 - `send robot` on a deposit card assigns one unassigned worker and never
   takes a worker from another post. The right-side roster shows builders,
   unassigned workers, workers grouped by deposit and mechanics, with each
@@ -324,7 +326,13 @@ For whoever works on the game, not for the player: in the region, hold Control a
   the rest stand inside the first ones with a count label. A post that runs
   dry releases its units. Every load ends at the nearest store of its kind
   (warehouse or core for lilac, silo or core for oil).
-- Any building but the core can be demolished from its card, and a site cancelled. Its tasks die with it, and its whole cost, plus what the stores lose the roof for, falls on its cell as one pile of loose items that the robots haul back to the stores. A protector can't go while its current bubble is the only one over another building.
+- Any building but the core can be ordered down from its card, and a
+  site cancelled at once. A builder walks over and works the order down
+  (5 s of work, `demolishWorkTicks` 300); its tasks die as it falls, and
+  its whole cost, plus what the stores lose the roof for, falls on its
+  cell as one pile of loose items that the robots haul back to the
+  stores. A protector can't be ordered down, or finish going, while its
+  current bubble is the only one over another building.
 - Rivals come for the oil, one moving party at a time: a scout four minutes in, which siphons 25 L and leaves its mark, then an introductory raid from the scout's bearing. Thirty cycles after the raid leaves, a crawler arrives and establishes a city that builds a repulsor, extractors and a war factory. The factory sends raiders first without artillery, then mobile artillery. Cities do not attack by themselves; their mobile forces do. Structures can be destroyed, wrecks drop loot, and the colony's artillery shells visible rival targets for lilac and oil (see [The rivals](#the-rivals)).
 - A war factory builds troopers, up to six, and they are its squad: one
   click orders them to guard a spot or attack a rival party, a chosen
@@ -537,8 +545,9 @@ with individual assignment and recall controls.
 The robots, in `sim_robots.go`: `startingBuilders` 1, `robotSpeed` 30 u/s,
 `robotCarryOil` 30 L and `robotCarryLilac` 20 kg per worker trip; a builder
 carries `builderCarryPart` one third as much. `robotLoadTicks` is 150 (2.5 s
-loading at a deposit). Builders alone raise sites and lay pipes; both roles
-can collect piles and work an explicitly assigned post. The idle ranks by
+loading at a deposit). Builders alone raise sites, take ordered buildings
+down and lay pipes; both roles can collect piles and work an explicitly
+assigned post. The idle ranks by
 the core use `parkSlots` 10 places, `parkRankSize` 5 to a rank,
 `parkSpacing` 7 u and `parkFromCore` 10 u before the monolith's broad face.
 A drained patch leaves one big scar and releases its assigned units. The
@@ -550,7 +559,7 @@ The buildings, in `sim_buildings.go`, all landed: the ground's last subdivision 
 
 The colony saves itself, in `store.go` and `identity.go`: the machine's own ID (Windows' MachineGuid, macOS' IOPlatformUUID, Linux' `/etc/machine-id`), hashed with `playerIDSalt`, is the player identity - `playerIDSalt` "niebla player id v1", 64 hex characters, shown on the menu as its first eight (`#30E99076`) and never in raw form; a machine with no ID gets a random one kept in the database. The local database is SQLite (`modernc.org/sqlite`, pure Go - no C compiler here), at the player's settings folder in `GoLib games/niebla/niebla.db`, with the schema a server keeps: `players` (identity, source, created_at, `token` empty until a server hands one out), `saves` (the whole State as one JSON value per player and slot, `region` for now, with tick and timestamp) and `machine` (key-value for this machine alone, the fallback identity lives there). State version 2 migrates old `core` robots into fueled builders and old `built` robots into workers, including an in-progress factory product. Autosave every `autosaveTicks` 900 (15 s of game time) and on leaving the region, so a window closed without ceremony loses less than 15 s. Under `golib shot` and `go test` the database is `:memory:`, so shots and tests never touch the player's base, and `golib shot --save` still starts a game deep in a state: `resumeState` takes the seeded value over the database. The driver doesn't build for `js/wasm`: a web build will take its store from a server or the browser's own.
 
-Demolition and loose items, in `sim_piles.go`: `demolishRefund` 1.0 (the part of the cost that falls to the ground; a site gives back the same), no work ticks to demolish, piles loaded with the deposits' `robotLoadTicks` and carry sizes, one kind per trip, lilac first. A robot never loads what the stores have no free room for, counting what is already on its way home (`freeRoom`), and unloads `storeStandoff` 11 u from its store's middle, spread by ID like the builders. State holds `Piles` (by ID: cell, oil, lilac) and `Robot.Pile` (the pile a loading robot stands at), the actions are `Demolish` (a building's ID) and `CancelJob` (a site's cell), `canPlace` refuses a cell with a pile, and the catalog has the `site` and `pile` types, primary on their tile. The robot's day is a list now (`robotDay`), the shape the per-robot task list will filter. In `inspect.go`: the trash can, `trashWidth` by `trashHeight` 11 by 13 px at the end of a card's title, red and under `demolish?` while armed.
+Demolition and loose items, in `sim_piles.go`: `demolishWorkTicks` 300 (5 s) of a builder's work to take an ordered building down (`Building.Demolish` counts the work left; it goes in only while `canDemolish` holds, so a protector waits where it stands), `demolishRefund` 1.0 (the part of the cost that falls to the ground; a site gives back the same), piles loaded with the deposits' `robotLoadTicks` and carry sizes, one kind per trip, lilac first. A robot never loads what the stores have no free room for, counting what is already on its way home (`freeRoom`), and unloads `storeStandoff` 11 u from its store's middle, spread by ID like the builders. State holds `Piles` (by ID: cell, oil, lilac) and `Robot.Pile` (the pile a loading robot stands at), the actions are `Demolish` (a building's ID: an order a builder works off) and `CancelJob` (a site's cell, at once), `canPlace` refuses a cell with a pile, and the catalog has the `site` and `pile` types, primary on their tile. The robot's day is a list now (`robotDay`), the shape the per-robot task list will filter. In `inspect.go`: the trash can, `trashWidth` by `trashHeight` 11 by 13 px at the end of a card's title, red and under `demolish?` while armed, gone while a building is being taken down.
 
 The rivals, in `sim_enemies.go`: every dial is in [The rivals](#the-rivals). The state gained `Enemies`, `Parties`, `Raids` (the visits that were, the tick of the next), `Marks`, `Reports` (the last `reportsKept` 12) and `Rolls`, the counter of the state's own PRNG (`State.roll`, splitmix64 over the seed and the counter), which the rivals are the first to draw from: a visit's bearing. A party moves as one at the pace of its slowest, the members `formationOffset` around its leader (18 m and up, inside the crawler's pocket), and stops `siphonReachUnits` 40 m from its tank. `Building` gained `Reload` and `Aim` for the guard posts; a shot shows `guardFlashTicks` 6. In `enemies.go`: the news stay `reportShowTicks` 900 (15 s) on a plate under the HUD, the mark is `markScale` 1.3 (about 40 m long), vehicles never draw under 5 px across (the crawler 9), and bearings are named as the screen shows them, north up (`compassWord`).
 
@@ -604,6 +613,28 @@ gift, and the first delivery brings infrastructure. The live rules are in
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-26: demolition stops being instant: somebody goes and does it.
+  The trash can's second press **orders** a building taken down
+  (`Building.Demolish`, the ticks of work left) instead of taking it
+  down at once, and a builder walks over and stands by it for
+  `demolishWorkTicks` 300 - 5 s, half of raising's 600 - stacking hands
+  on one order as they do on one site. The order waits its turn in the
+  build line after the sites and before the pipes; a site still cancels
+  at the button, which is bookkeeping and needs no one. The building
+  works on until it falls - a factory can roll its robot out before the
+  builder arrives - and the fall is what cancels its tasks and drops the
+  pile. A building ordered down wears no can and its headline counts the
+  work down (`demolishing, 4 s`); a protector's work stops while its
+  bubble alone shelters another building and picks up again after, so
+  the fog's law holds through the work. Pinned by
+  `TestDemolishingLeavesTheCostAsAPileAndTheRobotsHaulItHome` (the order
+  now leaves the building standing until a builder takes it down),
+  `TestAnOrderedBuildingSaysDemolishingOnItsCard` and
+  `TestAnOrderedProtectorWaitsWhileItAloneSheltersABuilding`, with the
+  other demolition tests working the order off through `demolishNow`;
+  shots from `NIEBLA_DEMOLISH_SHOT_STATE` armed a silo's can (red,
+  `demolish?`), pressed it again, saw its card count down with no can,
+  and watched the builder walk over, work and leave the cost as a pile.
 - 2026-09-25: city status announcements and their offscreen arrow now last
   one minute from founding; later city reports keep the 15-second lifetime.
   The deadline is saved with the city, so loading an older city does not

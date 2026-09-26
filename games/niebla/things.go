@@ -277,7 +277,9 @@ func buildingThing(b Building) Thing {
 		ID:   fmt.Sprintf("%s-%d", kind, b.ID),
 		Ref:  b.ID,
 	}
-	if b.Work > 0 {
+	if b.Demolish > 0 {
+		thing.Caption = fmt.Sprintf("demolishing, %d s", (b.Demolish+59)/60)
+	} else if b.Work > 0 {
 		unit := "robot"
 		switch robotWorkKind(b) {
 		case RobotCombat:
@@ -370,6 +372,9 @@ func robotCaption(s *State, r Robot) string {
 	case taskBuild:
 		if _, _, hasJob := priorityJob(s); hasJob {
 			return "building"
+		}
+		if _, ok := nearestDemolition(s, r); ok {
+			return "taking down"
 		}
 		return "laying pipe"
 	case taskRepair:

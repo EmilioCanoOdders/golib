@@ -239,7 +239,7 @@ func TestAFallenTrooperLeavesItsWreckAndADemolishedWarFactoryItsSquad(t *testing
 	survivor := s.Robots[s.spawnRobot(RobotCombat, 2500, 2500)]
 	survivor.Squad = home.ID
 	s.Robots[survivor.ID] = survivor
-	Apply(s, Demolish{Building: home.ID})
+	demolishNow(t, s, home.ID)
 	runTicks(s, 60*30)
 	r := s.Robots[survivor.ID]
 	px, py := parkCenter()

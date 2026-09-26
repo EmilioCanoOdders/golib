@@ -201,22 +201,24 @@ func (a OrderSquad) apply(s *State) {
 	s.Squads[a.Squad] = sq
 }
 
-// Demolish takes a building down at once: its tasks die with it, and its
-// cost, the cost of a robot its factory was building, the pipes that
-// started or ended at it and what the stores lose the roof for fall on
-// its cell as one pile. It does nothing for a
-// building that isn't there, or for a protector that alone shelters
-// another building (see canDemolish).
+// Demolish orders a building taken down: a builder walks to it and works
+// it down (`demolishWorkTicks`), and only then does it go. Its tasks die
+// with it, and its cost, the cost of a robot its factory was building,
+// the pipes that started or ended at it and what the stores lose the
+// roof for fall on its cell as one pile. It does nothing for a building
+// that isn't there, one already ordered down, or a protector that alone
+// shelters another building (see canDemolish).
 type Demolish struct {
 	Building int64 // the building's entity ID
 }
 
 func (a Demolish) apply(s *State) {
 	b, ok := s.Buildings[a.Building]
-	if !ok || !canDemolish(s, b) {
+	if !ok || b.Demolish > 0 || !canDemolish(s, b) {
 		return
 	}
-	s.takeDown(b, demolishRefund)
+	b.Demolish = demolishWorkTicks
+	s.Buildings[a.Building] = b
 }
 
 // takeDown is a building leaving the state, demolished or destroyed: the

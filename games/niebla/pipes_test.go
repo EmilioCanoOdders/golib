@@ -638,7 +638,7 @@ func TestOilHasAPlaceAndPipesMoveItBetweenTanks(t *testing.T) {
 	}
 	// A demolished tank drops its own oil, and its pipes with it.
 	held := s.Buildings[second.ID].Oil
-	Apply(s, Demolish{Building: second.ID})
+	demolishNow(t, s, second.ID)
 	pile, _ := pileAt(s, col+2, row)
 	if math.Abs(pile.Oil-held) > 0.001 {
 		t.Errorf("the pile holds %v L, want the silo's %v", pile.Oil, held)
@@ -719,7 +719,7 @@ func TestAPipeLeavesWithItsEndsAndItsCostFallsAsAPile(t *testing.T) {
 	silo := raised(t, s, BuildingSilo, col, row)
 	Apply(s, LayPipe{From: pump.ID, To: silo.ID})
 	p, _ := pipeOut(s, pump.ID)
-	Apply(s, Demolish{Building: silo.ID})
+	demolishNow(t, s, silo.ID)
 	if len(s.Pipes) != 0 {
 		t.Fatal("the pipe outlived the silo it ended at")
 	}
@@ -740,7 +740,7 @@ func TestAPipeLeavesWithItsEndsAndItsCostFallsAsAPile(t *testing.T) {
 	}
 
 	Apply(s, LayPipe{From: pump.ID, To: 0})
-	Apply(s, Demolish{Building: pump.ID})
+	demolishNow(t, s, pump.ID)
 	if len(s.Pipes) != 0 {
 		t.Error("the pipe outlived its pump")
 	}

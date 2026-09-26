@@ -127,13 +127,16 @@ const (
 // Building is one raised structure. Its Col, Row are cell coordinates
 // (the tile grid's last subdivision, a 40 u footprint — sim_buildings.go),
 // so a tile may hold several buildings. Its Work counts down while a
-// factory builds a unit; every other kind leaves it at zero.
+// factory builds a unit; every other kind leaves it at zero. Its
+// Demolish counts the robot work down to the building coming apart:
+// zero when nothing is ordered down.
 type Building struct {
 	ID       int64
 	Kind     BuildingKind
 	Col, Row int       // the cell it stands on
 	Work     int64     // ticks until the factory's unit is built
 	WorkKind RobotKind // the unit being built; unset when idle or in old saves
+	Demolish int64     // ticks of work left to take it down; 0 when not ordered
 	Oil      float64   // liters in its tank: stores and protectors (sim_oil.go)
 	Reload   int64     // guard posts: ticks until the next shot (sim_enemies.go)
 	Aim      int64     // guard posts: the vehicle the last shot went to

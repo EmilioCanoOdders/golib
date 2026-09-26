@@ -307,6 +307,9 @@ func robotPanelActivity(s *State, r Robot) string {
 		if job, _, ok := priorityJob(s); ok {
 			return "building " + string(job.Kind)
 		}
+		if b, ok := nearestDemolition(s, r); ok {
+			return "taking down " + string(b.Kind)
+		}
 		return "laying pipe"
 	case taskCollect:
 		return "collecting loose items"

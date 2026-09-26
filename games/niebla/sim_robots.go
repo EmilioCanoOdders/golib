@@ -229,6 +229,9 @@ func (r *Robot) building(s *State) bool {
 	if _, _, hasJob := priorityJob(s); hasJob {
 		return true
 	}
+	if _, ok := nearestDemolition(s, *r); ok {
+		return true
+	}
 	if claimStands(s, *r) {
 		return true
 	}
@@ -237,19 +240,29 @@ func (r *Robot) building(s *State) bool {
 }
 
 // Builders stand on their cell's edge, spread by ID, so the rising body
-// doesn't swallow them. With no site left to raise, they lay pipe.
+// doesn't swallow them. Sites come first, then buildings ordered down,
+// and with none of either they lay pipe.
 func (r *Robot) stepBuild(s *State) {
 	job, index, hasJob := priorityJob(s)
-	if !hasJob {
-		r.stepLayPipe(s)
+	if hasJob {
+		r.Pipe, r.Section = 0, 0
+		cx, cy := cellCenterUnits(job.Col, job.Row)
+		angle := float64(r.ID) * goldenAngle
+		if r.walkTowards(s, cx+math.Cos(angle)*11, cy+math.Sin(angle)*11) {
+			s.workJob(index)
+		}
 		return
 	}
-	r.Pipe, r.Section = 0, 0
-	cx, cy := cellCenterUnits(job.Col, job.Row)
-	angle := float64(r.ID) * goldenAngle
-	if r.walkTowards(s, cx+math.Cos(angle)*11, cy+math.Sin(angle)*11) {
-		s.workJob(index)
+	if b, ok := nearestDemolition(s, *r); ok {
+		r.Pipe, r.Section = 0, 0
+		cx, cy := cellCenterUnits(b.Col, b.Row)
+		angle := float64(r.ID) * goldenAngle
+		if r.walkTowards(s, cx+math.Cos(angle)*11, cy+math.Sin(angle)*11) {
+			s.workDemolish(b.ID)
+		}
+		return
 	}
+	r.stepLayPipe(s)
 }
 
 // stepLayPipe lays one section of pipe: the robot claims the next one

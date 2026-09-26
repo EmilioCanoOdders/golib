@@ -6,10 +6,13 @@ import (
 )
 
 // Demolition and loose items. What is built can be unbuilt: a building
-// or a site leaves the state at once, and everything it was made of or
-// held falls on its cell as one pile, which the robots haul back to the
-// stores. Nothing goes straight back: a refund is a haul.
+// ordered down is worked on by a builder and leaves the state when the
+// work is done, and everything it was made of or held falls on its cell
+// as one pile, which the robots haul back to the stores. Nothing goes
+// straight back: a refund is a haul.
 const (
+	demolishWorkTicks = 300 // ticks of robot work to take a building down: 5 s
+
 	demolishRefund  = 1.0  // the part of a blueprint's cost that falls to the ground
 	unitWreckRefund = 0.25 // the part of a lost unit's resources recovered
 
@@ -113,6 +116,44 @@ func canDemolish(s *State, b Building) bool {
 		}
 	}
 	return true
+}
+
+// nearestDemolition returns the closest building ordered down, the
+// lower ID on a tie, as the pipe claims spread their work.
+func nearestDemolition(s *State, r Robot) (Building, bool) {
+	var best Building
+	found, bestDist := false, 0.0
+	for _, id := range sortedBuildingIDs(s) {
+		b := s.Buildings[id]
+		if b.Demolish <= 0 {
+			continue
+		}
+		x, y := cellCenterUnits(b.Col, b.Row)
+		if d := math.Hypot(r.X-x, r.Y-y); !found || d < bestDist {
+			best, found, bestDist = b, true, d
+		}
+	}
+	return best, found
+}
+
+// workDemolish puts a tick of a builder's work into taking a building
+// down: the work only goes in while the building may legally go, so a
+// protector whose bubble alone shelters something waits where it stands
+// until that is no longer so. Work spent, the building comes down and
+// leaves its pile (takeDown).
+func (s *State) workDemolish(id int64) {
+	b, ok := s.Buildings[id]
+	if !ok || !canDemolish(s, b) {
+		return
+	}
+	if b.Demolish > 0 {
+		b.Demolish--
+	}
+	if b.Demolish > 0 {
+		s.Buildings[id] = b
+		return
+	}
+	s.takeDown(b, demolishRefund)
 }
 
 // spillOverflow moves the lilac the stores no longer have a roof for

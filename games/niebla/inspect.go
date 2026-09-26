@@ -10,8 +10,10 @@ import (
 // per line: the cell's header, one card title per thing with its headline
 // at the right, the expanded cards' details and, for deposits, worker
 // portraits and a button to send another robot. The card of a
-// building or a site ends its title in a trash can, which demolishes it
-// on the second press.
+// building or a site ends its title in a trash can, which on the second
+// press orders the building taken down - a builder goes and works it
+// down - or cancels the site at once. A building already ordered down
+// wears no can; its headline says `demolishing`.
 const (
 	tooltipWidth     = 290
 	tooltipPad       = 12
@@ -406,13 +408,17 @@ func tooltipLayoutForThings(
 
 // trashFor reports whether a thing's card carries a trash can, and
 // whether it is dimmed: every building and site can go but the core,
-// which has none, and a protector that alone shelters another building.
+// which has none, a building already ordered down, whose card says
+// `demolishing`, and a protector that alone shelters another building.
 func trashFor(s *State, thing Thing) (trash, blocked bool) {
 	if thing.Type == TypeSite {
 		return true, false
 	}
 	b, ok := s.Buildings[thing.Ref]
 	if !ok || buildingType(b.Kind) != thing.Type {
+		return false, false
+	}
+	if b.Demolish > 0 {
 		return false, false
 	}
 	return true, !canDemolish(s, b)

@@ -65,7 +65,7 @@ func TestDemolishingProtectorDropsItsFuelOnlyOnce(t *testing.T) {
 	b.Oil = 27
 	s.Buildings[b.ID] = b
 
-	Apply(s, Demolish{Building: b.ID})
+	demolishNow(t, s, b.ID)
 	p, ok := pileAt(s, col, row)
 	if !ok || p.Oil != b.Oil {
 		t.Fatalf("demolition left %v L in its pile, want the held %v L",
