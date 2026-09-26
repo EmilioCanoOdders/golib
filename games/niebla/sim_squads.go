@@ -3,11 +3,12 @@ package main
 import "math"
 
 // Military units: a war factory builds troopers, up to six in its squad,
-// and one mechanic. A squad guards a spot or attacks a rival party, a
-// vehicle of it first; nobody places a trooper by hand. Mechanics work
-// alone, repairing buildings for oil. Troopers shoot rivals in reach and
-// pay each shot from their tanks. The rivals' guns shoot back at troopers,
-// mechanics and guard posts; their shells can also damage buildings.
+// and, after the repair protocol, one mechanic. A squad guards a spot or
+// attacks a rival party, a vehicle of it first; nobody places a trooper by
+// hand. Mechanics work alone, repairing buildings for oil. Troopers shoot
+// rivals in reach and pay each shot from their tanks. The rivals' guns
+// shoot back at troopers, mechanics and guard posts; their shells can also
+// damage buildings.
 
 // Tuning: the squads' numbers, with units in the name.
 const (

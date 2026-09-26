@@ -326,6 +326,7 @@ func TestSettledCityDoesNotFireByItself(t *testing.T) {
 func TestOnlyAMechanicRepairsAndSpendsOil(t *testing.T) {
 	s := newGame()
 	noRivals(s)
+	s.Tech[techRepairID] = false
 	col, row := groundNearCore()
 	silo := raised(t, s, BuildingSilo, col, row)
 	s.hurtBuilding(silo.ID, 120)

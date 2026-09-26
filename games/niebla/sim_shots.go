@@ -139,7 +139,11 @@ func (s *State) land(shot Shot) {
 	if shot.Kind == ShotBullet {
 		s.hurtEnemy(shot.Enemy, shot.Damage)
 		s.hurtColonyUnit(shot.Robot, shot.Damage)
-		s.hurtBuilding(shot.Building, shot.Damage)
+		if shot.Rival {
+			s.hurtBuildingByRival(shot.Building, shot.Damage)
+		} else {
+			s.hurtBuilding(shot.Building, shot.Damage)
+		}
 		return
 	}
 	near := func(x, y float64) bool {
@@ -161,9 +165,16 @@ func (s *State) land(shot Shot) {
 	for _, id := range sortedBuildingIDs(s) {
 		b := s.Buildings[id]
 		if x, y := cellCenterUnits(b.Col, b.Row); near(x, y) {
-			s.hurtBuilding(id, shot.Damage)
+			s.hurtBuildingByRival(id, shot.Damage)
 		}
 	}
+}
+
+func (s *State) hurtBuildingByRival(id int64, damage float64) {
+	if _, stands := s.Buildings[id]; stands && damage > 0 {
+		s.Raids.RivalBuildingHit = true
+	}
+	s.hurtBuilding(id, damage)
 }
 
 // hurtEnemy takes health off a rival vehicle, and the vehicle with it

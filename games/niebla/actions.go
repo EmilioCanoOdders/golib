@@ -141,7 +141,7 @@ func (a QueueRobot) apply(s *State) {
 
 // QueueMechanic puts a war factory to work on its one repair unit, paying
 // its cost at once. A factory already building or with a mechanic leaves
-// the action unanswered.
+// the action unanswered; the repair protocol must have arrived first.
 type QueueMechanic struct {
 	Building int64
 }
@@ -153,6 +153,9 @@ func (a QueueMechanic) apply(s *State) {
 func queueUnit(s *State, id int64, kind RobotKind) {
 	b, ok := s.Buildings[id]
 	if !ok || !canProduce(b, kind) || b.Work > 0 {
+		return
+	}
+	if kind == RobotRepair && !repairProtocolUnlocked(s) {
 		return
 	}
 	if kind == RobotCombat && !squadRoom(s, b) {

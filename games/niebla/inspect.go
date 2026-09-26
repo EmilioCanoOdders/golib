@@ -264,7 +264,8 @@ func tooltipLayoutForThings(
 		}
 		if thing.Type == TypeWarFactory {
 			if b, ok := s.Buildings[thing.Ref]; ok {
-				if b.Work <= 0 && mechanicRoom(s, b) &&
+				if repairProtocolUnlocked(s) && b.Work <= 0 &&
+					mechanicRoom(s, b) &&
 					s.Stock.Lilac >= mechanicCostLilac &&
 					oilTotal(s) >= mechanicCostOil {
 					t.rows = append(t.rows, tooltipRow{

@@ -18,6 +18,7 @@ type economyPlan struct {
 	expand         bool
 	defend         bool
 	trooperGoal    int
+	repair         bool
 }
 
 var economyPlans = []economyPlan{
@@ -25,7 +26,43 @@ var economyPlans = []economyPlan{
 	{name: "growth", workerGoal: 3, robotsPerPatch: 2},
 	{name: "outpost", workerGoal: 3, robotsPerPatch: 1, expand: true},
 	{name: "defense", workerGoal: 3, robotsPerPatch: 2,
-		defend: true, trooperGoal: 2},
+		defend: true, trooperGoal: 2, repair: true},
+}
+
+type economyMilestones struct {
+	firstBuildingHitAt      int64
+	firstIntroAttackEndedAt int64
+	firstPressureSortieAt   int64
+	firstPressureLullAt     int64
+	repairProtocolArrivedAt int64
+}
+
+func newEconomyMilestones() economyMilestones {
+	return economyMilestones{
+		firstBuildingHitAt:      -1,
+		firstIntroAttackEndedAt: -1,
+		firstPressureSortieAt:   -1,
+		firstPressureLullAt:     -1,
+		repairProtocolArrivedAt: -1,
+	}
+}
+
+func (m *economyMilestones) observe(s *State) {
+	if m.firstBuildingHitAt < 0 && s.Raids.RivalBuildingHit {
+		m.firstBuildingHitAt = s.Ticks
+	}
+	if m.firstIntroAttackEndedAt < 0 && s.Raids.Visits >= 2 {
+		m.firstIntroAttackEndedAt = s.Ticks
+	}
+	if m.firstPressureSortieAt < 0 && s.Raids.PressureSortieStarted {
+		m.firstPressureSortieAt = s.Ticks
+	}
+	if m.firstPressureLullAt < 0 && s.Raids.PressureSortieResolved {
+		m.firstPressureLullAt = s.Ticks
+	}
+	if m.repairProtocolArrivedAt < 0 && repairProtocolUnlocked(s) {
+		m.repairProtocolArrivedAt = s.Ticks
+	}
 }
 
 type economyPlanner struct {
@@ -63,7 +100,10 @@ func TestWriteEconomyReport(t *testing.T) {
 		"pumps", "pipes", "guards", "swells", "visits", "enemies",
 		"party_stage", "party_size", "party_raiders", "party_artillery",
 		"city_stage", "city_work_ticks", "city_sorties", "city_oil",
-		"city_lilac",
+		"city_lilac", "first_building_hit_tick",
+		"first_intro_attack_end_tick", "first_pressure_sortie_tick",
+		"first_pressure_sortie_lull_tick", "repair_protocol_tick",
+		"mechanics", "building_damage",
 	}); err != nil {
 		t.Fatalf("writing the report header: %v", err)
 	}
@@ -88,8 +128,11 @@ func writeEconomyRun(
 	t.Helper()
 	s := newGameOn(seed)
 	p := newEconomyPlanner(plan)
+	milestones := newEconomyMilestones()
 	for minute := 0; minute <= minutes; minute++ {
-		if err := w.Write(economyRow(s, plan.name, seed, minute)); err != nil {
+		if err := w.Write(economyRow(
+			s, plan.name, seed, minute, milestones,
+		)); err != nil {
 			t.Fatalf("writing %s, seed %d, minute %d: %v", plan.name, seed, minute, err)
 		}
 		if minute == minutes {
@@ -100,6 +143,7 @@ func writeEconomyRun(
 				p.decide(s)
 			}
 			Apply(s, Tick{})
+			milestones.observe(s)
 		}
 	}
 }
@@ -211,11 +255,16 @@ func (p economyPlanner) buildDefense(s *State) {
 		return
 	}
 	factory, raised := buildingAt(s, p.warCol, p.warRow)
-	if !raised || factory.Work > 0 ||
-		len(squadMembers(s, factory.ID)) >= p.plan.trooperGoal {
+	if !raised || factory.Work > 0 {
 		return
 	}
-	Apply(s, QueueRobot{Building: factory.ID, Kind: RobotCombat})
+	if len(squadMembers(s, factory.ID)) < p.plan.trooperGoal {
+		Apply(s, QueueRobot{Building: factory.ID, Kind: RobotCombat})
+		return
+	}
+	if p.plan.repair && repairProtocolUnlocked(s) {
+		Apply(s, QueueMechanic{Building: factory.ID})
+	}
 }
 
 func (p economyPlanner) expandOil(s *State) {
@@ -307,12 +356,19 @@ func depositSafe(s *State, d Deposit) bool {
 	return inSafeZone(s, x, y)
 }
 
-func economyRow(s *State, plan string, seed int64, minute int) []string {
+func economyRow(
+	s *State,
+	plan string,
+	seed int64,
+	minute int,
+	milestones economyMilestones,
+) []string {
 	oilMined, lilacMined := mined(s)
 	workers, troopers := robotCounts(s)
 	buildings, protectors, pumps, guards := buildingCounts(s)
 	partyStage, partySize, partyRaiders, partyArtillery := partyCounts(s)
 	cityStage, cityWork, citySorties, cityOil, cityLilac := cityEconomy(s)
+	mechanics, damage := repairEconomy(s)
 	return []string{
 		plan,
 		strconv.FormatInt(seed, 10),
@@ -341,6 +397,62 @@ func economyRow(s *State, plan string, seed int64, minute int) []string {
 		citySorties,
 		cityOil,
 		cityLilac,
+		economyTick(milestones.firstBuildingHitAt),
+		economyTick(milestones.firstIntroAttackEndedAt),
+		economyTick(milestones.firstPressureSortieAt),
+		economyTick(milestones.firstPressureLullAt),
+		economyTick(milestones.repairProtocolArrivedAt),
+		strconv.Itoa(mechanics),
+		quantity(damage),
+	}
+}
+
+func repairEconomy(s *State) (mechanics int, damage float64) {
+	for _, id := range sortedRobotIDs(s) {
+		if s.Robots[id].Kind == RobotRepair {
+			mechanics++
+		}
+	}
+	for _, id := range sortedBuildingIDs(s) {
+		damage += s.Buildings[id].Damage
+	}
+	return mechanics, damage
+}
+
+func economyTick(tick int64) string {
+	if tick < 0 {
+		return ""
+	}
+	return strconv.FormatInt(tick, 10)
+}
+
+func TestEconomyMilestonesRememberTheirTicks(t *testing.T) {
+	s := newGame()
+	milestones := newEconomyMilestones()
+	s.Ticks = 100
+	s.Raids.RivalBuildingHit = true
+	milestones.observe(s)
+	s.Ticks = 200
+	s.Raids.Visits = 2
+	milestones.observe(s)
+	s.Ticks = 300
+	s.Raids.PressureSortieStarted = true
+	milestones.observe(s)
+	s.Ticks = 400
+	s.Raids.PressureSortieResolved = true
+	s.Parties[701] = Party{ID: 701, Stage: StageRaid}
+	milestones.observe(s)
+	s.Ticks = 500
+	s.Parties[701] = Party{ID: 701, Stage: StageUnload}
+	s.Tech[techRepairID] = false
+	milestones.observe(s)
+
+	if milestones.firstBuildingHitAt != 100 ||
+		milestones.firstIntroAttackEndedAt != 200 ||
+		milestones.firstPressureSortieAt != 300 ||
+		milestones.firstPressureLullAt != 400 ||
+		milestones.repairProtocolArrivedAt != 500 {
+		t.Fatalf("the economy probe recorded %+v", milestones)
 	}
 }
 

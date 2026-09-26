@@ -36,6 +36,9 @@ func TestFactorySchematicsStartAtTheCoreAndDeliveryBringsInfrastructure(t *testi
 	if !kindUnlocked(s, BuildingFactory) {
 		t.Fatal("the factory is not available with the opening builder")
 	}
+	if repairProtocolUnlocked(s) {
+		t.Fatal("a new colony received the repair protocol at the start")
+	}
 	Apply(s, AckTech{ID: techIndustryID})
 	col, row, _ := nearestTileOf(kindOil)
 	Apply(s, AssignRobot{ID: 1, Col: col, Row: row})
@@ -160,6 +163,13 @@ func TestOpeningCalloutsExplainTheNextStep(t *testing.T) {
 		body != "Your first delivered load brings silos, warehouses and "+
 			"chargers." {
 		t.Fatalf("infrastructure callout is %q, %q", title, body)
+	}
+	title, body = techWords(techRepairID)
+	wantRepairBody := "Rival fire damaged a building. Build a mechanic at a " +
+		"war factory to repair it."
+	if title != "repair protocol" ||
+		body != wantRepairBody {
+		t.Fatalf("repair callout is %q, %q", title, body)
 	}
 }
 
@@ -474,7 +484,7 @@ func TestEveryDropSquaresWhatItBrings(t *testing.T) {
 		techFrontierID: {
 			{name: "Shadow protector", kind: BuildingProtector},
 			{name: "Oil pump", kind: BuildingPump},
-			{name: "Pipes", pipes: true},
+			{name: "Pipes", pipes: true, informational: true},
 		},
 		techIndustryID: {
 			{name: "Robot factory", kind: BuildingFactory},
@@ -484,6 +494,12 @@ func TestEveryDropSquaresWhatItBrings(t *testing.T) {
 		},
 		techArtilleryID: {
 			{name: "Artillery", kind: BuildingArtillery},
+		},
+		techRepairID: {
+			{
+				name: "Mechanic", robot: RobotRepair,
+				informational: true,
+			},
 		},
 	}
 	if len(want) != len(techLadder) {
@@ -525,6 +541,28 @@ func TestTechCalloutHitboxCoversItsSquares(t *testing.T) {
 	}
 }
 
+func TestRepairCalloutMechanicSquareIsInformational(t *testing.T) {
+	s := newPlayScene(newGame())
+	s.techCallout = techRepairID
+	layout := techSquareLayout(s, techRepairID)
+	if len(layout) != 1 {
+		t.Fatalf("the repair callout has %d squares, want one", len(layout))
+	}
+	area := layout[0].area
+	square, found := techSquareAt(s,
+		area.X+area.Width/2, area.Y+area.Height/2)
+	if !found || !square.item.informational ||
+		square.item.robot != RobotRepair {
+		t.Fatalf("the repair square is %+v, found %v", square.item, found)
+	}
+	if s.selectTechBuilding(square.item.kind) || s.techPlacing != "" {
+		t.Fatal("the mechanic square armed building placement")
+	}
+	if techBuildingsRemain(techRepairID, map[BuildingKind]bool{}) {
+		t.Fatal("the informational mechanic square counts as an unused building")
+	}
+}
+
 func TestASaveFromBeforeTheSchematicsOpensWhatItEarned(t *testing.T) {
 	s := newGame()
 	s.Deliveries = 3
@@ -544,6 +582,9 @@ func TestASaveFromBeforeTheSchematicsOpensWhatItEarned(t *testing.T) {
 	}
 	if _, ok := s.Tech[techArtilleryID]; ok {
 		t.Error("artillery came to an old save with no base")
+	}
+	if _, ok := s.Tech[techRepairID]; ok {
+		t.Error("repair schematics came to an old save with no building hit")
 	}
 	// No badge waits: the guard post comes when a scout paints its mark,
 	// and this region has none on the ground yet.
@@ -660,16 +701,17 @@ func TestTheTechSurvivesARoundTrip(t *testing.T) {
 }
 
 // TestWriteTechShotState writes the states the schematics callout's
-// shots start from: NIEBLA_TECH_SHOT_STATE with the infrastructure
-// waiting (three blueprints) and NIEBLA_TECH_PIPES_SHOT_STATE with the
-// frontier kit (the protector, the pump and the pipes). Skipped
-// otherwise, the way tests write nothing. Each run prints where the
-// badge stands on the screen for the current layout.
+// shots start from: NIEBLA_TECH_SHOT_STATE with the infrastructure,
+// NIEBLA_TECH_PIPES_SHOT_STATE with the frontier kit, or
+// NIEBLA_TECH_REPAIR_SHOT_STATE with the informational mechanic item.
+// Skipped otherwise, the way tests write nothing. Each run prints where
+// the badge and first square stand on the current layout.
 func TestWriteTechShotState(t *testing.T) {
 	infra := os.Getenv("NIEBLA_TECH_SHOT_STATE")
 	frontier := os.Getenv("NIEBLA_TECH_PIPES_SHOT_STATE")
-	if infra == "" && frontier == "" {
-		t.Skip("set NIEBLA_TECH_SHOT_STATE / NIEBLA_TECH_PIPES_SHOT_STATE" +
+	repair := os.Getenv("NIEBLA_TECH_REPAIR_SHOT_STATE")
+	if infra == "" && frontier == "" && repair == "" {
+		t.Skip("set a NIEBLA_TECH_*_SHOT_STATE path" +
 			" to write the schematics callout's shot states")
 	}
 	write := func(path string, tech map[string]bool) {
@@ -709,6 +751,13 @@ func TestWriteTechShotState(t *testing.T) {
 		write(frontier, map[string]bool{
 			techIndustryID: true, techInfraID: true,
 			techFrontierID: false,
+		})
+	}
+	if repair != "" {
+		write(repair, map[string]bool{
+			techIndustryID: true, techInfraID: true, techGuardID: true,
+			techFrontierID: true, techMobileID: true,
+			techArtilleryID: true, techRepairID: false,
 		})
 	}
 }

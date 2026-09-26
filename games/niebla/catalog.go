@@ -267,10 +267,10 @@ var catalog = map[ThingType]ThingInfo{
 		Color:   warFactoryColor,
 		Primary: true,
 		Summary: func(amount float64) string {
-			return "builds troopers and mechanics"
+			return "produces units"
 		},
 		Details: func(s *State, thing Thing) []Detail {
-			return []Detail{
+			details := []Detail{
 				{"squad", squadWords(s, thing.Ref)},
 				{"room", fmt.Sprintf("%d of %d troopers",
 					len(squadMembers(s, thing.Ref)), squadSize)},
@@ -280,15 +280,20 @@ var catalog = map[ThingType]ThingInfo{
 					trooperHealth, si(smallArmsRangeUnits, "m"))},
 				{"shot", fmt.Sprintf("%.0f damage every %.1f s, [oil]%s[/] of its tank",
 					trooperShotDamage, trooperReloadTicks/60.0, si(trooperShotOil, "L"))},
-				{"mechanic cost", costWords(mechanicCostLilac, mechanicCostOil)},
-				{"mechanic pace", "one per " + si(mechanicBuildTicks/60, "s")},
-				{"mechanic", fmt.Sprintf("%.0f hull, repairs %.0f damage/s",
-					mechanicHealth, repairPerSecond)},
-				{"repair fuel", fmt.Sprintf("[oil]%s[/] per damage repaired",
-					si(repairOilPerPoint, "L"))},
-				{"mechanics", fmt.Sprintf("%d / %d",
-					mechanicCount(s, thing.Ref), mechanicPerFactory)},
 			}
+			if repairProtocolUnlocked(s) {
+				details = append(details, []Detail{
+					{"mechanic cost", costWords(mechanicCostLilac, mechanicCostOil)},
+					{"mechanic pace", "one per " + si(mechanicBuildTicks/60, "s")},
+					{"mechanic", fmt.Sprintf("%.0f hull, repairs %.0f damage/s",
+						mechanicHealth, repairPerSecond)},
+					{"repair fuel", fmt.Sprintf("[oil]%s[/] per damage repaired",
+						si(repairOilPerPoint, "L"))},
+					{"mechanics", fmt.Sprintf("%d / %d",
+						mechanicCount(s, thing.Ref), mechanicPerFactory)},
+				}...)
+			}
+			return details
 		},
 	},
 	TypeArtillery: {

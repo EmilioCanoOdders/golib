@@ -84,6 +84,7 @@ func TestAWarFactoryBuildsItsSquadAndNoMore(t *testing.T) {
 func TestWarFactoryBuildsOneMechanicSeparatelyFromItsSquad(t *testing.T) {
 	s := newGame()
 	noRivals(s)
+	s.Tech[techRepairID] = false
 	s.Stock = Stock{Oil: 1000, Lilac: 2500}
 	col, row := groundNearCore()
 	home := raised(t, s, BuildingWarFactory, col, row)

@@ -228,7 +228,7 @@ func (s *playScene) updateTech(input *golib.Input) bool {
 	mx, my := input.MousePosition()
 	if s.techCallout != "" {
 		if square, hit := techSquareAt(s, mx, my); hit {
-			if square.item.pipes || square.used {
+			if square.item.informational || square.used {
 				if square.used {
 					s.au.ui(0.6)
 				}
@@ -748,8 +748,11 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	s.dev.draw(s, screen)
 	help := "click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a cell, 1-9 call a squad, Esc saves and returns to the menu, F11 fullscreen, F2 filter"
 	if s.techCallout != "" && s.techPlacing == "" {
-		help = "click a building square once to place it; " +
-			"outside or right-click closes the callout"
+		help = "schematics received: click outside or right-click to close"
+		if techBuildingsRemain(s.techCallout, s.techUsed) {
+			help = "click a building square once to place it; " +
+				"outside or right-click closes the callout"
+		}
 	}
 	if s.ordering != 0 {
 		help = "ordering a squad: click a rival vehicle to attack its party, that vehicle first, or click the ground to post the squad there; right-click or the squad's number again puts the order away"

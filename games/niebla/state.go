@@ -39,7 +39,7 @@ type State struct {
 	Tech       map[string]bool    // the schematics that arrived: drop ID -> opened (sim_tech.go)
 }
 
-const stateVersion = 4
+const stateVersion = 5
 
 // Fog is the region's weather, where the fog's breath has got to. The
 // swell rises at a cycle's end and drains tick by tick; NextIn counts
@@ -121,7 +121,7 @@ const (
 	BuildingPump      BuildingKind = "pump"      // draws a pool's oil into a pipe
 	BuildingGuard     BuildingKind = "guard"     // shoots the rivals in its reach
 
-	BuildingWarFactory BuildingKind = "warfactory" // builds troopers and mechanics
+	BuildingWarFactory BuildingKind = "warfactory" // builds troopers and unlocked mechanics
 	BuildingArtillery  BuildingKind = "artillery"  // shells the rivals the colony sees
 )
 
@@ -288,7 +288,44 @@ func (s *State) migrateState() {
 			s.Buildings[id] = b
 		}
 	}
+	if s.Version < 5 {
+		if s.legacyRepairWasAvailable() {
+			s.Raids.LegacyRepairUnlocked = true
+		}
+		if city, ok := s.Cities[s.Raids.PressureCity]; ok &&
+			city.Sorties > 0 {
+			s.Raids.PressureSortieStarted = true
+		}
+		for _, id := range sortedPartyIDs(s) {
+			party := s.Parties[id]
+			if party.City != s.Raids.PressureCity || party.City == 0 {
+				continue
+			}
+			s.Raids.PressureSortieStarted = true
+			if party.Stage == StageUnload || party.Stage == StageRebuild ||
+				party.Stage == StageRegroup {
+				s.Raids.PressureSortieResolved = true
+			}
+		}
+	}
 	s.Version = stateVersion
+}
+
+func (s *State) legacyRepairWasAvailable() bool {
+	if dropArrived(s, techMobileID) {
+		return true
+	}
+	for _, id := range sortedBuildingIDs(s) {
+		if s.Buildings[id].Kind == BuildingWarFactory {
+			return true
+		}
+	}
+	for _, id := range sortedRobotIDs(s) {
+		if s.Robots[id].Kind == RobotRepair {
+			return true
+		}
+	}
+	return false
 }
 
 // spawnRobot adds one robot to the colony at a spot, with the tank full

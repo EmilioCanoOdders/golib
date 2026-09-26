@@ -18,6 +18,7 @@ package main
 const (
 	techFrontierTicks       = 5*60*60 + 30*60 // mid-valley, before the first raid
 	legacyTechIndustryTicks = 7 * 60 * 60     // old saves' factory unlock
+	techRepairFallbackTicks = 12 * 60 * 60    // no first city force by minute 12
 )
 
 // The drops' names. Treat them as identifiers, not prose: the view keys
@@ -29,6 +30,7 @@ const (
 	techIndustryID  = "industry"
 	techMobileID    = "mobile"
 	techArtilleryID = "artillery"
+	techRepairID    = "repair"
 )
 
 // techDrop is one rung of the ladder: the schematics it brings, and
@@ -75,6 +77,62 @@ var techLadder = []techDrop{
 			}
 			return false
 		}},
+	{techRepairID, nil, repairProtocolTrigger},
+}
+
+func repairProtocolTrigger(s *State) bool {
+	if s.Raids.LegacyRepairUnlocked || !s.Raids.RivalBuildingHit ||
+		s.Raids.Visits < 2 ||
+		!rivalForcesInLull(s) {
+		return false
+	}
+	if s.Raids.PressureSortieStarted {
+		return s.Raids.PressureSortieResolved
+	}
+	if s.Ticks < techRepairFallbackTicks ||
+		pressureCitySortieReady(s) {
+		return false
+	}
+	return true
+}
+
+func repairProtocolUnlocked(s *State) bool {
+	return s.Raids.LegacyRepairUnlocked || dropArrived(s, techRepairID)
+}
+
+func rivalForcesInLull(s *State) bool {
+	for _, id := range sortedPartyIDs(s) {
+		switch s.Parties[id].Stage {
+		case StageApproach, StageCamp, StageRaid, StageLeave:
+			return false
+		}
+	}
+	return true
+}
+
+func pressureCitySortieReady(s *State) bool {
+	city, exists := s.Cities[s.Raids.PressureCity]
+	if !exists || s.Raids.PressureSortieStarted || movingParty(s) {
+		return false
+	}
+	if city.Stage == len(cityBuildOrder)-1 && city.Work <= 1 {
+		return true
+	}
+	if city.Stage < len(cityBuildOrder) ||
+		!cityHasBuilding(s, city, EnemyCityFactory) ||
+		city.NextSortie > s.Ticks {
+		return false
+	}
+
+	oil := city.Oil
+	lilac := city.Lilac
+	if cityHasBuilding(s, city, EnemyCityOilworks) && city.OilDeposit > 0 {
+		oil += min(cityOilExtractPerSecond/60, city.OilDeposit)
+	}
+	if cityHasBuilding(s, city, EnemyCityMine) && city.LilacDeposit > 0 {
+		lilac += min(cityLilacExtractPerSecond/60, city.LilacDeposit)
+	}
+	return oil >= citySortieOil && lilac >= citySortieLilac
 }
 
 func hasBuiltWorker(s *State) bool {
@@ -93,6 +151,8 @@ func legacyTechArrived(s *State, id string) bool {
 		return s.Deliveries > 0
 	case techIndustryID:
 		return s.Ticks >= legacyTechIndustryTicks
+	case techRepairID:
+		return false
 	}
 	for i := range techLadder {
 		if techLadder[i].id == id {

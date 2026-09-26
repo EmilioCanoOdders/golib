@@ -110,6 +110,7 @@ func TestDemolishingLeavesTheCostAsAPileAndTheRobotsHaulItHome(t *testing.T) {
 
 func TestDemolishingAFactoryRefundsItsMechanicInProgress(t *testing.T) {
 	s := newGame()
+	s.Tech[techRepairID] = false
 	s.Stock = Stock{Oil: 1000, Lilac: 2500}
 	col, row := groundNearCore()
 	home := raised(t, s, BuildingWarFactory, col, row)

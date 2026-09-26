@@ -306,6 +306,9 @@ func cityBuildingSpec(kind BuildingKind) cityBuildingSpecValue {
 }
 
 func (s *State) spawnCitySortie(city City, artillery bool) {
+	if city.ID == s.Raids.PressureCity && city.Sorties == 1 {
+		s.Raids.PressureSortieStarted = true
+	}
 	partyID := s.NextID
 	s.NextID++
 	count := cityFirstRaiders

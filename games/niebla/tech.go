@@ -73,6 +73,8 @@ func techInk(id string) golib.Color {
 		return groupColor(groupMilitary)
 	case techIndustryID:
 		return groupColor(groupIndustry)
+	case techRepairID:
+		return factoryColor
 	}
 	for i := range techLadder {
 		d := &techLadder[i]
@@ -99,6 +101,8 @@ func drawTechMark(screen *golib.Screen, id string, cx, cy, box float32) {
 		drawBlueprintIcon(screen, BuildingWarFactory, cx, cy, box)
 	case techArtilleryID:
 		drawBlueprintIcon(screen, BuildingArtillery, cx, cy, box)
+	case techRepairID:
+		drawRobotPanelIcon(screen, Robot{Kind: RobotRepair}, cx, cy, box)
 	}
 }
 
@@ -122,17 +126,18 @@ func drawTechBadge(s *playScene, screen *golib.Screen) {
 	drawTechMark(screen, id, x, y, techBadgeR*1.5)
 }
 
-// techItem is one thing a drop brings: a blueprint's body and name, or
-// the pipes, which build no building and carry a mark of their own.
+// techItem is a blueprint, a robot shown for information, or pipes, which
+// build no building and carry a mark of their own.
 type techItem struct {
-	name  string
-	kind  BuildingKind
-	pipes bool
+	name          string
+	kind          BuildingKind
+	robot         RobotKind
+	pipes         bool
+	informational bool
 }
 
-// techBrings lists what a drop brought in, one per square: the
-// blueprints of its rung in the ladder and, with the frontier kit, the
-// pipes whose LayPipe asks for that drop by name.
+// techBrings lists what a drop brought in, one per square: its blueprints,
+// informational robot and, with the frontier kit, the pipes.
 func techBrings(id string) []techItem {
 	for i := range techLadder {
 		d := &techLadder[i]
@@ -146,8 +151,17 @@ func techBrings(id string) []techItem {
 				kind: kind,
 			})
 		}
+		if id == techRepairID {
+			items = append(items, techItem{
+				name:          "Mechanic",
+				robot:         RobotRepair,
+				informational: true,
+			})
+		}
 		if id == techFrontierID {
-			items = append(items, techItem{name: "Pipes", pipes: true})
+			items = append(items, techItem{
+				name: "Pipes", pipes: true, informational: true,
+			})
 		}
 		return items
 	}
@@ -178,6 +192,10 @@ func techWords(id string) (title, body string) {
 	case techArtilleryID:
 		return "artillery",
 			"It shells what the colony sees. Every shell costs lilac and oil."
+	case techRepairID:
+		return "repair protocol",
+			"Rival fire damaged a building. Build a mechanic at a war factory " +
+				"to repair it."
 	}
 	return "schematics", "The core received schematics."
 }
@@ -249,7 +267,7 @@ func techSquareLayout(s *playScene, id string) []techSquare {
 				Width:  techSquareW,
 				Height: techSquareH,
 			},
-			used: !item.pipes && s.techUsed[item.kind],
+			used: !item.informational && s.techUsed[item.kind],
 		})
 	}
 	return squares
@@ -269,7 +287,7 @@ func techSquareAt(s *playScene, mx, my float32) (techSquare, bool) {
 
 func techBuildingsRemain(id string, used map[BuildingKind]bool) bool {
 	for _, item := range techBrings(id) {
-		if !item.pipes && !used[item.kind] {
+		if !item.informational && !used[item.kind] {
 			return true
 		}
 	}
@@ -281,7 +299,8 @@ func (s *playScene) selectTechBuilding(kind BuildingKind) bool {
 		return false
 	}
 	for _, square := range techSquareLayout(s, s.techCallout) {
-		if square.item.pipes || square.item.kind != kind || square.used {
+		if square.item.informational || square.item.kind != kind ||
+			square.used {
 			continue
 		}
 		s.techPlacing = kind
@@ -385,8 +404,8 @@ func drawTechCallout(s *playScene, screen *golib.Screen) {
 	}
 }
 
-// drawTechSquares paints one square per thing a drop brought in: the icon
-// of its construction above and its name below, dimming used buildings.
+// drawTechSquares paints one square per thing a drop brought in, dimming
+// used buildings; informational items never arm placement.
 func drawTechSquares(s *playScene, screen *golib.Screen) {
 	nameBand := float32(2 * techSquareNameRow)
 	for _, square := range techSquareLayout(s, s.techCallout) {
@@ -398,6 +417,9 @@ func drawTechSquares(s *playScene, screen *golib.Screen) {
 		cy := area.Y + 3 + techSquareIcon/2
 		if item.pipes {
 			drawPipeIcon(screen, cx, cy, techSquareIcon)
+		} else if item.robot != "" {
+			drawRobotPanelIcon(screen, Robot{Kind: item.robot}, cx, cy,
+				techSquareIcon)
 		} else {
 			drawBlueprintIcon(screen, item.kind, cx, cy, techSquareIcon)
 		}

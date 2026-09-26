@@ -145,11 +145,15 @@ type Party struct {
 // Raids is the rivals' clock: ended visits, the next arrival, the saved
 // bearing and the first city whose construction drives the pressure loop.
 type Raids struct {
-	Visits       int64
-	NextAt       int64
-	FirstBearing float64
-	BearingKnown bool
-	PressureCity int64 // the first city, founded with the second visit
+	Visits                 int64
+	NextAt                 int64
+	FirstBearing           float64
+	BearingKnown           bool
+	PressureCity           int64 // the first city, founded with the second visit
+	RivalBuildingHit       bool  // any rival shot has damaged a colony building
+	PressureSortieStarted  bool  // the pressure city's first force was produced
+	PressureSortieResolved bool  // its first force reached a lull or was destroyed
+	LegacyRepairUnlocked   bool // an old save already had mechanic production
 }
 
 // Mark is what a scout paints on the ground before it leaves.
@@ -526,12 +530,21 @@ func stepParty(s *State, p Party) {
 			return
 		}
 	}
+	if p.City == s.Raids.PressureCity &&
+		(p.Stage == StageUnload || p.Stage == StageRebuild ||
+			p.Stage == StageRegroup) {
+		s.Raids.PressureSortieResolved = true
+	}
 	s.Parties[p.ID] = p
 }
 
 // endParty removes a party, reports its end and schedules what follows.
 func (s *State) endParty(p Party, kind ReportKind, oil, x, y float64) {
 	delete(s.Parties, p.ID)
+	if p.City == s.Raids.PressureCity && p.City != 0 &&
+		s.Raids.PressureSortieStarted {
+		s.Raids.PressureSortieResolved = true
+	}
 	if p.City != 0 || s.Raids.Visits > 0 || kind == ReportDestroyed {
 		s.report(kind, oil, x, y)
 	}

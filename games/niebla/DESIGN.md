@@ -62,8 +62,10 @@ A valid left click marks that building there; an invalid cell changes
 nothing. The pump cursor snaps to the oil pool's heart cell. A right click
 cancels and restores the callout. After a successful placement the callout
 returns with that square dimmed and disabled; once every building square has
-been used, it closes automatically. Pipes remain informational in the
-callout and are still laid from a pump or tank card.
+been used, it closes automatically. Pipes and the mechanic square in the
+repair protocol remain informational; pipes are still laid from a pump or
+tank card.
+An informational-only callout stays open until dismissed.
 
 Robots are simple units with priorities, not pathfinders of genius: the
 player solves the layout, and the robots solve the walking. Builders and
@@ -218,11 +220,11 @@ The colony's guard post remains its oil-paid answer; squads remain direct
 orders through the war factory and keys 1-9. The post and troopers share
 their 130 m reach with crawler and raider guns. The player's artillery
 remains an unlocked blueprint that shells visible rival targets for lilac
-and oil. A war factory can also build a vulnerable mechanic,
-which repairs damaged colony buildings with oil from its own tank. Bullets
-and shells stay in the serialized state with hit, damage, wreck and
-visual-effect rules. City structures can be selected and attacked by
-guard posts, squads and artillery like other rival targets.
+and oil. After the repair protocol arrives, a war factory can build a
+vulnerable mechanic, which repairs damaged colony buildings with oil from
+its own tank. Bullets and shells stay in the serialized state with hit,
+damage, wreck and visual-effect rules. City structures can be selected
+and attacked by guard posts, squads and artillery like other rival targets.
 
 Open: independent city choices and production strategies, pathfinding, cities sending more than one sortie at once, the city's response to a completely guarded oil supply, and city graphics beyond gray versions of the existing silhouettes.
 
@@ -289,10 +291,11 @@ static data generated from `State.Seed`, never state. `play.go` and
     15 s (one minute for a city founding), reports their theft, camp, raid,
     return, new base, razed
     building or fallen base. Rival vehicles and bases have cards too.
-    A war factory's card builds troopers, offers one mechanic and gives
-    its squad orders; damaged things show their remaining health and say
-    mechanics can repair them; picked guard posts and artillery show
-    their reach; bullets and shells fly with their light.
+    A war factory's card builds troopers and, after the repair protocol
+    arrives, offers one mechanic and gives the squad orders; damaged things
+    show their remaining health and say mechanics can repair them; picked
+    guard posts and artillery show their reach; bullets and shells fly
+    with their light.
   - Esc saves and returns to the menu.
 The current rival HUD reports an approaching city crawler, construction,
 an assembling battalion or a force on the move. City-building reports
@@ -371,15 +374,21 @@ For whoever works on the game, not for the player: in the region, hold Control a
   the guard post comes when the scout's theft is inevitable, the frontier
   kit (protector, pump, pipes) at 5:30, the war factory when the first
   peripheral city begins construction, and artillery when a rival city
-  completes its war factory. A drop's badge waits until opened; the menu
+  completes its war factory. The repair protocol is a later, unit-only
+  drop: it waits until the first
+  real attack has ended, rival fire has damaged a colony building, and the
+  first city force is unloading, rebuilding, regrouping or destroyed. If no
+  first force is produced, its timing falls back to minute 12; building
+  damage is still required. A drop's badge waits until opened; the menu
   offers only what the cell could really take, and unaffordable options
   stand washed out
   with their shortfall boxed in red (see [Construction model](#construction-model)).
 - A building square in a schematics callout arms a gray, grid-snapped
-  placement cursor. A valid click marks the building; an invalid click
-  changes nothing. Each building square can be used once from that drop,
-  then dims and disables; the callout closes after its last building is
-  placed. The pump cursor snaps to an oil pool's heart cell. Pipes are
+  placement cursor. The repair protocol's mechanic square is informational,
+  like pipes, and never arms placement. A valid building click marks it;
+  an invalid click changes nothing. Each building square is usable once per
+  drop and dims after placement; the callout closes after the last building
+  is placed. The pump cursor snaps to an oil pool's heart cell. Pipes are
   informational and are still laid from a pump or tank card.
 - One generated region, a pure function of `State.Seed` (`worldgen.go`): a gentle relief with great plains, ground cover in zones, oil pools and lilac veins that thin out toward their rims, fog everywhere else. Buildings ask for a flat cell.
 - The core gives the colony one white builder, with a full oil tank. It
@@ -434,8 +443,9 @@ For whoever works on the game, not for the player: in the region, hold Control a
   [The rivals](#the-rivals)).
 - A war factory builds troopers, up to six, and they are its squad: one
   click orders them to guard a spot or attack a rival party, a chosen
-  vehicle first. It can also build one mechanic. The mechanic is not in
-  the squad and takes no orders: it seeks damaged buildings automatically.
+  vehicle first. After the repair protocol arrives, it can also build one
+  mechanic. The mechanic is not in the squad and takes no orders: it seeks
+  damaged buildings automatically.
   Troopers do no work and shoot from their own tanks. Rivals shoot
   troopers, mechanics and guard posts; a post they bring down falls into
   a pile like any building.
@@ -447,8 +457,9 @@ For whoever works on the game, not for the player: in the region, hold Control a
   unit leaves 25% of its build cost and remaining tank in a pile, plus 25%
   of any cargo.
 - Lose buildings: rival mobile artillery brings buildings down into a
-  pile of half their cost, the core excepted. Only a mechanic repairs
-  damage: 6 points a second, spending 0.2 L per point from its own tank.
+  pile of half their cost, the core excepted. After the repair protocol
+  arrives, only a mechanic repairs damage: 6 points a second, spending
+  0.2 L per point from its own tank.
   Mechanics have 60 hull; an isolated one cannot out-repair continuous
   artillery fire. They must be built, fueled and kept alive.
 - The safe zone feeds you: an oil pool and a lilac vein, the region's smallest, sit whole inside the bubble, off the core, so at least one resource of each type is minable in comfort whatever the fog does outside.
@@ -594,7 +605,8 @@ them up to whole voice - provisional, to tune by ear. `uiClickPitch`
 Lost colony units leave `unitWreckRefund` 0.25 of each resource: build
 cost, cargo and remaining tank. The wreck is a pile on their cell
 (`sim_piles.go`). Fog-digested workers and fallen combat units use the
-same rule. A mechanic costs `mechanicCostLilac` 100 kg and
+same rule. After the repair protocol arrives, a mechanic costs
+`mechanicCostLilac` 100 kg and
 `mechanicCostOil` 50 L, takes `mechanicBuildTicks` 900 ticks to build,
 has `mechanicHealth` 60 health and repairs at `repairPerSecond` 6
 damage/s for `repairOilPerPoint` 0.2 L per damage (`sim_squads.go`,
@@ -608,8 +620,10 @@ Pinned as code lands, all at the top of the sim files with units in the name: `f
 
 In `sim_tech.go`: the factory blueprint is the opening drop, and the
 first delivery unlocks infrastructure. `techFrontierTicks` 5:30 is the
-frontier kit's clock drop. `legacyTechIndustryTicks` keeps the former
-7:00 factory trigger for migrating saves without a tech ledger. The view's
+frontier kit's clock drop. `techRepairFallbackTicks` 12:00 is the repair
+protocol's timing fallback when the pressure city produces no first force;
+rival building damage is still required. `legacyTechIndustryTicks` keeps
+the former 7:00 factory trigger for migrating saves without a tech ledger. The view's
 `techBadgeR` is 22 px, `techPulseTicks` is 90 (one breath of the glow,
 from the state's tick), `techCalloutW` is 280 px and `techUsedVeil` is
 0.72, the dark overlay on a building square used from its drop.
@@ -744,16 +758,34 @@ option at once; save for the next known threat.
    The probe has both by minute 7, before the first city sortie at minute
    9-11. Send the squad against an approaching party or keep it where it can
    protect the oil tank; do not leave the defense without orders by habit.
-4. After the first city force is answered, invest in a protector and pump.
+4. When the repair protocol arrives, build a mechanic if rival fire has
+   damaged a building and the war factory still stands. The drop waits for
+   the first city force's lull (or minute 12 if it was never produced).
+5. After the first city force is answered, invest in a protector and pump.
    Connect the outpost back to the core with a pipe. Keep a reserve for
    replacements and artillery instead of letting the outpost consume all
    the lilac.
-5. After each battle, check what was lost and what the next force contains.
+6. After each battle, check what was lost and what the next force contains.
    A surviving city force rests 90 seconds after unloading; use that valley
    to rebuild the guard, refill the squad and save for the next new threat.
 
 The tested defense opening builds its first two troopers in time, but two
-of the three seeded runs have lost them by minute 15. The tested outpost
+of the three seeded runs have lost them by minute 15. The repair probe
+records these defense milestones over seeds 0, 1 and 2:
+
+| Seed | Rival building hit | First attack ended | First city force | First lull | Repair protocol |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0 | 47,705 | 31,079 | 36,902 | 42,156 | 66,558 |
+| 1 | 30,821 | 45,206 | 45,207 | 58,232 | 58,232 |
+| 2 | 122,900 | 45,203 | 45,204 | 58,165 | 140,101 |
+
+All values are simulation ticks. Seed 1 produces a mechanic by minute 17,
+with 864.5 L and 306.3 kg left after the build. Seed 0's scripted war
+factory is gone at the protocol's arrival and the policy rebuilds it much
+later; seed 2 has no mechanic by minute 60. The probe separates the
+schematic gate from whether the scripted colony can keep a factory and
+stores through the battle. The report also records mechanics and remaining
+building damage. The tested outpost
 opening has a protector by minute 7 and its first pipe by minute 10-11,
 but it has no guard and no troopers; its protector is gone by minute 60 in
 all three runs. Keep unit costs and extraction rates unchanged for the next
@@ -772,6 +804,15 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-26: mechanic production now requires the repair protocol, a
+  separate informational schematic delivered after rival fire damages a
+  colony building and the first city force reaches a lull. It waits through
+  approach, camp, raid and retreat; a destroyed force counts as resolved.
+  If the city never produces its first force, tick 43,200 is the timing
+  fallback, still gated by damage. Old saves that had mechanic capability
+  keep it. The deterministic economy report records milestone ticks,
+  mechanic count and remaining damage; the defense seeds show protocol
+  arrival at ticks 66,558, 58,232 and 140,101.
 - 2026-09-26: guard posts, troopers, crawler guns and raider guns now share
   a 130 m reach. A single post placed on the first raid's approach to the
   nearest tank is reduced to 20% hull or less, or destroyed, across seeds

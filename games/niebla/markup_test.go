@@ -261,17 +261,38 @@ func TestTooltipOffersRobotButtons(t *testing.T) {
 	}
 }
 
-func TestWarFactoryCardOffersMechanicOnlyWhenItCanBuildOne(t *testing.T) {
+func TestWarFactoryCardWaitsForRepairProtocolBeforeOfferingMechanic(t *testing.T) {
 	s := newGame()
 	s.Stock = Stock{Oil: 1000, Lilac: 2500}
 	col, row := groundNearCore()
 	home := raised(t, s, BuildingWarFactory, col, row)
 	camera := golib.NewCamera(screenWidth, screenHeight)
+	hasMechanicDetails := func(panel tooltip) bool {
+		for _, row := range panel.rows {
+			if row.detail.Label == "mechanic cost" {
+				return true
+			}
+		}
+		return false
+	}
 	panel := tooltipLayout(s, camera, col, row, map[string]bool{})
-	if panel.findButton(buttonMechanic) == nil {
-		t.Fatal("the war factory offers no mechanic while it has room and resources")
+	if panel.findButton(buttonMechanic) != nil || hasMechanicDetails(panel) {
+		t.Fatal("the war factory reveals a mechanic before its schematics arrive")
+	}
+	Apply(s, QueueMechanic{Building: home.ID})
+	if s.Buildings[home.ID].Work > 0 ||
+		s.Stock != (Stock{Oil: 1000, Lilac: 2500}) {
+		t.Fatal("a locked mechanic order changed the factory or its stores")
 	}
 
+	s.Tech[techRepairID] = false
+	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
+	if panel.findButton(buttonMechanic) == nil {
+		t.Fatal("the repair protocol did not offer an affordable mechanic")
+	}
+	if !hasMechanicDetails(panel) {
+		t.Fatal("the war factory did not show the unlocked mechanic details")
+	}
 	s.Stock.Lilac = mechanicCostLilac - 1
 	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
 	if panel.findButton(buttonMechanic) != nil {
