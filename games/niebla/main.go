@@ -134,6 +134,7 @@ var (
 	panelDimColor    = golib.Color{R: 148, G: 156, B: 172, A: 255}
 	pickedTileColor  = golib.Color{R: 255, G: 244, B: 214, A: 255}
 	hoveredTileColor = golib.Color{R: 255, G: 255, B: 255, A: 90}
+	techGhostColor   = golib.Color{R: 202, G: 208, B: 218, A: 255}
 	buttonColor      = golib.Color{R: 34, G: 39, B: 50, A: 255}
 	buttonEdgeColor  = golib.Color{R: 190, G: 226, B: 255, A: 120}
 	buttonHoverColor = golib.Color{R: 52, G: 60, B: 76, A: 255}

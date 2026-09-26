@@ -180,7 +180,8 @@ func (d *devTools) resetWorld(s *playScene, seed int64) {
 	s.closeRadial()
 	s.laying = pipeLaying{}
 	s.ordering = 0
-	s.techCallout = ""
+	s.techPlacing = ""
+	s.closeTechCallout()
 	s.expanded = map[string]bool{}
 	s.mites = newMiteField()
 	s.fx = newFxField()

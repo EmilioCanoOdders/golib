@@ -330,6 +330,137 @@ func TestDismissingTechCalloutPassesOutsideClicksThrough(t *testing.T) {
 	}
 }
 
+func TestTechBlueprintsCanBeSelectedOnceFromTheirCallout(t *testing.T) {
+	s := newPlayScene(newGame())
+	s.techCallout = techInfraID
+	s.techUsed = map[BuildingKind]bool{}
+	squares := techSquareLayout(s, techInfraID)
+	if len(squares) != 3 {
+		t.Fatalf("the infrastructure callout has %d squares, want 3",
+			len(squares))
+	}
+	center := squares[0].area.Center()
+	square, hit := techSquareAt(s, center.X, center.Y)
+	if !hit || square.item.kind != BuildingSilo {
+		t.Fatalf("the first square hit %v, want the silo", square)
+	}
+	if !s.selectTechBuilding(square.item.kind) ||
+		s.techPlacing != BuildingSilo {
+		t.Fatal("clicking the silo square did not arm its placement")
+	}
+	s.techPlacing = ""
+	s.techUsed[BuildingSilo] = true
+	square, hit = techSquareAt(s, center.X, center.Y)
+	if !hit || !square.used {
+		t.Fatal("the placed silo square does not read as used")
+	}
+	if s.selectTechBuilding(BuildingSilo) {
+		t.Fatal("a used blueprint can be selected again")
+	}
+	if !techBuildingsRemain(techInfraID, s.techUsed) {
+		t.Fatal("the callout ran out of buildings after one of three")
+	}
+	s.techUsed[BuildingWarehouse] = true
+	s.techUsed[BuildingCharger] = true
+	if techBuildingsRemain(techInfraID, s.techUsed) {
+		t.Fatal("the callout still has a building after all three were used")
+	}
+	if techBuildingsRemain(techFrontierID, map[BuildingKind]bool{
+		BuildingProtector: true,
+		BuildingPump:      true,
+	}) {
+		t.Fatal("the informational pipe square kept the callout open")
+	}
+}
+
+func TestTechPumpPlacementSnapsToItsPoolAndClosesAfterTheLastBuilding(t *testing.T) {
+	s := newPlayScene(newGame())
+	seedStock(s.state)
+	arriveAll(s.state)
+	s.techCallout = techFrontierID
+	s.techUsed = map[BuildingKind]bool{}
+	s.techPlacing = BuildingPump
+	d := safePool(t)
+	tcol, trow := cellTile(d.HeartCol, d.HeartRow)
+	s.hoverCell = true
+	s.hoverCellCol, s.hoverCellRow = tileCell(tcol, trow)
+	col, row, inside := s.techPlacementCell()
+	if !inside || col != d.HeartCol || row != d.HeartRow {
+		t.Fatalf("pump preview targets %d,%d, want pool heart %d,%d",
+			col, row, d.HeartCol, d.HeartRow)
+	}
+	if !techPlacementValid(s.state, BuildingPump, col, row) {
+		t.Fatal("the safe oil pool cannot take its pump")
+	}
+	if !s.placeTechBuilding() {
+		t.Fatal("the pump was not marked on its pool")
+	}
+	if len(s.state.Jobs) != 1 || s.state.Jobs[0].Kind != BuildingPump ||
+		s.state.Jobs[0].Col != d.HeartCol ||
+		s.state.Jobs[0].Row != d.HeartRow {
+		t.Fatalf("pump job is %+v, want the pool heart", s.state.Jobs)
+	}
+	if !s.techUsed[BuildingPump] || s.techCallout != techFrontierID {
+		t.Fatal("using the pump did not disable it and leave the protector offer")
+	}
+	if s.selectTechBuilding(BuildingPump) {
+		t.Fatal("the used pump can be selected again")
+	}
+	if !s.selectTechBuilding(BuildingProtector) {
+		t.Fatal("the unused protector could not be selected")
+	}
+	s.hoverCellCol, s.hoverCellRow = groundInTheFog()
+	if !s.placeTechBuilding() {
+		t.Fatal("the protector was not marked on valid ground")
+	}
+	if s.techCallout != "" || s.techPlacing != "" || s.techUsed != nil {
+		t.Fatal("the callout stayed open after its last building was used")
+	}
+}
+
+func TestInvalidTechPlacementKeepsTheBlueprintAndResources(t *testing.T) {
+	s := newPlayScene(newGame())
+	seedStock(s.state)
+	arriveAll(s.state)
+	s.techCallout = techIndustryID
+	s.techUsed = map[BuildingKind]bool{}
+	if !s.selectTechBuilding(BuildingFactory) {
+		t.Fatal("the factory could not be selected")
+	}
+	s.hoverCell = true
+	s.hoverCellCol, s.hoverCellRow = groundInTheFog()
+	stock := s.state.Stock
+	if s.placeTechBuilding() {
+		t.Fatal("a factory was marked outside every bubble")
+	}
+	if len(s.state.Jobs) != 0 || s.state.Stock != stock {
+		t.Fatal("an invalid placement changed jobs or stores")
+	}
+	if s.techPlacing != BuildingFactory || s.techUsed[BuildingFactory] {
+		t.Fatal("an invalid placement consumed the factory offer")
+	}
+	s.state.Stock.Lilac = 0
+	s.hoverCellCol, s.hoverCellRow = groundNearCore()
+	col, row, _ := s.techPlacementCell()
+	if techPlacementValid(s.state, BuildingFactory, col, row) {
+		t.Fatal("an unaffordable factory preview reads as placeable")
+	}
+	if s.placeTechBuilding() || len(s.state.Jobs) != 0 {
+		t.Fatal("an unaffordable factory was marked")
+	}
+	seedStock(s.state)
+	x, y := cellCenterUnits(col, row)
+	robot := s.state.Robots[1]
+	robot.X, robot.Y = x, y
+	s.state.Robots[robot.ID] = robot
+	if techPlacementValid(s.state, BuildingFactory, col, row) {
+		t.Fatal("a factory preview reads as placeable under a robot")
+	}
+	if s.placeTechBuilding() || len(s.state.Jobs) != 0 {
+		t.Fatal("a factory was marked under a robot")
+	}
+}
+
 func TestEveryDropSquaresWhatItBrings(t *testing.T) {
 	want := map[string][]techItem{
 		techInfraID: {
@@ -546,8 +677,21 @@ func TestWriteTechShotState(t *testing.T) {
 		noRivals(s)
 		s.Deliveries = 1
 		s.Tech = tech
-		x, y := techBadgeAt(newPlayScene(s))
+		play := newPlayScene(s)
+		id := techPending(s)
+		play.techCallout = id
+		x, y := techBadgeAt(play)
 		t.Logf("schematics badge click: %0.0f,%0.0f", x, y)
+		if squares := techSquareLayout(play, id); len(squares) > 0 {
+			center := squares[0].area.Center()
+			t.Logf("first %s square: %0.0f,%0.0f",
+				squares[0].item.name, center.X, center.Y)
+		}
+		col, row := groundNearCore()
+		gx, gy := projectBuilding(Building{Col: col, Row: row})
+		ground := play.camera.ToScreen(golib.Vector2{X: gx, Y: gy})
+		t.Logf("valid ground cell %d,%d: %0.0f,%0.0f",
+			col, row, ground.X, ground.Y)
 		data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
 		if err != nil {
 			t.Fatalf("the state doesn't marshal: %v", err)
@@ -557,11 +701,14 @@ func TestWriteTechShotState(t *testing.T) {
 		}
 	}
 	if infra != "" {
-		write(infra, map[string]bool{techInfraID: false})
+		write(infra, map[string]bool{
+			techIndustryID: true, techInfraID: false,
+		})
 	}
 	if frontier != "" {
 		write(frontier, map[string]bool{
-			techInfraID: true, techFrontierID: false,
+			techIndustryID: true, techInfraID: true,
+			techFrontierID: false,
 		})
 	}
 }

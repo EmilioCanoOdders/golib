@@ -79,9 +79,10 @@ NIEBLA_TECH_SHOT_STATE=../../build/niebla/tech.json \
   --input "Enter@1 Mouse@2:640,312 MouseLeft@3"
 ```
 
-The test prints where the badge stands on the screen for the current
-layout. `NIEBLA_TECH_PIPES_SHOT_STATE` writes the frontier kit instead,
-with the pipes' square among the blueprints; both may be written at once.
+The test prints the badge and first blueprint square coordinates, plus a
+valid ground cell for placing it. `NIEBLA_TECH_PIPES_SHOT_STATE` writes the
+frontier kit instead, with the pipes' square among the blueprints; both
+states may be written at once.
 
 To inspect a pump being eaten outside every bubble, write its state and
 take shots before and after the mites finish it:
@@ -206,7 +207,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `menu.go` | The title screen: the game's name, the player's number, Play and Quit; the `menuButton` hit-testing both scenes' menus use |
 | `identity.go` | Who is playing: the machine's ID (registry value, platform UUID or `/etc/machine-id`), hashed with the game's salt into `player`, the number the menu shows and a later server hands tokens out by |
 | `store.go` | The local database (SQLite): players, saves and the machine table; `saveBase`/`resumeState`, the scenes' door into it; the DB path, `:memory:` under `golib shot` |
-| `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); camera, selection, open cards, robot roster, individual assignment mode and pointer modes live here, never serialized; the schematics' callout, rivals' HUD, reach overlays and autosave are view state too |
+| `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); camera, selection, open cards, robot roster, individual assignment and pointer modes live here, never serialized; the schematics callout and one-use building placement mode, rivals' HUD, reach overlays and autosave are view state too |
 | `radial.go` | The build menu: the two rings a click on empty ground opens - the build groups (industry, military, logistics), then the group's blueprints - laid out around the cell every frame, and `backRadial`/`closeRadial`/`openRadial` for the scene |
 | `glyphs.go` | The marks the build menu wears: a group's own glyph, a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both - and the pipe's mark, the tube the region lifts on posts |
 | `state.go` | The simulation's state and save-schema version: builders, workers, troopers and mechanics with saved hull, facing and fog-stillness ticks, buildings with their tanks, production type, reloads and damage, stock, deposits, jobs, piles, pipes, weather and rival tables, plus the schematics ledger; `newGame` gives the colony one fueled builder |
@@ -239,11 +240,11 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `mites.go` | The fog's wear, for looks only: mites of darkness orbiting whatever stands in exposed air, by its volume, trailing walkers and closing in on what stands still; half strength in haze, view and never state |
 | `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, orange bands sized by offered flow and animated by liters moved) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
 | `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset/replay the world, next arrival, create city, finish one city building, finish/send a battalion, fast-forward and next schematics —; view only, acting through `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
-| `tech.go` | The schematics on the screen: the badge over the core - breathing halos around the drop's mark - while an unopened drop waits, the callout its click opens (`techWords`, `techWrap`) with a square per thing the drop brings (`techBrings`, `drawTechSquares`), and the words (`techWords`) and ink (`techInk`) of each drop; view, never state |
+| `tech.go` | The schematics on the screen: the badge over the core - breathing halos around the drop's mark - while an unopened drop waits, the callout its click opens (`techWords`, `techWrap`) with a clickable square per building and an informational square for pipes (`techBrings`, `drawTechSquares`); used buildings dim and disable, and the callout closes after its last building is placed; view, never state |
 | `guides.go` | Screen-edge arrows for an offscreen rival report or pending schematics, with layout kept clear of the HUD and the two guides separated when they point the same way; view, never state |
 | `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and amplitude-modulated crystal pings, gunfire and shell impacts, low interface clicks, a site-marking thump and a low fanfare for new rival reports. Ordinary world emitters fade steeply with distance and become quiet beyond the view; cannon reports keep their longer, gentler range. Individual shell whistles track their own positions through the descending half of flight. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |
 | `tools/soundgen/` | The maker of the wind, oil and mineral sounds and `assets/sounds/alert.wav`: stdlib Go renders the noise beds as WAV for conversion to OGG, the mineral ring as a seamless WAV with irregular pitch drift of at most one semitone, the crystal ping with amplitude modulation, and the low alert fanfare with `--alert`; run it only when a sound changes |
-| `draw.go` | The region painter: the core's monolith, buildings with their damage bars, the bubbles' outside edges, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
+| `draw.go` | The region painter: the core's monolith, buildings with their damage bars, the bubbles' outside edges, build-site wireframes and the gray schematic-placement ghost, the marking cursor, the stores' fill bars (`drawFillBar`) and the idle count by the core |
 | `units.go` | The colony's four unit models on the ground, with Blender-rendered shadows, cargo, charge feedback, combat-unit health bars and the workers' oil-tank bar over their bodies |
 | `worldsprites.go` | The eight eight-direction model and shadow sheets in the world and the scaled model icons; converts the world ground point to a screen pixel before drawing so moving sprites do not jump by the camera's zoom |
 | `orientation.go` | The screen-space eight-way facing derived from an isometric movement vector, and the ground-plane yaw used for world details |
@@ -267,7 +268,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `fog_test.go` | The fog driven directly: cycles, swell timing, line and bubble margin, pushed-band drag, stationary wear by exposure, movement and bubble resets, saved wear and the HUD forecast |
 | `identity_test.go` | The identity derived from a machine ID: stable, distinct, and the parsers of what `reg query`, `ioreg` and the machine-id files say |
 | `store_test.go` | The database driven directly: an identity kept across runs, the fallback one too, the token column waiting empty, a base saved and loaded back whole, a second save replacing the first, one player's save invisible to another, the DB path's rules |
-| `tech_test.go` | The schematics driven directly: factory at start, first delivery brings infrastructure before the scout, the pressure city unlocks mobile units, the old visit trigger remains for saves, later triggers fire on time, locked actions are refused, `DevNextTech` brings the ladder in order, and the ledger survives a round trip |
+| `tech_test.go` | The schematics driven directly: factory at start, first delivery brings infrastructure before the scout, the pressure city unlocks mobile units, the old visit trigger remains for saves, later triggers fire on time, locked actions are refused, `DevNextTech` brings the ladder in order, one-use callout selection and disabled squares, snapped pump placement, invalid placement and automatic dismissal; the ledger survives a round trip |
 
 ## Architecture
 
@@ -356,6 +357,14 @@ the very body the region draws (`drawBuilding`) in miniature, so one
 graphic serves both. Options read their own place on the rings
 (`radialOffered`: `kindUnlocked` plus `canPlace`); whether the stores
 could pay shows as the wash and in the tip.
+The drop's callout offers the same buildings directly: clicking a building
+square hides the callout and arms a gray wireframe cursor on the cell grid.
+The pump snaps to an oil pool's heart. A valid click marks the job; an
+invalid cell leaves the mode and resources alone. After success the callout
+returns with that square dimmed and disabled, and closes automatically when
+its last building is used. Pipes are informational there and are still laid
+from an oil tank's card.
+
 The job joins the queue; builders raise protector jobs before other jobs,
 oldest first within each group, standing on the cell's edge
 (spread by ID) where the rising body can't swallow them, and the site

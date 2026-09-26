@@ -54,6 +54,17 @@ The player never builds by hand. Marking is building, and building is earned: th
 3. The job joins the queue; while robots raise it, the site shows a wireframe of the body to come with its progress bar, drawn over the fog.
 4. Harvesting works the same way: mark an oil pool or a lilac vein, and robots commute between it and storage while their charge lasts.
 
+Building squares take priority over the callout's usual click-to-dismiss
+behavior. Each offers a one-use placement mode for its building. Clicking a
+building square hides the callout and arms a gray wireframe cursor that
+follows the pointer, snapped to the cell grid.
+A valid left click marks that building there; an invalid cell changes
+nothing. The pump cursor snaps to the oil pool's heart cell. A right click
+cancels and restores the callout. After a successful placement the callout
+returns with that square dimmed and disabled; once every building square has
+been used, it closes automatically. Pipes remain informational in the
+callout and are still laid from a pump or tank card.
+
 Robots are simple units with priorities, not pathfinders of genius: the
 player solves the layout, and the robots solve the walking. Builders and
 workers are separate roles, so a construction job never pulls a worker away
@@ -308,7 +319,8 @@ screen; they never move the camera or take input.
 | Mouse wheel | Zoom toward the cursor, gliding between whole stops, each twice the last (pixel art stays square at rest) |
 | Mouse right, held | Drag the view: grab the ground and move it |
 | Mouse left, on a free cell of ground | Open the build menu on that cell; picking a blueprint builds it there. Until the first schematics arrive, the click inspects the cell instead |
-| Mouse left, on the schematics badge over the core | Open the drop: the badge goes and the callout says what arrived; clicking the callout closes it, while a click elsewhere closes it and acts on the region |
+| Mouse left, on a building square in the schematics callout | Enter placement mode for that blueprint; a gray wireframe follows the pointer, snapped to the cell grid. Left-click valid ground to mark it; right-click cancels |
+| Mouse left, on the schematics badge over the core | Open the drop: the badge goes and the callout says what arrived. Each building square is usable once, then dims and disables; using the last building closes the callout. A click outside closes it and still acts on the region |
 | Mouse left | Select / inspect the cell under the pointer: expand a card, press its buttons, send another robot from a deposit, or click a unit portrait to open its card and recall it individually |
 | Mouse left, on the robot roster button | Open or close the colony robot panel; its X closes it too |
 | Mouse left, on a robot in the roster | Select it; `assign deposit` arms an individual order, then click an oil pool or lilac vein to assign that robot |
@@ -318,7 +330,7 @@ screen; they never move the camera or take input.
 | 1-9 | Call a squad: 1 is the first war factory raised, 2 the next. The key arms the order the same way `give order` does (one click orders, right click puts it away); the same key again takes it back. A squad's box at the top right - tank icon, unit count, the key below - calls it too |
 | Mouse left, on a squad's pennant or ring | Call that squad, where it stands |
 | Mouse left, on a card's trash can | First press arms it (`demolish?`), the second orders the building taken down - a builder goes and works it - or cancels a site; a click anywhere else disarms |
-| Mouse right, clicked | Close the menu / deselect |
+| Mouse right, clicked | Close the menu / deselect / close the schematics callout; during building placement, cancel and restore the callout |
 | Esc | In the region: save and return to the menu. In the menu: quit |
 | F11 or Alt+Enter | Fullscreen on and off |
 | Control held, two clicks on the game's name | The dev tools on and off (see [Dev tools](#dev-tools)) |
@@ -356,6 +368,12 @@ For whoever works on the game, not for the player: in the region, hold Control a
   offers only what the cell could really take, and unaffordable options
   stand washed out
   with their shortfall boxed in red (see [Construction model](#construction-model)).
+- A building square in a schematics callout arms a gray, grid-snapped
+  placement cursor. A valid click marks the building; an invalid click
+  changes nothing. Each building square can be used once from that drop,
+  then dims and disables; the callout closes after its last building is
+  placed. The pump cursor snaps to an oil pool's heart cell. Pipes are
+  informational and are still laid from a pump or tank card.
 - One generated region, a pure function of `State.Seed` (`worldgen.go`): a gentle relief with great plains, ground cover in zones, oil pools and lilac veins that thin out toward their rims, fog everywhere else. Buildings ask for a flat cell.
 - The core gives the colony one white builder, with a full oil tank. It
   is no more immune to the fog than any other builder: empty outside a
@@ -586,7 +604,8 @@ first delivery unlocks infrastructure. `techFrontierTicks` 5:30 is the
 frontier kit's clock drop. `legacyTechIndustryTicks` keeps the former
 7:00 factory trigger for migrating saves without a tech ledger. The view's
 `techBadgeR` is 22 px, `techPulseTicks` is 90 (one breath of the glow,
-from the state's tick) and `techCalloutW` is 280 px.
+from the state's tick), `techCalloutW` is 280 px and `techUsedVeil` is
+0.72, the dark overlay on a building square used from its drop.
 
 In `sim_cities.go`, `cityBuildTicks` is 2700 ticks (45 s) per building,
 and `citySortieCooldownTicks` is 5400 ticks (90 s) after a full force
@@ -755,6 +774,13 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-26: the building squares in a schematic callout now arm a
+  gray, grid-snapped placement cursor. Valid clicks mark buildings through
+  the existing reducer; invalid clicks preserve the mode and resources.
+  Pumps snap to their oil pool's heart. Each building square is usable once
+  per drop, then dims and disables; the callout closes after the last one
+  is placed. Right-click cancels placement or closes the callout. Pipes stay
+  informational and are still laid from a pump or tank card.
 - 2026-09-26: tuned the first economic teeth from three-seed probe runs.
   Colony buildings now take 5 s of builder work and each rival city building
   45 s. The scout arrives after one minute; one minute after it leaves or

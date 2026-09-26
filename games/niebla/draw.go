@@ -220,26 +220,11 @@ func drawJobs(s *State, screen *golib.Screen, zoom float32) {
 				across, height*done, fx, fy)
 		}
 		// The scaffold: the whole body, in wireframe.
-		hw := across * unitW / 2
-		hh := across * unitH / 2
-		hy := height * unitH
-		wire := func(points []golib.Vector2) {
-			screen.DrawPolygonOutline(points, 1.5/zoom, info.Color)
-		}
-		wire([]golib.Vector2{
-			{X: gx, Y: gy - hy - hh}, {X: gx + hw, Y: gy - hy},
-			{X: gx, Y: gy - hy + hh}, {X: gx - hw, Y: gy - hy},
-		})
-		wire([]golib.Vector2{
-			{X: gx, Y: gy - hy + hh}, {X: gx + hw, Y: gy - hy},
-			{X: gx + hw, Y: gy}, {X: gx, Y: gy + hh},
-		})
-		wire([]golib.Vector2{
-			{X: gx - hw, Y: gy - hy}, {X: gx, Y: gy - hy + hh},
-			{X: gx, Y: gy + hh}, {X: gx - hw, Y: gy},
-		})
+		drawBuildingWireframe(screen, gx, gy, across, height, zoom,
+			info.Color)
 		// The progress bar: the site's width, filling with the work done.
 		w := across * unitW
+		hh := across * unitH / 2
 		y := gy + hh + 4/zoom
 		screen.DrawRectangle(
 			golib.Rectangle{X: gx - w/2, Y: y, Width: w, Height: 3 / zoom}, scarColor)
@@ -249,6 +234,51 @@ func drawJobs(s *State, screen *golib.Screen, zoom float32) {
 				info.Color)
 		}
 	}
+}
+
+func drawBuildingWireframe(
+	screen *golib.Screen,
+	gx, gy, across, height, zoom float32,
+	color golib.Color,
+) {
+	hw := across * unitW / 2
+	hh := across * unitH / 2
+	hy := height * unitH
+	wire := func(points []golib.Vector2) {
+		screen.DrawPolygonOutline(points, 1.5/zoom, color)
+	}
+	wire([]golib.Vector2{
+		{X: gx, Y: gy - hy - hh}, {X: gx + hw, Y: gy - hy},
+		{X: gx, Y: gy - hy + hh}, {X: gx - hw, Y: gy - hy},
+	})
+	wire([]golib.Vector2{
+		{X: gx, Y: gy - hy + hh}, {X: gx + hw, Y: gy - hy},
+		{X: gx + hw, Y: gy}, {X: gx, Y: gy + hh},
+	})
+	wire([]golib.Vector2{
+		{X: gx - hw, Y: gy - hy}, {X: gx, Y: gy - hy + hh},
+		{X: gx, Y: gy + hh}, {X: gx - hw, Y: gy},
+	})
+}
+
+func drawTechPlacementGhost(s *playScene, screen *golib.Screen) {
+	col, row, inside := s.techPlacementCell()
+	if !inside {
+		return
+	}
+	valid := techPlacementValid(s.state, s.techPlacing, col, row)
+	alpha := float32(0.32)
+	if valid {
+		alpha = 0.82
+	}
+	ink := golib.WithOpacity(techGhostColor, alpha)
+	cell, gx, gy := cellDiamond(col, row, s.zoom)
+	screen.DrawPolygon(cell, golib.WithOpacity(techGhostColor, alpha*0.12))
+	screen.DrawPolygonOutline(cell, 2/s.zoom, ink)
+	screen.DrawCircle(gx, gy, 2.5/s.zoom, ink)
+	across, height := buildingSize(s.techPlacing)
+	k := buildingIcon(across, height, s.zoom)
+	drawBuildingWireframe(screen, gx, gy, across*k, height*k, s.zoom, ink)
 }
 
 // buildingSize returns a kind's body: its footprint across and its

@@ -35,6 +35,7 @@ const (
 	techSquareIcon    = 40.0 // the box an icon is fitted into
 	techSquareName    = 9.0  // the name's text size
 	techSquareNameRow = 11.0 // and its lines' height
+	techUsedVeil      = 0.72
 )
 
 // techBreath is the pulse the glow rides, 0 to 1, from the state's tick
@@ -217,35 +218,159 @@ func techCalloutRect(s *playScene, height float32) golib.Rectangle {
 // picture - four body rows and the squares' row - whatever the body
 // wrapped into, so no click on the plate falls through to the region.
 func techCalloutBounds(s *playScene) golib.Rectangle {
-	height := techCalloutPad*2 + techCalloutHead +
-		float32(techCalloutMaxBodyRows)*techCalloutRow +
-		techSquareGap + techSquareH
-	return techCalloutRect(s, height)
+	return techCalloutRect(s, techCalloutHeight())
+}
+
+func techCalloutHeight() float32 {
+	return float32(2*techCalloutPad + techCalloutHead +
+		float64(techCalloutMaxBodyRows)*techCalloutRow +
+		techSquareGap + techSquareH)
+}
+
+type techSquare struct {
+	item techItem
+	area golib.Rectangle
+	used bool
+}
+
+func techSquareLayout(s *playScene, id string) []techSquare {
+	plate := techCalloutRect(s, techCalloutHeight())
+	x := plate.X + techCalloutPad
+	y := plate.Y + techCalloutPad + techCalloutHead +
+		float32(techCalloutMaxBodyRows)*techCalloutRow + techSquareGap
+	items := techBrings(id)
+	squares := make([]techSquare, 0, len(items))
+	for i, item := range items {
+		squares = append(squares, techSquare{
+			item: item,
+			area: golib.Rectangle{
+				X:      x + float32(i)*(techSquareW+techSquareGap),
+				Y:      y,
+				Width:  techSquareW,
+				Height: techSquareH,
+			},
+			used: !item.pipes && s.techUsed[item.kind],
+		})
+	}
+	return squares
+}
+
+func techSquareAt(s *playScene, mx, my float32) (techSquare, bool) {
+	if s.techCallout == "" {
+		return techSquare{}, false
+	}
+	for _, square := range techSquareLayout(s, s.techCallout) {
+		if square.area.Contains(mx, my) {
+			return square, true
+		}
+	}
+	return techSquare{}, false
+}
+
+func techBuildingsRemain(id string, used map[BuildingKind]bool) bool {
+	for _, item := range techBrings(id) {
+		if !item.pipes && !used[item.kind] {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *playScene) selectTechBuilding(kind BuildingKind) bool {
+	if s.techCallout == "" || s.techPlacing != "" {
+		return false
+	}
+	for _, square := range techSquareLayout(s, s.techCallout) {
+		if square.item.pipes || square.item.kind != kind || square.used {
+			continue
+		}
+		s.techPlacing = kind
+		s.picked = false
+		s.pickedThing = ""
+		s.pickedRobot = 0
+		s.robotPage = 0
+		s.armed = ""
+		s.ordering = 0
+		s.assigningRobot = 0
+		s.laying = pipeLaying{}
+		s.closeRadial()
+		return true
+	}
+	return false
+}
+
+func (s *playScene) techPlacementCell() (col, row int, inside bool) {
+	if !s.hoverCell {
+		return 0, 0, false
+	}
+	col, row = s.hoverCellCol, s.hoverCellRow
+	if s.techPlacing != BuildingPump {
+		return col, row, true
+	}
+	d, found := depositAt(cellTile(col, row))
+	if found && d.Kind == kindOil {
+		col, row = pumpCell(d)
+	}
+	return col, row, true
+}
+
+func techPlacementValid(
+	s *State,
+	kind BuildingKind,
+	col, row int,
+) bool {
+	return kindUnlocked(s, kind) && canPlace(s, kind, col, row) &&
+		canAfford(s, kind) && !unitOnCell(s, col, row)
+}
+
+func (s *playScene) placeTechBuilding() bool {
+	col, row, inside := s.techPlacementCell()
+	if !inside || !techPlacementValid(s.state, s.techPlacing, col, row) {
+		return false
+	}
+	kind := s.techPlacing
+	jobsBefore := len(s.state.Jobs)
+	Apply(s.state, MarkBuilding{Kind: kind, Col: col, Row: row})
+	if len(s.state.Jobs) == jobsBefore {
+		return false
+	}
+	if s.techUsed == nil {
+		s.techUsed = map[BuildingKind]bool{}
+	}
+	s.techUsed[kind] = true
+	s.techPlacing = ""
+	s.au.placed()
+	if !techBuildingsRemain(s.techCallout, s.techUsed) {
+		s.closeTechCallout()
+	}
+	return true
+}
+
+func (s *playScene) closeTechCallout() {
+	s.techCallout = ""
+	s.techUsed = nil
 }
 
 func (s *playScene) dismissTechCallout(mx, my float32) bool {
-	s.techCallout = ""
-	return techCalloutBounds(s).Contains(mx, my)
+	inside := techCalloutBounds(s).Contains(mx, my)
+	s.closeTechCallout()
+	return inside
 }
 
 // drawTechCallout paints the open drop's teaching and the squares of
 // what it brought, anchored to the badge and kept on the screen.
-// Clicking it closes the callout; a click elsewhere closes it and acts
-// on the region.
+// An unused building square arms placement; used and informational squares
+// stay in the callout. Other callout clicks close it; outside clicks also
+// act on the region.
 func drawTechCallout(s *playScene, screen *golib.Screen) {
-	if s.techCallout == "" {
+	if s.techCallout == "" || s.techPlacing != "" {
 		return
 	}
 	title, body := techWords(s.techCallout)
 	inner := float32(techCalloutW - 2*techCalloutPad)
 	lines := techWrap(screen, body, inner, techCalloutSize)
 	brings := techBrings(s.techCallout)
-	h := techCalloutPad + techCalloutHead +
-		float32(len(lines))*techCalloutRow + techCalloutPad
-	if len(brings) > 0 {
-		h += techSquareGap + techSquareH
-	}
-	plate := techCalloutRect(s, h)
+	plate := techCalloutRect(s, techCalloutHeight())
 	screen.DrawRectangle(plate, panelColor)
 	screen.DrawRectangleOutline(plate, 1.5, techInk(s.techCallout))
 	tx, ty := plate.X+techCalloutPad, plate.Y+techCalloutPad
@@ -256,29 +381,19 @@ func drawTechCallout(s *playScene, screen *golib.Screen) {
 		ty += techCalloutRow
 	}
 	if len(brings) > 0 {
-		drawTechSquares(screen, brings, tx, ty+techSquareGap)
+		drawTechSquares(s, screen)
 	}
 }
 
-// drawTechSquares paints one square per thing a drop brought in, side
-// by side from x, y: the plate of a deposit's worker portrait, the icon
-// of its construction above and its name below.
-func drawTechSquares(
-	screen *golib.Screen,
-	brings []techItem,
-	x, y float32,
-) {
-	nameTop := y + 3 + techSquareIcon + 5
+// drawTechSquares paints one square per thing a drop brought in: the icon
+// of its construction above and its name below, dimming used buildings.
+func drawTechSquares(s *playScene, screen *golib.Screen) {
 	nameBand := float32(2 * techSquareNameRow)
-	for i, item := range brings {
-		area := golib.Rectangle{
-			X:      x + float32(i)*(techSquareW+techSquareGap),
-			Y:      y,
-			Width:  techSquareW,
-			Height: techSquareH,
-		}
+	for _, square := range techSquareLayout(s, s.techCallout) {
+		item := square.item
+		area := square.area
+		nameTop := area.Y + 3 + techSquareIcon + 5
 		screen.DrawRectangle(area, buttonColor)
-		screen.DrawRectangleOutline(area, 1, buttonEdgeColor)
 		cx := area.X + techSquareW/2
 		cy := area.Y + 3 + techSquareIcon/2
 		if item.pipes {
@@ -289,9 +404,22 @@ func drawTechSquares(
 		names := techWrap(screen, item.name, techSquareW-12, techSquareName)
 		ny := nameTop + (nameBand-float32(len(names))*techSquareNameRow)/2
 		for _, line := range names {
-			screen.DrawText(line, cx, ny, techSquareName, panelTextColor,
+			color := panelTextColor
+			if square.used {
+				color = panelDimColor
+			}
+			screen.DrawText(line, cx, ny, techSquareName, color,
 				golib.TextOptions{Font: uiFont, Align: golib.AlignCenter})
 			ny += techSquareNameRow
 		}
+		if square.used {
+			screen.DrawRectangle(area,
+				golib.WithOpacity(panelColor, techUsedVeil))
+		}
+		edge := buttonEdgeColor
+		if square.used {
+			edge = golib.WithOpacity(panelDimColor, 0.65)
+		}
+		screen.DrawRectangleOutline(area, 1, edge)
 	}
 }

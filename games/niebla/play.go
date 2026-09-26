@@ -76,9 +76,11 @@ type playScene struct {
 	robotsPicked   int64
 	assigningRobot int64
 	techCallout    string // the schematics drop whose callout stands open, by ID
-	hoverCellCol   int    // the cell under the pointer, the cursor
-	hoverCellRow   int    //
-	hoverCell      bool   // the pointer is over a cell
+	techPlacing    BuildingKind
+	techUsed       map[BuildingKind]bool
+	hoverCellCol   int  // the cell under the pointer, the cursor
+	hoverCellRow   int  //
+	hoverCell      bool // the pointer is over a cell
 	rightWasDown   bool
 	rightFrom      golib.Vector2 // where the right button went down
 }
@@ -136,14 +138,20 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 		taken = s.updateTech(input)
 	}
 	if !taken {
-		taken = s.updateRobotPanel(input)
+		if s.techPlacing == "" {
+			taken = s.updateRobotPanel(input)
+		}
 	}
-	if !taken {
+	if !taken && s.techPlacing == "" {
 		taken = s.updateSquadBoxes(input)
 	}
-	s.updateRadial()
-	s.updateInspection(input, taken)
-	s.updateSquadKeys(input)
+	if s.techPlacing != "" {
+		s.updateInspection(input, taken)
+	} else {
+		s.updateRadial()
+		s.updateInspection(input, taken)
+		s.updateSquadKeys(input)
+	}
 	// The loop is the clock: one tick of simulation per update, more
 	// while the dev tools fast forward.
 	ticks := s.dev.ticksPerUpdate()
@@ -207,11 +215,11 @@ func (s *playScene) updateSquadKeys(input *golib.Input) {
 	}
 }
 
-// updateTech takes a click on the schematics badge over the core, which
-// opens the oldest unopened drop. A click on its callout closes it; a
-// click elsewhere closes it and carries on into the region.
+// updateTech opens the oldest unopened drop from its badge and arms a
+// building from an unused square. Used and informational squares do
+// nothing; other callout clicks dismiss it or pass through to the region.
 func (s *playScene) updateTech(input *golib.Input) bool {
-	if s.assigningRobot != 0 {
+	if s.assigningRobot != 0 || s.techPlacing != "" {
 		return false
 	}
 	if !input.MousePressed(golib.MouseLeft) {
@@ -219,12 +227,33 @@ func (s *playScene) updateTech(input *golib.Input) bool {
 	}
 	mx, my := input.MousePosition()
 	if s.techCallout != "" {
+		if square, hit := techSquareAt(s, mx, my); hit {
+			if square.item.pipes || square.used {
+				if square.used {
+					s.au.ui(0.6)
+				}
+				return true
+			}
+			if s.selectTechBuilding(square.item.kind) {
+				s.au.ui(1)
+				return true
+			}
+			return true
+		}
 		return s.dismissTechCallout(mx, my)
 	}
 	if id := techPending(s.state); id != "" && s.techBadgeHolds(mx, my) {
 		Apply(s.state, AckTech{ID: id})
 		s.au.ui(1.1)
 		s.techCallout = id
+		s.techUsed = map[BuildingKind]bool{}
+		s.picked = false
+		s.pickedThing = ""
+		s.pickedRobot = 0
+		s.armed = ""
+		s.ordering = 0
+		s.laying = pipeLaying{}
+		s.robotsOpen = false
 		s.closeRadial()
 		return true
 	}
@@ -372,11 +401,11 @@ func (s *playScene) updateRadial() {
 // cancels with a right click that never became a drag, expands or folds
 // a card when a click lands on its title, and acts when a click lands on
 // a card's button. A click on empty ground opens the build menu instead,
-// a radial around the tile; picking one of its options marks that
-// blueprint, and the click that confirms it lands on a cell. While a
-// blueprint is marked, the panel and the menu stand down. The camera has
-// already moved, so the hover follows the view the frame it changes. A
-// left click the dev tools took is none of its business.
+// a radial around the cell; picking one of its options marks that
+// blueprint there. A blueprint selected from the schematics callout owns
+// the pointer until it is placed or canceled. The camera has already
+// moved, so the hover follows the view the frame it changes. A left click
+// the dev tools took is none of its business.
 func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 	mx, my := input.MousePosition()
 	world := s.camera.ToWorld(mx, my)
@@ -389,6 +418,19 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 	}
 
 	rightClick := s.rightClicked(input)
+	if s.techPlacing != "" {
+		if rightClick {
+			s.techPlacing = ""
+		}
+		if input.MousePressed(golib.MouseLeft) && !clickTaken {
+			s.placeTechBuilding()
+		}
+		return
+	}
+	if rightClick && s.techCallout != "" {
+		s.closeTechCallout()
+		return
+	}
 	if s.assigningRobot != 0 {
 		if rightClick {
 			s.assigningRobot = 0
@@ -556,16 +598,17 @@ func (s *playScene) buildableCell(col, row int) bool {
 	if _, littered := pileAt(s.state, col, row); littered {
 		return false
 	}
-	for _, id := range sortedRobotIDs(s.state) {
-		r := s.state.Robots[id]
+	return !unitOnCell(s.state, col, row)
+}
+
+func unitOnCell(s *State, col, row int) bool {
+	for _, id := range sortedRobotIDs(s) {
+		r := s.Robots[id]
 		if int(r.X/buildingCell) == col && int(r.Y/buildingCell) == row {
-			return false
+			return true
 		}
 	}
-	if len(enemiesOnCell(s.state, col, row)) > 0 {
-		return false
-	}
-	return true
+	return len(enemiesOnCell(s, col, row)) > 0
 }
 
 // pressButton applies the action a card's button asks for on the picked
@@ -663,7 +706,9 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	// The cursor is the cell under the pointer, the grid's last
 	// subdivision, about four robots across. Far out it lifts to a
 	// readable size on the screen.
-	if s.hoverCell {
+	if s.techPlacing != "" {
+		drawTechPlacementGhost(s, screen)
+	} else if s.hoverCell {
 		cursor, gx, gy := cellDiamond(s.hoverCellCol, s.hoverCellRow, s.zoom)
 		screen.DrawPolygonOutline(cursor, 2/s.zoom, hoveredTileColor)
 		screen.DrawCircle(gx, gy, 2.5/s.zoom, hoveredTileColor)
@@ -701,6 +746,10 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	drawSquadStrip(s, screen)
 	s.dev.draw(s, screen)
 	help := "click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a cell, 1-9 call a squad, Esc saves and returns to the menu, F11 fullscreen, F2 filter"
+	if s.techCallout != "" && s.techPlacing == "" {
+		help = "click a building square once to place it; " +
+			"outside or right-click closes the callout"
+	}
 	if s.ordering != 0 {
 		help = "ordering a squad: click a rival vehicle to attack its party, that vehicle first, or click the ground to post the squad there; right-click or the squad's number again puts the order away"
 	}
@@ -712,6 +761,14 @@ func (s *playScene) Draw(screen *golib.Screen) {
 			"assigning robot #%d: click an oil pool or lilac vein; "+
 				"right-click cancels",
 			s.assigningRobot,
+		)
+	}
+	if s.techPlacing != "" {
+		name := catalogInfo(buildingType(s.techPlacing)).Name
+		help = fmt.Sprintf(
+			"placing %s: click valid ground to mark it; "+
+				"right-click cancels",
+			name,
 		)
 	}
 	screen.DrawText(help, 16, float32(screen.Height())-30, 13, textColor, uiText)
