@@ -719,7 +719,8 @@ func (s *playScene) Draw(screen *golib.Screen) {
 		// A picked guard post shows its reach.
 		if b, ok := buildingAt(s.state, s.pickedCol, s.pickedRow); ok && b.Kind == BuildingGuard {
 			gx, gy := projectBuilding(b)
-			ellipseOutline(screen, gx, gy, guardRangeUnits/unitsPerTile,
+			ellipseOutline(screen, gx, gy,
+				smallArmsRangeUnits/unitsPerTile,
 				1.5/s.zoom, golib.WithOpacity(guardColor, 0.8))
 		}
 		// And a picked artillery piece its two: the reach, and the ring it

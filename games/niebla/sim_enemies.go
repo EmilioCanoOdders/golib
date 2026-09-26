@@ -33,6 +33,7 @@ const (
 	siphonReachUnits      = 40.0    // u from a tank's middle to a party siphoning it
 	siphonLitersPerSecond = 3.0     // L/s each vehicle draws
 	raidSiphonTicks       = 60 * 60 // ticks a party siphons at the most: a minute
+	smallArmsRangeUnits   = 130.0   // u; every light weapon's reach
 
 	enemyFogTicks = 300 // ticks a vehicle lasts in the fog with no repulsor: 5 s
 
@@ -76,7 +77,9 @@ func enemySpecOf(kind EnemyKind) enemySpec {
 	case EnemyScout:
 		return enemySpec{24, 60, 40, 25, 2, 5, 0, 0, 0}
 	case EnemyCrawler:
-		return enemySpec{12, 300, 120, 0, 10, 25, 8, 50, 130}
+		return enemySpec{
+			12, 300, 120, 0, 10, 25, 8, 50, smallArmsRangeUnits,
+		}
 	case EnemyBase:
 		return enemySpec{0, 1200, 0, 0, 60, 150, 0, 0, 0}
 	case EnemyArtillery:
@@ -90,7 +93,9 @@ func enemySpecOf(kind EnemyKind) enemySpec {
 	case EnemyCityFactory:
 		return enemySpec{0, 250, 0, 0, 0, 0, 0, 0, 0}
 	}
-	return enemySpec{20, 100, 0, 60, 4, 8, 5, 40, 110}
+	return enemySpec{
+		20, 100, 0, 60, 4, 8, 5, 40, smallArmsRangeUnits,
+	}
 }
 
 // Enemy is one rival vehicle. Like a robot it carries no plan: its party's
@@ -762,7 +767,6 @@ func (s *State) killEnemy(id int64) {
 const (
 	guardCostLilac   = 150.0 // kg
 	guardCostOil     = 30.0  // L
-	guardRangeUnits  = 250.0 // u
 	guardReloadTicks = 40    // ticks between two shots
 	guardShotDamage  = 12.0
 	guardShotOil     = 0.5 // L a shot burns, out of any tank
@@ -782,7 +786,7 @@ func stepGuards(s *State) {
 			continue
 		}
 		x, y := cellCenterUnits(b.Col, b.Row)
-		target, found := nearestEnemy(s, x, y, guardRangeUnits)
+		target, found := nearestEnemy(s, x, y, smallArmsRangeUnits)
 		if !found || oilTotal(s) < guardShotOil {
 			b.Aim = 0
 			s.Buildings[id] = b

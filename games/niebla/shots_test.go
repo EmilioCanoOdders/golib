@@ -71,6 +71,171 @@ func TestShellLeavesSubtleSmokeAlongItsFlight(t *testing.T) {
 	}
 }
 
+func TestSmallArmsShareAndRespectTheirRange(t *testing.T) {
+	weapons := []struct {
+		name string
+		fire func(*testing.T, *State, float64)
+	}{
+		{
+			name: "guard post",
+			fire: func(t *testing.T, s *State, distance float64) {
+				col, row := groundNearCore()
+				post := raised(t, s, BuildingGuard, col, row)
+				px, py := cellCenterUnits(post.Col, post.Row)
+				s.Enemies[900] = Enemy{
+					ID: 900, Kind: EnemyRaider,
+					X: px + distance, Y: py,
+					Health: enemySpecOf(EnemyRaider).health,
+				}
+				stepGuards(s)
+			},
+		},
+		{
+			name: "trooper",
+			fire: func(_ *testing.T, s *State, distance float64) {
+				r := Robot{
+					ID: 900, Kind: RobotCombat,
+					Tank: robotTankLiters,
+				}
+				r.X, r.Y = parkCenter()
+				s.Enemies[901] = Enemy{
+					ID: 901, Kind: EnemyRaider,
+					X: r.X + distance, Y: r.Y,
+					Health: enemySpecOf(EnemyRaider).health,
+				}
+				r.shoot(s)
+			},
+		},
+		{
+			name: "crawler",
+			fire: func(t *testing.T, s *State, distance float64) {
+				col, row := groundNearCore()
+				post := raised(t, s, BuildingGuard, col, row)
+				px, py := cellCenterUnits(post.Col, post.Row)
+				s.Enemies[900] = Enemy{
+					ID: 900, Kind: EnemyCrawler,
+					X: px + distance, Y: py,
+					Health: enemySpecOf(EnemyCrawler).health,
+				}
+				stepEnemyGuns(s)
+			},
+		},
+		{
+			name: "raider",
+			fire: func(t *testing.T, s *State, distance float64) {
+				col, row := groundNearCore()
+				post := raised(t, s, BuildingGuard, col, row)
+				px, py := cellCenterUnits(post.Col, post.Row)
+				s.Enemies[900] = Enemy{
+					ID: 900, Kind: EnemyRaider,
+					X: px + distance, Y: py,
+					Health: enemySpecOf(EnemyRaider).health,
+				}
+				stepEnemyGuns(s)
+			},
+		},
+	}
+
+	for _, weapon := range weapons {
+		for _, test := range []struct {
+			name     string
+			distance float64
+			wantShot bool
+		}{
+			{
+				name: "at limit", distance: smallArmsRangeUnits,
+				wantShot: true,
+			},
+			{
+				name:     "beyond limit",
+				distance: smallArmsRangeUnits + 0.01,
+				wantShot: false,
+			},
+		} {
+			t.Run(weapon.name+"/"+test.name, func(t *testing.T) {
+				s := newGame()
+				noRivals(s)
+				seedStock(s)
+				weapon.fire(t, s, test.distance)
+				if got := len(s.Shots) > 0; got != test.wantShot {
+					t.Errorf("at %.2f m, fired %v, want %v",
+						test.distance, got, test.wantShot)
+				}
+			})
+		}
+	}
+}
+
+func TestOneGuardPostIsWornDownByTheFirstRaid(t *testing.T) {
+	for _, seed := range []int64{0, 1, 2} {
+		s := newGameOn(seed)
+		s.Raids.Visits = 1
+		noRivals(s)
+		s.spawnVisit()
+		partyID := sortedPartyIDs(s)[0]
+		lead := partyMembers(s, partyID)[0]
+		coreX, coreY := tileCenterUnits(coreCol, coreRow)
+		angle := math.Atan2(lead.Y-coreY, lead.X-coreX)
+		targetX := coreX + math.Cos(angle)*(siphonReachUnits-1)
+		targetY := coreY + math.Sin(angle)*(siphonReachUnits-1)
+		cellsPerTile := unitsPerTile / buildingCell
+		firstRow := (coreRow - 1) * cellsPerTile
+		lastRow := (coreRow + 2) * cellsPerTile
+		firstCol := (coreCol - 1) * cellsPerTile
+		lastCol := (coreCol + 2) * cellsPerTile
+		// Place the single post on the approach side to the tank.
+		postCol, postRow := 0, 0
+		postGap := math.Inf(1)
+		for row := firstRow; row < lastRow; row++ {
+			for col := firstCol; col < lastCol; col++ {
+				if !canPlace(s, BuildingGuard, col, row) {
+					continue
+				}
+				x, y := cellCenterUnits(col, row)
+				if !inSafeZone(s, x, y) {
+					continue
+				}
+				if gap := math.Hypot(targetX-x, targetY-y); gap < postGap {
+					postCol, postRow, postGap = col, row, gap
+				}
+			}
+		}
+		if math.IsInf(postGap, 1) {
+			t.Fatalf("seed %d: no safe guard site faces the first raid", seed)
+		}
+		post := raised(t, s, BuildingGuard, postCol, postRow)
+		s.Stock = Stock{
+			Oil:   startingStockOil - guardCostOil,
+			Lilac: startingStockLilac - guardCostLilac,
+		}
+		postX, postY := cellCenterUnits(post.Col, post.Row)
+		nearestEnemyGap := math.Inf(1)
+		if !tickUntil(s, 10*60*60, func() bool {
+			for _, id := range sortedEnemyIDs(s) {
+				enemy := s.Enemies[id]
+				gap := math.Hypot(enemy.X-postX, enemy.Y-postY)
+				nearestEnemyGap = math.Min(nearestEnemyGap, gap)
+			}
+			_, active := s.Parties[partyID]
+			return !active
+		}) {
+			t.Fatalf("seed %d: the first raid did not finish", seed)
+		}
+		remaining := 0.0
+		if building, stands := s.Buildings[post.ID]; stands {
+			remaining = buildingHealth(BuildingGuard) - building.Damage
+		}
+		if remaining > buildingHealth(BuildingGuard)*0.2 {
+			t.Errorf(
+				"seed %d: one guard post retained %.1f / %.1f health; "+
+					"nearest enemy was %.1f m away; reports: %+v",
+				seed, remaining, buildingHealth(BuildingGuard),
+				nearestEnemyGap, s.Reports,
+			)
+		}
+	}
+}
+
 // settledCityNexus builds a city for shot tests and returns its Nexus.
 func settledCityNexus(t *testing.T, s *State) Enemy {
 	t.Helper()

@@ -166,6 +166,12 @@ sooner than 30 cycles apart, up to three; each city is part of the saved
 state. The city has a fixed 170 m repulsor post. The colony is told when
 the first city establishes and when later crawlers approach.
 
+The colony's guard posts and troopers, and rival crawlers and raiders, all
+have a `smallArmsRangeUnits` reach of 130 m. A guard post on the first
+attack's approach to the nearest tank should end that first raid at 20% hull
+or less, or be destroyed; it is a trade, not a defense the player can ignore.
+Artillery keeps its separate range and rules.
+
 For one minute after a city establishes, the HUD announces its location and
 status. Its founding report and offscreen arrow use that same deadline,
 unless newer news replaces them; other reports and arrows last
@@ -208,10 +214,11 @@ gray and subdued to distinguish them from the colony at every zoom. Wrecks
 still drop their own salvage and stolen oil as a pile for the colony's
 robots to haul.
 
-The colony's guard post remains its short-range oil-paid answer; squads
-remain direct orders through the war factory and keys 1-9. The player's
-artillery remains an unlocked blueprint that shells visible rival targets
-for lilac and oil. A war factory can also build a vulnerable mechanic,
+The colony's guard post remains its oil-paid answer; squads remain direct
+orders through the war factory and keys 1-9. The post and troopers share
+their 130 m reach with crawler and raider guns. The player's artillery
+remains an unlocked blueprint that shells visible rival targets for lilac
+and oil. A war factory can also build a vulnerable mechanic,
 which repairs damaged colony buildings with oil from its own tank. Bullets
 and shells stay in the serialized state with hit, damage, wreck and
 visual-effect rules. City structures can be selected and attacked by
@@ -755,15 +762,6 @@ the second attack survivable; if it does not, change one economic dial at a
 time and rerun all four probe policies.
 
 ## Later
-- **Debt - turrets must trade, not hold forever** (2026-09-23): guard
-  posts already have 200 health, take rival bullets, show their damage
-  and fall into a wreck; the rivals target troopers, mechanics and guard
-  posts, but not artillery with their small arms (artillery can still
-  take shell damage like any building). Let nearby rivals target an
-  artillery piece too. Balance and test an unassisted guard post against
-  a raid so it typically destroys about two vehicles before going down,
-  with positioning, repairs and numbers still able to change the result.
-  A post should buy time, not make the next raid safe to ignore.
 - **Debt - the relief doesn't slow anybody** (2026-09-21): the generated ground is looks and building ground only, and robots walk it at their one speed. A robot should go slower uphill (and perhaps no faster downhill), by the slope under it along its way: `Region.heightAt` gives the height at both ends of a step, and `walkTowards` in `sim_robots.go` is where the factor goes, beside the fog's drag. It moves hauls' timings, so the tests that count ticks on seed 0 will need a look.
 - **The arc (mid-game):** stabilizing the first region summons the ark, the mobile base - the game's own idea, arriving as a reward. By then the fog deepens too slowly to feel in an hour of play: a region is a chapter, not a home.
 - **Expeditions:** sending a robot into the deep fog as adventure - richer finds, ruins, beacons, the fog's origin; the fear and the loot of the mist.
@@ -774,6 +772,11 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-26: guard posts, troopers, crawler guns and raider guns now share
+  a 130 m reach. A single post placed on the first raid's approach to the
+  nearest tank is reduced to 20% hull or less, or destroyed, across seeds
+  0, 1 and 2. `shots_test.go` checks each weapon at and just beyond its
+  limit, and replays the full first raid to pin the trade.
 - 2026-09-26: the building squares in a schematic callout now arm a
   gray, grid-snapped placement cursor. Valid clicks mark buildings through
   the existing reducer; invalid clicks preserve the mode and resources.

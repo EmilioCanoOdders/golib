@@ -218,10 +218,10 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `sim_oil.go` | Oil's spendable tanks and dedicated protector reserves: `oilTotal`, `oilCap`, `payOil`, all physical tank capacity, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
 | `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus`; fog-covered oil pools stop pumps without losing oil, protectors clear them, tanks fill from pipes at a shared 1.6 L/s limit and pass excess onward, while protectors keep their reserve and upkeep; each pipe records offered, moved and cumulative liters for the view |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, local exposure (`fogExposureAt`), oil pools covered outside bubbles, where the line stands now (`fogLineNow`), and the drag a walker keeps (`fogDrag`) |
-| `sim_enemies.go` | The rivals' timing and movement: `Enemy` with its saved facing octant, `Party`, `Raids`, `Mark` and `Report`; the one-minute scout and follow-up clocks, the first no-camp attack, slow raider-count growth, city arrivals, party stages, siphoning and return, fog exposure, wrecks, guard posts and the state's PRNG |
+| `sim_enemies.go` | The rivals' timing and movement: `Enemy` with its saved facing octant, `Party`, `Raids`, `Mark` and `Report`; the one-minute scout and follow-up clocks, the first no-camp attack, slow raider-count growth, city arrivals, party stages, siphoning and return, fog exposure, wrecks, guard posts and the shared 130 m small-arms reach |
 | `sim_cities.go` | Rival cities: serializable production, deterministic 45-second building steps, finite local oil/mineral reserves, city arrival and old-save migration, city-produced sorties, unloading, 90-second rests, squad replacement and mobile artillery |
 | `sim_tech.go` | The schematics: the robot factory is the opening drop, first delivery unlocks infrastructure, then the scout's theft, frontier clock, first-city founding and rival factory trigger their drops; `stepTech`, `kindUnlocked`, `dropArrived` and `techPending` derive arrivals and `State.Tech` keeps which drops were opened |
-| `sim_squads.go` | The military units' law and tuning: troopers (`RobotCombat`) and mechanics (`RobotRepair`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), the war factory's capacity (`squadRoom`, `mechanicRoom`), and rivals targeting defenders (`stepEnemyGuns`) |
+| `sim_squads.go` | The military units' law and tuning: troopers (`RobotCombat`) and mechanics (`RobotRepair`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), the shared 130 m small-arms reach, the war factory's capacity (`squadRoom`, `mechanicRoom`), and rivals targeting defenders (`stepEnemyGuns`) |
 | `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right with a trooper icon, unit count and key (`drawSquadStrip`, `drawTrooperIcon`, `squadBoxRect`, `squadBoxAt`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the marks that pick a squad where it stands (`squadMarkAt`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
 | `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), vulnerable colony units, building health and oil-paid mechanic repairs, what the colony sees (`seen`) and its artillery (`stepArtillery`) |
 | `shots.go` | Shots on the screen and their light, for looks only: bullets as streaks, shells on their arc over a shadow, pools of light added over the ground and what stands on it (`lightPool`), guns' flashes, and bursts of sparks that cool from yellow to red, embers and smoke; the field (`fxField`) learns of fired and landed shots by comparing the state's with the ones it saw last; view, never state |
@@ -255,7 +255,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `guides_test.go` | Offscreen arrow placement and direction, hiding for visible targets, current-report timing, pending schematics and spacing; can write the optional visual fixture with `NIEBLA_GUIDE_SHOT_STATE` |
 | `markup_test.go` | Markup parser, tooltip layout/button, portrait hit-testing, remote robot card and page-layout tests |
 | `robots_panel_test.go` | Roster grouping, paging, row bounds, button placement and selected-unit details |
-| `shots_test.go` | Bullet and shell impacts, building damage, mechanic repair rate and oil, defender damage and wrecks, and old war-factory saves |
+| `shots_test.go` | Small-arms reach limits, the first raid against one guard post over three seeds, bullet and shell impacts, building damage, mechanic repair rate and oil, defender damage and wrecks, and old war-factory saves |
 | `squads_test.go` | Trooper production and squad behavior, mechanic limits, target selection, health and wrecks; squads can attack the first incoming crawler without a camp delay |
 | `world_test.go` | The simulation driven directly: the starting builder, explicit individual assignment, worker-only auto-assignment, role-specific carrying, loot and construction priorities, migration, dry deposits, determinism and JSON round trip |
 | `economy_test.go` | The deterministic economy probe: four legal opening policies over three seeds, sampled each minute into an opt-in CSV with protector fuel separate from spendable oil, and party and city production details |
@@ -696,8 +696,9 @@ own bubble shelters a sortie farther out.
 
 A guard post (`BuildingGuard`, in the build menu) reloads in
 `Building.Reload` and shoots the nearest vehicle within
-`guardRangeUnits` (`nearestEnemy`) with a bullet of `guardShotDamage`,
-paid `guardShotOil` out of any tank.
+`smallArmsRangeUnits` 130 m (`nearestEnemy`) with a bullet of
+`guardShotDamage`, paid `guardShotOil` out of any tank. Troopers and the
+rival crawlers and raiders use that same reach; artillery is separate.
 
 Shots (`sim_shots.go`). No gun hits at once: `State.fire` puts a `Shot`
 in `State.Shots` and `stepShots` flies it - a bullet at `bulletSpeed`

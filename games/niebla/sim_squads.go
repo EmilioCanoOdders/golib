@@ -19,8 +19,7 @@ const (
 	trooperBuildTicks  = 900  // ticks to build one: 15 s
 	squadSize          = 6    // troopers to a war factory
 	trooperHealth      = 80.0
-	trooperRangeUnits  = 120.0 // u
-	trooperReloadTicks = 30    // ticks between two shots
+	trooperReloadTicks = 30 // ticks between two shots
 	trooperShotDamage  = 6.0
 	trooperShotOil     = 0.2 // L a shot burns, out of the trooper's own tank
 
@@ -146,7 +145,8 @@ func (r *Robot) stepSquad(s *State) {
 	}
 	dx, dy := formationOffset(place + 1)
 	if target, ok := s.Enemies[sq.Focus]; ok && sq.Order == OrderAttack {
-		if math.Hypot(target.X-r.X, target.Y-r.Y) > trooperRangeUnits*squadStandoff {
+		if math.Hypot(target.X-r.X, target.Y-r.Y) >
+			smallArmsRangeUnits*squadStandoff {
 			r.walkTowards(s, target.X+dx, target.Y+dy)
 		}
 		return
@@ -165,8 +165,9 @@ func (r *Robot) shoot(s *State) {
 		return
 	}
 	target, found := s.Enemies[squadOf(s, r.Squad).Focus]
-	if !found || math.Hypot(target.X-r.X, target.Y-r.Y) > trooperRangeUnits {
-		target, found = nearestEnemy(s, r.X, r.Y, trooperRangeUnits)
+	if !found || math.Hypot(target.X-r.X, target.Y-r.Y) >
+		smallArmsRangeUnits {
+		target, found = nearestEnemy(s, r.X, r.Y, smallArmsRangeUnits)
 	}
 	if !found || r.Tank < trooperShotOil {
 		r.Aim = 0

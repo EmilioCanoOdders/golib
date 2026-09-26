@@ -255,7 +255,7 @@ var catalog = map[ThingType]ThingInfo{
 		},
 		Details: func(s *State, thing Thing) []Detail {
 			return []Detail{
-				{"reach", si(guardRangeUnits, "m")},
+				{"reach", si(smallArmsRangeUnits, "m")},
 				{"shot", fmt.Sprintf("%.0f damage, every %.1f s",
 					guardShotDamage, guardReloadTicks/60.0)},
 				{"shot cost", fmt.Sprintf("[oil]%s[/], from any tank", si(guardShotOil, "L"))},
@@ -277,7 +277,7 @@ var catalog = map[ThingType]ThingInfo{
 				{"trooper cost", costWords(trooperCostLilac, trooperCostOil)},
 				{"pace", "one per " + si(trooperBuildTicks/60, "s")},
 				{"trooper", fmt.Sprintf("%.0f health, reach %s",
-					trooperHealth, si(trooperRangeUnits, "m"))},
+					trooperHealth, si(smallArmsRangeUnits, "m"))},
 				{"shot", fmt.Sprintf("%.0f damage every %.1f s, [oil]%s[/] of its tank",
 					trooperShotDamage, trooperReloadTicks/60.0, si(trooperShotOil, "L"))},
 				{"mechanic cost", costWords(mechanicCostLilac, mechanicCostOil)},
