@@ -80,6 +80,26 @@ func TestAResidentCrawlerArrivesBeforeTheCityBuilds(t *testing.T) {
 	}
 }
 
+func TestRivalCityBuildingsTakeFortyFiveSecondsEach(t *testing.T) {
+	s := newGame()
+	cityID := s.foundCity(3500, 3200, 0.4)
+	city := s.Cities[cityID]
+	if cityBuildTicks != 45*60 || city.Work != 45*60 {
+		t.Fatalf("city building work is %d ticks, want 45 seconds",
+			city.Work)
+	}
+	for range cityBuildTicks - 1 {
+		stepCity(s, &city)
+	}
+	if city.Stage != 0 || city.Work != 1 {
+		t.Fatalf("the first city building finished early at %+v", city)
+	}
+	stepCity(s, &city)
+	if city.Stage != 1 || !cityHasRepulsor(s, city) {
+		t.Fatal("the city did not complete its first building on time")
+	}
+}
+
 func TestCityAnnouncementLastsOneMinute(t *testing.T) {
 	s := newGame()
 	cityID := s.foundCity(3500, 3200, 0.4)
@@ -312,9 +332,21 @@ func TestReturnedFullCityForceUnloadsThenAttacksAgain(t *testing.T) {
 			got, want)
 	}
 	if !tickUntil(s, 10*60, func() bool {
-		return s.Parties[partyID].Stage == StageRaid
+		return s.Parties[partyID].Stage == StageRegroup
 	}) {
-		t.Fatal("the full force did not return to attack after unloading")
+		t.Fatal("the full force did not rest after unloading")
+	}
+	if got := s.Cities[cityID].NextSortie; got != s.Ticks+citySortieCooldownTicks {
+		t.Fatalf("the next sortie is due at %d, want %d ticks later",
+			got, s.Ticks+citySortieCooldownTicks)
+	}
+	runTicks(s, int(citySortieCooldownTicks)-1)
+	if s.Parties[partyID].Stage != StageRegroup {
+		t.Fatal("the full force attacked before completing its rest")
+	}
+	runTicks(s, 1)
+	if s.Parties[partyID].Stage != StageRaid {
+		t.Fatal("the full force did not attack when its rest ended")
 	}
 	if got := s.Cities[cityID].Oil; got < 524 {
 		t.Fatalf("the city unloaded to %.3f L, want at least 524 L", got)
@@ -488,6 +520,31 @@ func TestDevelopmentActionsFinishOneCityStepAndReleaseItsForce(t *testing.T) {
 	}
 	if s.Parties[party.ID].Stage != StageRaid {
 		t.Fatal("the city force stopped attacking")
+	}
+}
+
+func TestDevelopmentActionCanEndAFullCityForceRegroup(t *testing.T) {
+	s := newGame()
+	cityID := s.foundCity(3500, 3200, 0.4)
+	city := s.Cities[cityID]
+	for range cityBuildOrder {
+		s.finishCityBuilding(&city)
+	}
+	s.Cities[cityID] = city
+	s.spawnCitySortie(city, false)
+	partyID := sortedPartyIDs(s)[0]
+	party := s.Parties[partyID]
+	party.Stage = StageRegroup
+	party.Wait = citySortieCooldownTicks
+	s.Parties[partyID] = party
+
+	Apply(s, DevSendCityBattalion{})
+	if s.Parties[partyID].Wait != 0 {
+		t.Fatal("send battalion did not end the full force's regroup wait")
+	}
+	Apply(s, Tick{})
+	if s.Parties[partyID].Stage != StageRaid {
+		t.Fatal("the full force did not attack after its regroup was ended")
 	}
 }
 

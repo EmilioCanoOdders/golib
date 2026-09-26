@@ -20,14 +20,15 @@ const (
 	raidFirstScoutTicks = 60 * 60 // ticks before the scout: 1 min
 	raidFollowupTicks   = 60 * 60 // ticks between pressure parties: 1 min
 
-	campPrepareTicks    = 3 * 60 * 60 // ticks the first raid camps before it moves: 3 min
+	campPrepareTicks    = 3 * 60 * 60 // ticks a later raid camps before it moves: 3 min
 	campPrepareShortens = 0.8         // each raid camps this much of the last one's time
 	campPrepareMinTicks = 45 * 60     // ticks of camp at the least: 45 s
 	campRadiusTiles     = 9.3         // tiles from the core to a camp: the clear ground's edge
 	entryRadiusTiles    = 12.3        // tiles from the core to where a party comes in
 
-	raidFirstRaiders = 2 // raiders of the first raid
-	raidMaxRaiders   = 6 // raiders of a raid at the most
+	raidFirstRaiders = 1 // raiders of the first intro attack
+	raidMaxRaiders   = 4 // raiders of a raid at the most
+	cityFirstRaiders = 2 // raiders of a city's first battalion
 
 	siphonReachUnits      = 40.0    // u from a tank's middle to a party siphoning it
 	siphonLitersPerSecond = 3.0     // L/s each vehicle draws
@@ -118,6 +119,7 @@ const (
 	StageLeave    PartyStage = "leave"    // driving back out
 	StageUnload   PartyStage = "unload"   // unloading at the city
 	StageRebuild  PartyStage = "rebuild"  // completing a damaged city force
+	StageRegroup  PartyStage = "regroup"  // full force resting before its next raid
 	StageSettled  PartyStage = "settled"
 )
 
@@ -127,7 +129,7 @@ type Party struct {
 	Stage          PartyStage
 	EntryX, EntryY float64 // where it came in, and where it leaves
 	CampX, CampY   float64
-	Wait           int64 // ticks of camp or squad rebuild left
+	Wait           int64 // ticks of camp, rebuild or regroup left
 	Siphon         int64 // ticks of siphoning left before it gives up
 	City           int64 // city that produced this sortie; 0 for introduction visits
 	Artillery      bool  // sortie includes mobile artillery
@@ -314,7 +316,14 @@ func settled(s *State) bool {
 
 // raidersOf returns how many raiders a visit brings.
 func raidersOf(visit int64) int {
-	return int(math.Min(raidMaxRaiders, float64(raidFirstRaiders+visit-1)))
+	count := raidFirstRaiders
+	if visit > 2 {
+		count += int(visit - 2)
+	}
+	if count > raidMaxRaiders {
+		return raidMaxRaiders
+	}
+	return count
 }
 
 // prepareTicks returns how long a visit camps before it moves.
@@ -325,7 +334,7 @@ func prepareTicks(visit int64) int64 {
 
 // spawnVisit brings the next party in at a bearing the state rolls: the
 // first visit is a scout that goes straight for the oil, the rest are a
-// crawler and its raiders, which camp first.
+// crawler and its raiders, which camp before later attacks.
 func (s *State) spawnVisit() {
 	// A save from before the rivals loads with no tables for them.
 	if s.Enemies == nil {
@@ -355,6 +364,9 @@ func (s *State) spawnVisit() {
 	kinds := []EnemyKind{EnemyScout}
 	if visit := s.Raids.Visits; visit > 0 {
 		p.Stage, p.Wait = StageApproach, prepareTicks(visit)
+		if visit == 1 {
+			p.Wait = 0
+		}
 		kinds = []EnemyKind{EnemyCrawler}
 		for i := 0; i < raidersOf(visit); i++ {
 			kinds = append(kinds, EnemyRaider)
@@ -425,6 +437,11 @@ func stepParty(s *State, p Party) {
 			s.Raids.NextAt = s.Ticks + int64(cityIntervalCycles)*fogCycleTicks
 			return
 		}
+		if p.Wait == 0 {
+			p.Stage = StageRaid
+			s.report(ReportRaid, 0, lead.X, lead.Y)
+			break
+		}
 		p.Stage = StageCamp
 		s.report(ReportCamp, 0, p.CampX, p.CampY)
 	case StageSettled:
@@ -466,6 +483,19 @@ func stepParty(s *State, p Party) {
 				p.Stage = StageRaid
 				p.Siphon = raidSiphonTicks
 			}
+		}
+	case StageRegroup:
+		if _, ok := s.Cities[p.City]; !ok {
+			for _, e := range members {
+				delete(s.Enemies, e.ID)
+			}
+			s.endParty(p, ReportDestroyed, 0, p.CampX, p.CampY)
+			return
+		}
+		p.Wait--
+		if p.Wait <= 0 {
+			p.Stage = StageRaid
+			s.report(ReportRaid, 0, lead.X, lead.Y)
 		}
 	case StageLeave:
 		if s.driveParty(members, p.EntryX, p.EntryY) {

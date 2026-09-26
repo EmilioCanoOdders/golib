@@ -141,39 +141,52 @@ Open: whether mites wear a pipe in the mist, junction buildings (a splitter with
 
 ## The rivals
 The scout is the first contact: one minute in it steals up to 25 L, paints
-its mark and leaves. One minute after it leaves or is destroyed, the second
-attack arrives on the scout's saved bearing, and a rival city starts
+its mark and leaves. One minute after it leaves or is destroyed, the first
+real attack arrives on the scout's saved bearing, and a rival city starts
 building 10 tiles (2 km) from the core on that same bearing, beyond the
-colony artillery's 1.5 km range. Its crawler serves as the construction
-rig. The Nexus comes after the pylon. While that city is being built,
-another attack arrives one minute after the previous party leaves or is
-destroyed. Only one party moves at a time. Later cities arrive no sooner
-than 30 cycles apart, up to three; each city is part of the saved state.
-The city has a fixed 170 m repulsor post. Its first sortie needs no mobile
-artillery in calm weather, while later squads include mobile artillery to
-shield the force when the fog swells. The colony is told when the first
-city establishes and when later crawlers approach.
+colony artillery's 1.5 km range. The attack has a crawler and one raider.
+It goes straight from its entry point to the nearest oil tank: it does not
+stop to camp. The crawler serves as the city's construction rig. The Nexus
+comes after the pylon. While that city is being built, another attack
+arrives one minute after the previous party leaves or is destroyed. Those
+later parties camp before attacking and grow slowly from one raider to a
+maximum of four. Only one party moves at a time. Later cities arrive no
+sooner than 30 cycles apart, up to three; each city is part of the saved
+state. The city has a fixed 170 m repulsor post. The colony is told when
+the first city establishes and when later crawlers approach.
 
 For one minute after a city establishes, the HUD announces its location and
 status. Its founding report and offscreen arrow use that same deadline,
 unless newer news replaces them; other reports and arrows last
 `reportShowTicks` 15 s.
 
-The arrival crawler stays as the city's construction rig. The Nexus ID is reserved at founding, but its entity appears only after the antimist pylon is built. It has no repulsor of its own; the pylon covers it and the rest of the city. The extractor, lilac mine and military factory follow the Nexus, each a gray rival structure with health and a `cityBuildTicks` 90 s build. Oil and lilac are finite city-local reserves (`cityOilReserve` 900 L and `cityLilacReserve` 1800 kg). The extractors add to city stores; the factory spends them on sorties. Destroying an extractor stops that resource. Destroying the factory stops new forces; destroying the Nexus removes the city. City buildings never fire.
+The arrival crawler stays as the city's construction rig. The Nexus ID is
+reserved at founding, but its entity appears only after the antimist pylon
+is built. It has no repulsor of its own; the pylon covers it and the rest
+of the city. The extractor, lilac mine and military factory follow the
+Nexus, each a gray rival structure with health and a `cityBuildTicks` 45 s
+build. Five buildings take 3 min 45 s of uninterrupted construction. Oil
+and lilac are finite city-local reserves (`cityOilReserve` 900 L and
+`cityLilacReserve` 1800 kg). The extractors add to city stores; the factory
+spends them on sorties. Destroying an extractor stops that resource.
+Destroying the factory stops new forces; destroying the Nexus removes the
+city. City buildings never fire.
 
-Once the factory and stores are ready, the first battalion attacks
-immediately. It has raiders but no mobile artillery, walks directly to the
-nearest colony oil tank, siphons and returns to its city. A force that
-returns with stolen oil unloads at `cityUnloadPerSecond` 3 L/s per vehicle.
-If its full squad survives, it attacks again as soon as it is empty; if it
-lost a vehicle, it waits one minute and replaces the missing unit before
-attacking again. A force that returns empty or is destroyed is rebuilt
-after one minute. Only one moving party can be in the region at a time;
-other cities wait their turn. New squads include mobile artillery: it
-carries its own 170 m antimist bubble and shells colony buildings on the
-way in. A shot cannot damage the core. The first force can make the trip
-in calm weather while it is within the fog line; artillery keeps the
-formation repulsed through swells. The route is a straight line for now.
+Once the factory and stores are ready, the first city battalion attacks
+immediately. It has two raiders and no mobile artillery, walks directly to
+the nearest colony oil tank, siphons and returns to its city. Its next
+replacement keeps the two raiders and adds mobile artillery; later
+replacements grow to four raiders at most. Mobile artillery carries its
+own 170 m antimist bubble and shells colony buildings on the way in. A
+shot cannot damage the core. A force that returns with stolen oil unloads
+at `cityUnloadPerSecond` 3 L/s per vehicle. A complete force then rests
+for `citySortieCooldownTicks` 90 s before attacking again. A damaged force
+waits one minute and replaces missing vehicles; an empty or destroyed
+force is rebuilt after one minute. Only one moving party can be in the
+region at a time; other cities wait their turn. The first force can make
+the trip in calm weather while it is within the fog line; artillery keeps
+the formation repulsed through swells. The route is a straight line for
+now.
 
 The scout, the repeated attacks during the first city's construction, and
 later city arrivals are scheduled by the rival clock. Once a city is
@@ -324,11 +337,12 @@ For whoever works on the game, not for the player: in the region, hold Control a
   the scout, an intro/construction attack, or a later city crawler. It waits
   while a non-settled party is active.
 - **rivals: stop waiting** (`DevHurryRivals`): ends a camped party's wait or
-  a city force's squad-completion wait.
+  a city force's regroup or squad-completion wait.
 - **rivals: new city** (`DevNewCity`): establishes a city now, up to `cityLimit` 3.
 - **finish city build** (`DevFinishCityBuilding`): completes one next building in the oldest city.
 - **finish battalion** (`DevFinishCityBattalion`): creates the oldest city's next complete force and starts its attack.
-- **send battalion** (`DevSendCityBattalion`): ends that city's squad-completion wait, so missing units join on the next tick.
+- **send battalion** (`DevSendCityBattalion`): ends that city's squad-
+  completion or regroup wait.
 - **fast forward x8**, under `replay seed`: the play scene sends `devFastTicks` 8 ticks an update instead of one until the button is pressed again, so a wait passes sooner. It is view, not state: the ticks are the same ones, so a game played fast is the same game.
 - **place robots** (`DevSpawnRobot`): arms the pointer, and every left click on the region puts a built robot there, its tank full, for nothing - in the fog too, which is what it is for. The button again, or a right click, disarms it. While armed, clicks don't inspect or open the build menu.
 
@@ -347,6 +361,8 @@ For whoever works on the game, not for the player: in the region, hold Control a
   is no more immune to the fog than any other builder: empty outside a
   bubble, it is digested. The factory builds either another builder or a
   blue worker for the same lilac and oil cost and 12 seconds of work.
+- Marking a colony building pays its cost immediately; one builder raises
+  it in five seconds of work. Each rival city building takes 45 seconds.
 - Builders first bring home any load they already carry and refuel when
   low, then raise buildings, take ordered ones down and lay pipes before
   collecting piles or working their own deposit post. Workers carry loads
@@ -378,17 +394,19 @@ For whoever works on the game, not for the player: in the region, hold Control a
   protector can't be ordered down, or finish going, while its current
   bubble is the only one over another building.
 - Rivals come for the oil, one moving party at a time. The scout arrives
-  after one minute. One minute after it leaves or is destroyed, an attack
-  arrives on its bearing as the first peripheral city starts building on
-  that bearing. During construction, another attack follows one minute
-  after the previous party leaves or is destroyed. Once the city has a
-  factory and enough stores, it sends forces immediately. A force that
-  returns with oil unloads; a complete force attacks again right away,
-  while a damaged one replaces its missing units after a minute. A force
-  that returns empty or is destroyed is rebuilt after a minute. Later
-  cities arrive on the city clock. Structures can be destroyed, wrecks
-  drop loot, and the colony's artillery shells visible rival targets for
-  lilac and oil (see [The rivals](#the-rivals)).
+  after one minute. One minute after it leaves or is destroyed, the first
+  real attack arrives on its bearing with a crawler and one raider; it
+  attacks without stopping to camp as the first city starts building.
+  During construction, later attacks follow one minute after the previous
+  party ends. They camp first and grow slowly, from one raider to four.
+  Each city building takes 45 seconds. Its first battalion has two raiders
+  and no artillery; replacement forces add mobile artillery and grow to
+  four raiders. Full forces rest 90 seconds after unloading before
+  attacking again. Damaged forces replace losses after a minute; empty or
+  destroyed forces rebuild after a minute. Later cities arrive on the
+  city clock. Structures can be destroyed, wrecks drop loot, and the
+  colony's artillery shells visible rival targets for lilac and oil (see
+  [The rivals](#the-rivals)).
 - A war factory builds troopers, up to six, and they are its squad: one
   click orders them to guard a spot or attack a rival party, a chosen
   vehicle first. It can also build one mechanic. The mechanic is not in
@@ -570,10 +588,12 @@ frontier kit's clock drop. `legacyTechIndustryTicks` keeps the former
 `techBadgeR` is 22 px, `techPulseTicks` is 90 (one breath of the glow,
 from the state's tick) and `techCalloutW` is 280 px.
 
-In `sim_cities.go`, `cityAnnouncementTicks` is 3600 ticks (one minute).
-The city status, founding report and offscreen arrow share that deadline;
-other reports last `reportShowTicks` 900 ticks (15 s). In `guides.go`,
-offscreen arrows sit `guideEdgeInset` 28 px from the
+In `sim_cities.go`, `cityBuildTicks` is 2700 ticks (45 s) per building,
+and `citySortieCooldownTicks` is 5400 ticks (90 s) after a full force
+returns. `cityAnnouncementTicks` is 3600 ticks (one minute); the city
+status, founding report and offscreen arrow share that deadline. Other
+reports last `reportShowTicks` 900 ticks (15 s). In `guides.go`, offscreen
+arrows sit `guideEdgeInset` 28 px from the
 side edges, 78 px below the top and 52 px above the bottom, clear of the
 HUD and the bottom help line.
 
@@ -615,7 +635,40 @@ stores live in the state (`State.Stock`) with the room each roof gives them,
 and show in the HUD and in the core's card; robot captions (`things.go`)
 read the current task in simulation priority order.
 
-The buildings, in `sim_buildings.go`, all landed: the ground's last subdivision is the **cell**, `buildingCell` 25 u on a side (8 by 8 to a tile, `regionCellCols`/`Rows` 200), the footprint of the smallest building - about four robots across - so buildings sit on cells and a tile may hold several. The build menu opens on the clicked cell over two rings - the build groups, then a group's blueprints - and picking a blueprint marks it there (dimmed when `canPlace` or the stores refuse it), paying lilac up front (factory 200 kg; charger 120 kg + 40 L; silo 100 kg; warehouse 100 kg; protector 180 kg + 40 L initial fuel) and asking `buildingWorkTicks` 600 (10 s) of robot work to raise; a building draws as an isometric body that never shrinks under a 9x6 screen-pixel icon, and a site under construction shows its built part rising from the ground in solid colors inside the wireframe of the whole body, the work's progress bar under the cell, all drawn over the fog, the builders standing on their cell's edge. The factory turns `robotCostLilac` 40 kg + `robotCostOil` 30 L into a robot every `factoryRobotTicks` 720 (12 s), one at a time, its card carrying the build robot button while idle. The stores' roof: `coreOilCap` 1000 L and `coreLilacCap` 2500 kg, `siloOilCap` +1000 L and `warehouseLilacCap` +4000 kg apiece, and they start with the core's gift (300 L, 600 kg). A built robot's tank: `robotTankLiters` 120 L, `robotBurnPerSecond` 0.25 L/s while it carries a load and nothing otherwise, `robotLowTankAt` 25% the line that sends it to the nearest refill post (a charger or the core, `chargerRefillPerSec` 20 L/s from the stores, filling to the top so it doesn't dance between post and charger); at zero outside a bubble the fog digests it. A shadow protector has a dedicated `protectorOilCap` 200 L tank; it starts with its 40 L construction charge and uses `protectorOilPerSecond` 0.25 L/s (provisional). Its `protectorBubbleTiles` 2.0 radius (400 m) stays full above `protectorRadiusFadeBelow` 5% charge, then fades linearly to zero. Robots and pipes refill it; its oil is reserved and can't pay other costs or be stolen. Old saves give existing protectors their starting charge once (`State.Version`). Only an active protector shelters buildings and robots; only a protector may stand outside every bubble - the fog's law in `canPlace`. The fog's drag, `fogSpeedFactor` 0.5, slows every robot, core or built, scaled by how deep its tile sits in the mist, and the bubbles cancel it. The robots carry no plan - every tick the rules derive what one does from the state (`stepRobot`), so a save reproduces its future; their positions are floats in units, the tile computed from them; deposits are patches (`Deposit` in `region.go`, flooded once out of the layout): one robot per patch, one card per patch, and what remains lives in `State.Drain` under the patch's key.
+The buildings, in `sim_buildings.go`, use the ground's last subdivision,
+the **cell**: `buildingCell` 25 m on a side, eight cells to a tile and
+200 by 200 cells in the region. A tile may hold several buildings. The
+two-ring build menu marks a blueprint on the clicked cell and pays its
+cost immediately: factory 200 kg of lilac; charger 120 kg and 40 L of oil;
+silo 100 kg; warehouse 100 kg; protector 180 kg and 40 L of initial fuel.
+One builder raises any marked colony building in `buildingWorkTicks` 300
+ticks (5 s). A building remains at least a 9-by-6 screen-pixel icon; its
+site shows the rising body, wireframe and work bar over the fog.
+
+The factory turns `robotCostLilac` 40 kg and `robotCostOil` 30 L into one
+robot every `factoryRobotTicks` 720 ticks (12 s). The core starts with
+300 L and 600 kg. Its room is `coreOilCap` 1000 L and `coreLilacCap`
+2500 kg; each silo adds `siloOilCap` 1000 L, and each warehouse adds
+`warehouseLilacCap` 4000 kg. Built robots carry `robotTankLiters` 120 L.
+They burn `robotBurnPerSecond` 0.25 L/s only while carrying, and below
+`robotLowTankAt` 25% they head to a charger or the core to refill at
+`chargerRefillPerSec` 20 L/s. An empty tank outside a bubble means
+digestion.
+
+A protector has its own `protectorOilCap` 200 L reserve, including the
+40 L charge paid with its blueprint. It uses `protectorOilPerSecond`
+0.25 L/s, a provisional dial, and protects a `protectorBubbleTiles` 2-tile
+(400 m) radius. The radius fades below `protectorRadiusFadeBelow` 5% fuel
+and reaches zero when empty. Robots and pipes refill it; this reserve
+cannot pay other costs or be stolen. Old saves receive the initial charge
+once during migration. Only an active protector shelters buildings outside
+the core bubble. The fog slows every robot by `fogSpeedFactor` 0.5 at full
+exposure; bubbles cancel the drag.
+
+Robots carry no task plan: `stepRobot` derives their work from the saved
+state each tick. Positions are floats in world units, and deposits are
+patches whose remaining resources live in `State.Drain`. Several robots
+may work one patch; each still gets its own post position.
 
 The colony saves itself, in `store.go` and `identity.go`: the machine's own ID (Windows' MachineGuid, macOS' IOPlatformUUID, Linux' `/etc/machine-id`), hashed with `playerIDSalt`, is the player identity - `playerIDSalt` "niebla player id v1", 64 hex characters, shown on the menu as its first eight (`#30E99076`) and never in raw form; a machine with no ID gets a random one kept in the database. The local database is SQLite (`modernc.org/sqlite`, pure Go - no C compiler here), at the player's settings folder in `GoLib games/niebla/niebla.db`, with the schema a server keeps: `players` (identity, source, created_at, `token` empty until a server hands one out), `saves` (the whole State as one JSON value per player and slot, `region` for now, with tick and timestamp) and `machine` (key-value for this machine alone, the fallback identity lives there). State version 3 migrates old `core` robots into fueled builders and old `built` robots into workers, including an in-progress factory product, and gives legacy builders and workers their initial hull. Autosave every `autosaveTicks` 900 (15 s of game time) and on leaving the region, so a window closed without ceremony loses less than 15 s. Under `golib shot` and `go test` the database is `:memory:`, so shots and tests never touch the player's base, and `golib shot --save` still starts a game deep in a state: `resumeState` takes the seeded value over the database. The driver doesn't build for `js/wasm`: a web build will take its store from a server or the browser's own.
 
@@ -639,19 +692,48 @@ and 30 L of oil apiece. The role rules and opening gift are in
 [Rules (MVP)](#rules-mvp).
 
 ## Prototype scope
-The prototype is done when these five have landed, on top of the debts under [Later](#later) (decided 2026-09-21). Each is a heading to design, not a design, until its turn comes: they are discussed and landed one at a time. Enemies and battles is under way and nearly whole; the other four are not started.
+The prototype is done when these five have landed, on top of the debts under [Later](#later) (decided 2026-09-21). Each is a heading to design, not a design, until its turn comes: they are discussed and landed one at a time. The first enemy-and-battle loop and its first economy probe are implemented; balance continues. The schematic introduction is landed; humans and electricity are not started.
 
-The introduction note below records the original ladder from 2026-09-22.
-Its unlock order was revised on 2026-09-25: the factory is the opening
-gift, and the first delivery brings infrastructure. The live rules are in
-[Rules (MVP)](#rules-mvp).
+The introduction bullet below preserves the original 2026-09-22 ladder as
+history. Its current unlock order is in [Rules (MVP)](#rules-mvp), and its
+current economic measurements are in [Economy balance plan](#economy-balance-plan).
 
-- **Enemies and battles.** The swell is pressure, but it is only weather: resources should also buy war. **Under way**: the design and what has landed are in [The rivals](#the-rivals). Decided (2026-09-21): no walls, ever, and war that is good to watch, R.U.S.E.-style (artillery, an enemy that builds a base in the region); a repulsor repels the fog and nothing else; rivals steal, and later destroy; they ride vehicles under a crawler's mobile repulsor, which is never usable loot; wrecks drop loot; many kinds in time, humans for now; positioning is coarse - posts (preventive) and small squads, never units placed by hand one by one; an enemy that settles is a warning with a clock, and a head-on attack is at a disadvantage. Landed: the scout and its mark, the camped raids, the fog's due, loot, the guard post, the war factory and its squad, rivals that shoot back at troopers, the settled enemy and its gun, buildings that fall and are mended, the colony's artillery, bullets and shells with their light and their bursts.
-- **Economy analysis and balance.** Times, yields, costs and rates looked at as one system, so that the decisions are interesting instead of obvious: how long a deposit lasts, what a robot pays back and when, what a pipe saves against the legs it replaces, what a swell costs. `economy_test.go` is the first instrument: it plays the real, deterministic simulation for an hour over three seeds and records each minute in CSV. It compares safe harvesting, worker growth and a protected oil outpost with a pump, pipe and guard; it does not duplicate the rules in a spreadsheet. The first report (2026-09-22) says two core robots bring about 60 L and 40 kg a minute from the safe patches; the core oil tank fills around minute 13 and its lilac store around minute 44. The outpost opening reaches its protector around minute 2, pump around minute 5, guard around minute 11 and laid pipe around minute 17, so those are measured hypotheses, not tuning targets yet. Next reports change one dial or opening policy at a time, and compare the times to each milestone, reserves, resources mined, losses and whether the player had a usable answer before the threat. What remains deliberately unbalanced (2026-09-22): every dial of [The rivals](#the-rivals) was set by eye, a level 2 base razes a small outpost in a few minutes, and oil got much cheaper the day the tank stopped burning while a robot walks empty-handed. Reference: [Difficulty curves](https://www.davetech.co.uk/difficultycurves) (Dave Tech) - the **difficulty saw**: difficulty is not one rising line but a tooth per mechanic, a spike when it is introduced and a slope down as it is mastered, and later mechanics call back to earlier ones as foundations. It bears on the economy (the swells' growth is the base line the teeth ride on) and on the introduction below (the order of the unlocks is the order of the teeth).
-- **Economy analysis and balance.** Times, yields, costs and rates looked at as one system, so that the decisions are interesting instead of obvious: how long a deposit lasts, what a robot pays back and when, what a pipe saves against the legs it replaces, what a swell costs. `economy_test.go` is the first instrument: it plays the real, deterministic simulation for an hour over three seeds and records each minute in CSV, including dedicated protector oil separately from spendable oil. It compares safe harvesting, worker growth and a protected oil outpost with a pump, protector-fed pipes and a guard; it does not duplicate the rules in a spreadsheet. The first report (2026-09-22) predates protector upkeep: it says two core robots bring about 60 L and 40 kg a minute from the safe patches; the core oil tank fills around minute 13 and its lilac store around minute 44. The outpost opening reaches its protector around minute 2, pump around minute 5, guard around minute 11 and laid pipe around minute 17, so those are historical measurements, not current tuning targets. Next reports change one dial or opening policy at a time, and compare the times to each milestone, reserves, resources mined, losses and whether the player had a usable answer before the threat. What remains deliberately unbalanced (2026-09-22): every dial of [The rivals](#the-rivals) was set by eye, a level 2 base razes a small outpost in a few minutes, and oil got much cheaper the day the tank stopped burning while a robot walks empty-handed. Reference: [Difficulty curves](https://www.davetech.co.uk/difficultycurves) (Dave Tech) - the **difficulty saw**: difficulty is not one rising line but a tooth per mechanic, a spike when it is introduced and a slope down as it is mastered, and later mechanics call back to earlier ones as foundations. It bears on the economy (the swells' growth is the base line the teeth ride on) and on the introduction below (the order of the unlocks is the order of the teeth).
+- **Enemies and battles.** The swell is pressure, but it is only weather: resources should also buy war. The rules and the current tuning are in [The rivals](#the-rivals). The design has no walls; rivals steal and later destroy; they ride vehicles under a crawler's mobile repulsor, which is never usable loot; wrecks drop loot; positioning stays coarse - posts and small squads, never units placed by hand one by one. Landed: the scout and its mark, camped raids, the fog's due, the guard post, the war factory and squads, rivals that shoot back, the settled city, artillery, building damage and repair, bullets and shells.
+- **Economy analysis and balance.** The opt-in `economy_test.go` probe now plays four deterministic policies over seeds 0, 1 and 2 for an hour, using only schematics that have actually arrived: safe harvest, worker growth, a protected oil outpost, and a guard plus a two-trooper defense. It records stores, extraction, protectors, pipes, party size and city production each minute. In all three defense runs, the guard is built by minute 3-4 and two troopers by minute 7; the first city sortie is minute 9-11 and its next produced force minute 11-14. Without defense, the growth policy fills its lilac store by minute 60; the outpost policy raises a protector by minute 7 and lays its first pipe by minute 10-11, but has no military and the protector is gone by minute 60. The defense test loses its first two troopers by minute 15 on two seeds. The next balance pass should make that second battle a recoverable new tooth: test defending orders and artillery placement before changing costs or yields, then rerun the same policies and compare losses, reserves and replacement times. The probe measures scripted decisions, not whether a human finds the choices clear. The difficulty-saw reference is [Dave Tech](https://www.davetech.co.uk/difficultycurves): introduce one mechanic, give room to learn it, then call it back as a foundation for the next.
 - **Introduction to the game.** The player gets the elements little by little, so there is always one more thing they can do and never ten at once: the tutorial is the unlocking. The colony's buildings arrive as **remote schematics** the core receives: a drop of the ladder (`sim_tech.go`) lights a pulsing badge over the monolith, its click opens a callout that says what came in and how it is used, and the blueprints join the build menu - before the first drop the menu doesn't open at all, so the callout's "click empty ground" is true the day it is said. The first ladder, landed 2026-09-22 and tuned by the first play the same day: the first delivery of a haul home brings the **infrastructure** in (silo, warehouse, charger) - farming alone until then, no dead minutes on a clock; the guard post comes when the scout's drawing has become **inevitable** - a rival drinking at the tanks (`Enemy.Oil` over zero), or the mark already on the ground - and it comes **alone**, too late to stop the drawing, in time for the next visit; at 5:30 the **frontier kit** (protector, pump, and with them the pipes); at 7:00 the **robot factory**; after the first raid leaves, the **war factory**; when a base settles, **artillery**. The order is the difficulty saw (Dave Tech, above): a drop per valley, none in the middle of a peak, a war tool only once its lesson is on the road (the guard while the scout steals, the squads after the first raid, the artillery after the base digs in), three blueprints to a drop at the most. Two teeth still run on the clock on purpose - they hold the long calm between the scout and the first raid; the rest answer events the player has seen or caused. Candidate for the measured loop: the storage drops answering the roofs ("at 80% of an oil roof, the silo") instead of the clock. Plain milestone unlocks win for the prototype; a research center or choices between technologies wait until the measured loop says they need a resource sink or a strategic fork. A factory's extra workers still cannot raise the safe harvest while a deposit takes one robot - the multi-worker design under [Later](#later) comes first; until then the factory's callout promises hands, never ore. And nothing unavailable is ever shown: the menu offers only what the colony could raise right now (see [Construction model](#construction-model)), so the game gives itself away option by option and never spoils what it hasn't given yet.
 - **Humans.** No walkers on the ground - the technology could draw them, the design doesn't want them - but buildings of theirs: housing, and whatever follows. To study whether to do it at all, because the next steps are food, waste and the rest, and the question is whether this game wants to be the next Ixion. What is decided is smaller: the colony gets **at least one more resource**, and people are one candidate for what needs it, not the only one. They are also the voices the mites' nickname already owes the game.
 - **Electricity and connection.** Generators - oil-burning, wind, geothermal and the like - and a grid the buildings hang from. And **wireless points** that let robots coordinate: inside the grid's coverage a robot knows what the others are doing; outside it, it knows only what it is doing itself and where the stores are, so two robots out of coverage may walk to the same job or the same pile. The risk is teaching it, since it has little precedent as a rule about *knowledge*; the picture has plenty (StarCraft's pylon fields, Factorio's roboport ranges, Creeper World's network), so coverage drawn on the ground while placing, and a mark on a robot that has lost the grid, are where to start.
+
+## Economy balance plan
+
+This is the working order for a new region. Do not spend on every unlocked
+option at once; save for the next known threat.
+
+1. Build the robot factory and work the safe oil and lilac patches. Grow to
+   three workers, assigning several robots to the two safe patches instead
+   of making six workers that have no active deposit.
+2. When the scout steals oil, build the guard post. In the three-seed probe,
+   this defense plan raises one by minute 3-4.
+3. When the first city appears, mark the war factory and build two troopers.
+   The probe has both by minute 7, before the first city sortie at minute
+   9-11. Send the squad against an approaching party or keep it where it can
+   protect the oil tank; do not leave the defense without orders by habit.
+4. After the first city force is answered, invest in a protector and pump.
+   Connect the outpost back to the core with a pipe. Keep a reserve for
+   replacements and artillery instead of letting the outpost consume all
+   the lilac.
+5. After each battle, check what was lost and what the next force contains.
+   A surviving city force rests 90 seconds after unloading; use that valley
+   to rebuild the guard, refill the squad and save for the next new threat.
+
+The tested defense opening builds its first two troopers in time, but two
+of the three seeded runs have lost them by minute 15. The tested outpost
+opening has a protector by minute 7 and its first pipe by minute 10-11,
+but it has no guard and no troopers; its protector is gone by minute 60 in
+all three runs. Keep unit costs and extraction rates unchanged for the next
+pass. First test whether defending the outpost and ordering the squad makes
+the second attack survivable; if it does not, change one economic dial at a
+time and rerun all four probe policies.
 
 ## Later
 - **Debt - turrets must trade, not hold forever** (2026-09-23): guard
@@ -673,14 +755,20 @@ gift, and the first delivery brings infrastructure. The live rules are in
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
-- 2026-09-26: tightened the rival pressure in the introduction. The scout
-  arrives after one minute; one minute after it leaves or is destroyed,
-  the second attack and first peripheral city begin together on its saved
-  bearing. Another attack follows each party's end by one minute while the
-  city is built. Completed cities launch as soon as they can pay; returned
-  oil is unloaded at 3 L/s per vehicle, full squads turn around immediately,
-  damaged squads replace losses after a minute, and empty or destroyed
-  forces are rebuilt after a minute.
+- 2026-09-26: tuned the first economic teeth from three-seed probe runs.
+  Colony buildings now take 5 s of builder work and each rival city building
+  45 s. The scout arrives after one minute; one minute after it leaves or
+  is destroyed, the first real attack and pressure city arrive on its bearing.
+  That party has one raider and a crawler and does not camp; later attacks
+  camp and grow from one to four raiders. A city's first battalion has two
+  raiders without artillery; replacement forces add artillery and grow to
+  four. A full returning force unloads at 3 L/s per vehicle, then rests
+  90 s; damaged, empty or destroyed forces wait a minute before replacement.
+  The economy probe now uses earned schematics and four opening policies.
+  In all three defense runs, a guard is built by minute 3-4 and two troopers
+  by minute 7, before the city's first sortie at minute 9-11. The first two
+  troopers are gone by minute 15 on two seeds, so the next balance pass tests
+  surviving the artillery follow-up before changing resource prices.
 - 2026-09-26: after two seconds standing in exposed air, units lose up to
   2 hull points/s and 1 L/s at full exposure, half those rates in the haze;
   moving resets the wait, and the core and protector bubbles cancel it.

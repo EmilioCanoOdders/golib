@@ -118,7 +118,8 @@ func TestFastForwardAndRivalToolsHaveDistinctButtons(t *testing.T) {
 
 func TestDevHurryRivalsEndsACampsWait(t *testing.T) {
 	s := newGame()
-	s.Raids.Visits = 1
+	s.Raids.Visits = 2
+	s.Raids.PressureCity = s.foundCityOnBearing(0.7)
 	visitNow(s)
 	Apply(s, DevHurryRivals{}) // on its way in, a party has no wait to end
 	tickUntil(s, 60*600, func() bool { return lastReport(s).Kind == ReportCamp })

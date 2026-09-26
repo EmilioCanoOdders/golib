@@ -376,14 +376,14 @@ func (DevNextVisit) apply(s *State) {
 	s.Raids.NextAt = s.Ticks + 1
 }
 
-// DevHurryRivals ends the wait of camped parties and rebuilding city forces.
+// DevHurryRivals ends rival camp, regroup and rebuild waits.
 type DevHurryRivals struct{}
 
 func (DevHurryRivals) apply(s *State) {
 	for _, id := range sortedPartyIDs(s) {
 		p := s.Parties[id]
 		switch p.Stage {
-		case StageCamp, StageRebuild:
+		case StageCamp, StageRebuild, StageRegroup:
 			p.Wait = 0
 		}
 		s.Parties[id] = p
@@ -437,7 +437,8 @@ func (DevSendCityBattalion) apply(s *State) {
 		for _, partyID := range sortedPartyIDs(s) {
 			p := s.Parties[partyID]
 			if p.City == cityID &&
-				(p.Stage == StageCamp || p.Stage == StageRebuild) {
+				(p.Stage == StageCamp || p.Stage == StageRebuild ||
+					p.Stage == StageRegroup) {
 				p.Wait = 0
 				s.Parties[partyID] = p
 				return

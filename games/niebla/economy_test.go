@@ -12,16 +12,20 @@ import (
 const economySampleTicks = 60 * 60 // one minute of game time
 
 type economyPlan struct {
-	name       string
-	workerGoal int
-	expand     bool
-	guardAt    int64
+	name           string
+	workerGoal     int
+	robotsPerPatch int
+	expand         bool
+	defend         bool
+	trooperGoal    int
 }
 
 var economyPlans = []economyPlan{
-	{name: "safe-harvest", workerGoal: 2},
-	{name: "growth", workerGoal: 6},
-	{name: "outpost", workerGoal: 6, expand: true, guardAt: 10 * economySampleTicks},
+	{name: "safe-harvest", workerGoal: 1, robotsPerPatch: 1},
+	{name: "growth", workerGoal: 3, robotsPerPatch: 2},
+	{name: "outpost", workerGoal: 3, robotsPerPatch: 1, expand: true},
+	{name: "defense", workerGoal: 3, robotsPerPatch: 2,
+		defend: true, trooperGoal: 2},
 }
 
 type economyPlanner struct {
@@ -30,15 +34,17 @@ type economyPlanner struct {
 	factoryRow  int
 	guardCol    int
 	guardRow    int
+	warCol      int
+	warRow      int
 	farOil      Deposit
 	hasFarOil   bool
 	farLilac    Deposit
 	hasFarLilac bool
 }
 
-// TestWriteEconomyReport runs real, deterministic colonies over three
-// opening plans and seeds. Set NIEBLA_ECONOMY_REPORT to a CSV path to write
-// a report; ordinary tests leave no diagnostics behind.
+// TestWriteEconomyReport runs deterministic colonies over four legal
+// opening policies and three seeds. Set NIEBLA_ECONOMY_REPORT to write a
+// CSV report; ordinary tests leave no diagnostics behind.
 func TestWriteEconomyReport(t *testing.T) {
 	path := os.Getenv("NIEBLA_ECONOMY_REPORT")
 	if path == "" {
@@ -55,6 +61,9 @@ func TestWriteEconomyReport(t *testing.T) {
 		"plan", "seed", "minute", "oil", "protector_oil", "lilac", "oil_mined",
 		"lilac_mined", "workers", "troopers", "buildings", "protectors",
 		"pumps", "pipes", "guards", "swells", "visits", "enemies",
+		"party_stage", "party_size", "party_raiders", "party_artillery",
+		"city_stage", "city_work_ticks", "city_sorties", "city_oil",
+		"city_lilac",
 	}); err != nil {
 		t.Fatalf("writing the report header: %v", err)
 	}
@@ -78,7 +87,6 @@ func writeEconomyRun(
 ) {
 	t.Helper()
 	s := newGameOn(seed)
-	arriveAll(s) // the planner builds the whole ladder from the start
 	p := newEconomyPlanner(plan)
 	for minute := 0; minute <= minutes; minute++ {
 		if err := w.Write(economyRow(s, plan.name, seed, minute)); err != nil {
@@ -104,6 +112,8 @@ func newEconomyPlanner(plan economyPlan) economyPlanner {
 		factoryRow: factoryRow,
 		guardCol:   factoryCol + 2,
 		guardRow:   factoryRow,
+		warCol:     factoryCol + 4,
+		warRow:     factoryRow,
 	}
 	for _, deposit := range depositsByDistance() {
 		if depositDistance(deposit) <= coreBubbleRadius {
@@ -120,13 +130,23 @@ func newEconomyPlanner(plan economyPlan) economyPlanner {
 }
 
 func (p economyPlanner) decide(s *State) {
+	p.openSchematics(s)
 	p.assignPosts(s)
 	p.growWorkers(s)
 	if p.plan.expand {
 		p.expandOil(s)
 	}
-	if p.plan.guardAt > 0 && s.Ticks >= p.plan.guardAt {
-		p.mark(s, BuildingGuard, p.guardCol, p.guardRow)
+	if p.plan.defend {
+		p.buildDefense(s)
+	}
+}
+
+func (p economyPlanner) openSchematics(s *State) {
+	for _, drop := range techLadder {
+		opened, arrived := s.Tech[drop.id]
+		if arrived && !opened {
+			Apply(s, AckTech{ID: drop.id})
+		}
 	}
 }
 
@@ -140,11 +160,15 @@ func (p economyPlanner) assignPosts(s *State) {
 		if p.plan.expand && far && !depositSafe(s, deposit) {
 			continue
 		}
-		if len(postRobots(s, tileCol, tileRow)) == 0 {
+		if remainingAt(s, tileCol, tileRow) <= 0 {
+			continue
+		}
+		for len(postRobots(s, tileCol, tileRow)) < p.plan.robotsPerPatch {
 			if worker := pickRobot(s, tileCol, tileRow); worker >= 0 {
 				Apply(s, SendRobot{Col: tileCol, Row: tileRow})
 				continue
 			}
+			assignedBuilder := false
 			for _, id := range sortedRobotIDs(s) {
 				r := s.Robots[id]
 				if r.Kind != RobotBuilder || r.hasPost() {
@@ -153,6 +177,10 @@ func (p economyPlanner) assignPosts(s *State) {
 				Apply(s, AssignRobot{
 					ID: id, Col: tileCol, Row: tileRow,
 				})
+				assignedBuilder = true
+				break
+			}
+			if !assignedBuilder {
 				break
 			}
 		}
@@ -171,6 +199,23 @@ func (p economyPlanner) growWorkers(s *State) {
 			Building: factory.ID, Kind: RobotWorker,
 		})
 	}
+}
+
+func (p economyPlanner) buildDefense(s *State) {
+	if kindUnlocked(s, BuildingGuard) &&
+		!p.mark(s, BuildingGuard, p.guardCol, p.guardRow) {
+		return
+	}
+	if !kindUnlocked(s, BuildingWarFactory) ||
+		!p.mark(s, BuildingWarFactory, p.warCol, p.warRow) {
+		return
+	}
+	factory, raised := buildingAt(s, p.warCol, p.warRow)
+	if !raised || factory.Work > 0 ||
+		len(squadMembers(s, factory.ID)) >= p.plan.trooperGoal {
+		return
+	}
+	Apply(s, QueueRobot{Building: factory.ID, Kind: RobotCombat})
 }
 
 func (p economyPlanner) expandOil(s *State) {
@@ -266,6 +311,8 @@ func economyRow(s *State, plan string, seed int64, minute int) []string {
 	oilMined, lilacMined := mined(s)
 	workers, troopers := robotCounts(s)
 	buildings, protectors, pumps, guards := buildingCounts(s)
+	partyStage, partySize, partyRaiders, partyArtillery := partyCounts(s)
+	cityStage, cityWork, citySorties, cityOil, cityLilac := cityEconomy(s)
 	return []string{
 		plan,
 		strconv.FormatInt(seed, 10),
@@ -285,7 +332,48 @@ func economyRow(s *State, plan string, seed int64, minute int) []string {
 		strconv.FormatInt(s.Fog.Swells, 10),
 		strconv.FormatInt(s.Raids.Visits, 10),
 		strconv.Itoa(len(s.Enemies)),
+		partyStage,
+		strconv.Itoa(partySize),
+		strconv.Itoa(partyRaiders),
+		strconv.Itoa(partyArtillery),
+		cityStage,
+		cityWork,
+		citySorties,
+		cityOil,
+		cityLilac,
 	}
+}
+
+func partyCounts(s *State) (stage string, size, raiders, artillery int) {
+	for _, id := range sortedPartyIDs(s) {
+		party := s.Parties[id]
+		if party.Stage == StageSettled {
+			continue
+		}
+		stage = string(party.Stage)
+		for _, enemy := range partyMembers(s, id) {
+			size++
+			if enemy.Kind == EnemyRaider {
+				raiders++
+			}
+			if enemy.Kind == EnemyArtillery {
+				artillery++
+			}
+		}
+		return stage, size, raiders, artillery
+	}
+	return "", 0, 0, 0
+}
+
+func cityEconomy(s *State) (stage, work, sorties, oil, lilac string) {
+	ids := sortedCityIDs(s)
+	if len(ids) == 0 {
+		return "", "", "", "", ""
+	}
+	city := s.Cities[ids[0]]
+	return strconv.Itoa(city.Stage), strconv.FormatInt(city.Work, 10),
+		strconv.FormatInt(city.Sorties, 10), quantity(city.Oil),
+		quantity(city.Lilac)
 }
 
 func mined(s *State) (oil, lilac float64) {

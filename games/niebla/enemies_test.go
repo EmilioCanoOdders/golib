@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"math"
+	"os"
 	"reflect"
 	"testing"
 
@@ -182,10 +183,70 @@ func TestPressurePartiesRepeatOneMinuteAfterDisappearanceDuringConstruction(t *t
 	}
 }
 
+func TestFirstActualRaidDoesNotCamp(t *testing.T) {
+	s := newGame()
+	s.Raids.Visits = 1
+	visitNow(s)
+	party := s.Parties[sortedPartyIDs(s)[0]]
+	if party.Wait != 0 {
+		t.Fatalf("the first raid waits %d ticks before attacking", party.Wait)
+	}
+	if !tickUntil(s, 60*300, func() bool {
+		return s.Parties[party.ID].Stage == StageRaid
+	}) {
+		t.Fatal("the first raid never started")
+	}
+	if lastReport(s).Kind != ReportRaid {
+		t.Fatalf("the first attack reported %q, want raid", lastReport(s).Kind)
+	}
+	for _, report := range s.Reports {
+		if report.Kind == ReportCamp {
+			t.Fatal("the first actual raid stopped to camp")
+		}
+	}
+}
+
+func TestWriteFirstRaidShotState(t *testing.T) {
+	path := os.Getenv("NIEBLA_FIRST_RAID_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_FIRST_RAID_SHOT_STATE to write the first-raid state")
+	}
+	s := newGame()
+	s.Raids.Visits = 1
+	visitNow(s)
+	partyID := sortedPartyIDs(s)[0]
+	if !tickUntil(s, 60*300, func() bool {
+		return s.Parties[partyID].Stage == StageRaid
+	}) {
+		t.Fatal("the first attack never moved in without camping")
+	}
+	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+	if err != nil {
+		t.Fatalf("the first-raid state doesn't marshal: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
+	}
+}
+
+func TestRaiderBattalionsGrowSlowlyAndStopAtFour(t *testing.T) {
+	for _, test := range []struct {
+		visit int64
+		want  int
+	}{{1, 1}, {2, 1}, {3, 2}, {4, 3}, {5, 4}, {10, 4}} {
+		if got := raidersOf(test.visit); got != test.want {
+			t.Errorf("visit %d brings %d raiders, want %d",
+				test.visit, got, test.want)
+		}
+	}
+}
+
 func TestARaidCampsGetsReadyStealsAndLeaves(t *testing.T) {
 	s := newGame()
 	seedStock(s)
-	s.Raids.Visits = 1
+	s.Raids.Visits = 2
+	cityID := s.foundCityOnBearing(0.7)
+	s.Raids.PressureCity = cityID
 	visitNow(s)
 	party := s.Parties[sortedPartyIDs(s)[0]]
 	if got, want := len(partyMembers(s, party.ID)),
@@ -211,7 +272,7 @@ func TestARaidCampsGetsReadyStealsAndLeaves(t *testing.T) {
 		t.Errorf("the camp is %v tiles out, want %v", gap, campRadiusTiles)
 	}
 	oil := oilTotal(s)
-	runTicks(s, int(prepareTicks(1))-1)
+	runTicks(s, int(prepareTicks(2))-1)
 	if !staged(StageCamp)() || oilTotal(s) != oil {
 		t.Errorf("the raid moved before its time")
 	}
@@ -230,8 +291,8 @@ func TestARaidCampsGetsReadyStealsAndLeaves(t *testing.T) {
 	if r := lastReport(s); r.Kind != ReportLeft || math.Abs(r.Oil-want) > 0.001 {
 		t.Errorf("the last report is %+v, want them gone with %v L", r, want)
 	}
-	if raidersOf(2) != raidFirstRaiders+1 || prepareTicks(2) >= prepareTicks(1) {
-		t.Errorf("the second raid is no bigger or no quicker than the first")
+	if prepareTicks(3) >= prepareTicks(2) {
+		t.Errorf("later raids should spend less time getting ready")
 	}
 }
 

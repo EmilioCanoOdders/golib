@@ -224,6 +224,12 @@ func stageWords(stage PartyStage) string {
 		return "coming in"
 	case StageCamp:
 		return "camped, getting ready"
+	case StageUnload:
+		return "unloading at its city"
+	case StageRebuild:
+		return "completing its ranks"
+	case StageRegroup:
+		return "regrouping before its next attack"
 	case StageRaid:
 		return "after your oil"
 	case StageSettled:

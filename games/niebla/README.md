@@ -14,15 +14,30 @@ From the GoLib repository root:
 ./golib shot niebla 120 --input "Enter@1"   # reach the region: Play is Enter
 ```
 
-The economy probe plays headless opening plans over seeds 0, 1 and 2 for an
-hour, sampling the real state every game minute. Its `oil` column is
-spendable oil; `protector_oil` tracks the dedicated fuel separately. It
-writes only when given a path, so normal tests never leave a report:
+The economy probe plays four headless opening policies over seeds 0, 1 and
+2 for an hour, sampling the real state every game minute. It respects the
+schematics each policy has actually earned. The plans are safe harvesting,
+worker growth, a protected oil outpost, and a guard with a two-trooper
+defense. The `oil` column is spendable oil; `protector_oil` tracks dedicated
+fuel separately. Party size, city progress, stores and sortie counts are
+recorded too. It writes only when given a path, so normal tests leave no
+report:
 
 ```text
 NIEBLA_ECONOMY_REPORT=../../build/niebla/economy.csv \
-  ./golib go -C games/niebla test \
+./golib go -C games/niebla test \
   -run TestWriteEconomyReport -v
+```
+
+To inspect the first real attack just as it starts, without replaying the
+minutes before it:
+
+```text
+NIEBLA_FIRST_RAID_SHOT_STATE=../../build/niebla/first-raid.json \
+  ./golib go -C games/niebla test \
+  -run TestWriteFirstRaidShotState
+./golib shot niebla 80 \
+  --save build/niebla/first-raid.json --input "Enter@1"
 ```
 
 To inspect a half-powered protector and its card:
@@ -163,15 +178,15 @@ or `replay seed` at `460,77`.
 `rivals: next visit` brings the next scheduled arrival in immediately
 (`DevNextVisit`): the scout, an intro/construction attack, or a later city
 crawler. It waits while a non-settled party is active. `rivals: stop
-waiting` ends the preparation of a camped party or a city force's
-replacement wait (`DevHurryRivals`). `rivals: new city`
+waiting` ends the preparation of a camped party or a city force's regroup
+or replacement wait (`DevHurryRivals`). `rivals: new city`
 establishes a city now (`DevNewCity`). The next three buttons each act
 on the oldest city: finish exactly one building
 (`DevFinishCityBuilding`), create and launch its next complete battalion
 (`DevFinishCityBattalion`), or end a damaged force's replacement wait
-(`DevSendCityBattalion`). `fast forward x8` sends
-`devFastTicks` ticks an update instead of one until pressed again; the
-simulation advances identically, only sooner.
+or a full force's regroup wait (`DevSendCityBattalion`). `fast forward x8`
+sends `devFastTicks` ticks an update instead of one until pressed again;
+the simulation advances identically, only sooner.
 
 `cities_test.go` can write a save with a complete city and its artillery
 battalion for inspecting the visuals:
@@ -202,8 +217,8 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `sim_oil.go` | Oil's spendable tanks and dedicated protector reserves: `oilTotal`, `oilCap`, `payOil`, all physical tank capacity, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
 | `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus`; fog-covered oil pools stop pumps without losing oil, protectors clear them, tanks fill from pipes at a shared 1.6 L/s limit and pass excess onward, while protectors keep their reserve and upkeep; each pipe records offered, moved and cumulative liters for the view |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, local exposure (`fogExposureAt`), oil pools covered outside bubbles, where the line stands now (`fogLineNow`), and the drag a walker keeps (`fogDrag`) |
-| `sim_enemies.go` | The rivals' timing and movement: `Enemy` with its saved facing octant, `Party`, `Raids`, `Mark` and `Report`; one-minute scout and follow-up clocks, first-city founding on the scout's bearing, construction attacks, later city arrivals, party stages, siphoning and return, fog exposure, wrecks, guard posts and the state's PRNG |
-| `sim_cities.go` | Rival cities: serializable production, deterministic building order, finite local oil/mineral reserves, city arrival and old-save migration, city-produced sorties, unloading, squad replacement and mobile artillery |
+| `sim_enemies.go` | The rivals' timing and movement: `Enemy` with its saved facing octant, `Party`, `Raids`, `Mark` and `Report`; the one-minute scout and follow-up clocks, the first no-camp attack, slow raider-count growth, city arrivals, party stages, siphoning and return, fog exposure, wrecks, guard posts and the state's PRNG |
+| `sim_cities.go` | Rival cities: serializable production, deterministic 45-second building steps, finite local oil/mineral reserves, city arrival and old-save migration, city-produced sorties, unloading, 90-second rests, squad replacement and mobile artillery |
 | `sim_tech.go` | The schematics: the robot factory is the opening drop, first delivery unlocks infrastructure, then the scout's theft, frontier clock, first-city founding and rival factory trigger their drops; `stepTech`, `kindUnlocked`, `dropArrived` and `techPending` derive arrivals and `State.Tech` keeps which drops were opened |
 | `sim_squads.go` | The military units' law and tuning: troopers (`RobotCombat`) and mechanics (`RobotRepair`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), the war factory's capacity (`squadRoom`, `mechanicRoom`), and rivals targeting defenders (`stepEnemyGuns`) |
 | `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right with a trooper icon, unit count and key (`drawSquadStrip`, `drawTrooperIcon`, `squadBoxRect`, `squadBoxAt`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the marks that pick a squad where it stands (`squadMarkAt`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
@@ -240,15 +255,15 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `markup_test.go` | Markup parser, tooltip layout/button, portrait hit-testing, remote robot card and page-layout tests |
 | `robots_panel_test.go` | Roster grouping, paging, row bounds, button placement and selected-unit details |
 | `shots_test.go` | Bullet and shell impacts, building damage, mechanic repair rate and oil, defender damage and wrecks, and old war-factory saves |
-| `squads_test.go` | Trooper production and squad behavior, mechanic limits, target selection, health and wrecks |
+| `squads_test.go` | Trooper production and squad behavior, mechanic limits, target selection, health and wrecks; squads can attack the first incoming crawler without a camp delay |
 | `world_test.go` | The simulation driven directly: the starting builder, explicit individual assignment, worker-only auto-assignment, role-specific carrying, loot and construction priorities, migration, dry deposits, determinism and JSON round trip |
-| `economy_test.go` | The deterministic economy probe: safe harvesting, worker growth and a protected oil outpost over three seeds, sampled each minute into an opt-in CSV report with protector fuel separated from spendable oil |
-| `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
+| `economy_test.go` | The deterministic economy probe: four legal opening policies over three seeds, sampled each minute into an opt-in CSV with protector fuel separate from spendable oil, and party and city production details |
+| `buildings_test.go` | The buildings driven directly: five-second marked construction, payment, fog placement, factory robots, refueling, digestion, full stores, silos and the protector's bubble |
 | `pipes_test.go` | Pumps and pipes driven directly: oil-pool fog stops robot loading and pump flow without draining the pool, a protector restores extraction, an exposed pump is eaten unless sheltered, pipes are paid and laid by sections, robots claim one section each, tanks share their pipe-fill limit across inlets and pass excess through a chain, protectors keep their reserve and upkeep, source outlets share flow, blocked tanks throttle pumps, bands show offered versus actual flow, pipes move oil between tanks, workers haul and refuel, illegal pipe actions are refused, pipe removal drops its cost as a pile, curves follow bends, and saves resume deterministically; can write a pump/protector flow fixture with `NIEBLA_PIPE_FLOW_SHOT_STATE` |
 | `protector_test.go` | Protector fuel: upkeep drains its dedicated tank, radius fades below the configured threshold and vanishes empty, robots and pipes refill it, the reserve stays unavailable to other costs, old saves migrate once with starting charge, and an opt-in state fixture supports visual shots |
 | `mites_test.go` | The mites driven with no window: counted by volume and exposure, half strength in the haze, tight on what stands still and trailing a walker, fading over what is gone, the falloff's layers |
-| `dev_test.go` | The dev actions: a held swell stays up and doesn't count, a placed robot is built, the city tool buttons have separate hit boxes, `unitsAtWorld` undoes `project` |
-| `cities_test.go` | City founding beyond artillery range and on the scout's bearing, pylon-first construction, finite local economy, sorties, unloading/reuse, squad completion and rebuild timing, dev actions, replay and JSON persistence |
+| `dev_test.go` | The dev actions: a held swell stays up and doesn't count, a placed robot is built, rival camp/regroup/rebuild waits can be hurried, the city tool buttons have separate hit boxes, `unitsAtWorld` undoes `project` |
+| `cities_test.go` | City founding beyond artillery range and on the scout's bearing, 45-second building steps, pylon-first construction, finite local economy, sorties, unloading/reuse, the full-squad rest, replacement and rebuild timing, dev actions, replay and JSON persistence |
 | `fog_test.go` | The fog driven directly: cycles, swell timing, line and bubble margin, pushed-band drag, stationary wear by exposure, movement and bubble resets, saved wear and the HUD forecast |
 | `identity_test.go` | The identity derived from a machine ID: stable, distinct, and the parsers of what `reg query`, `ioreg` and the machine-id files say |
 | `store_test.go` | The database driven directly: an identity kept across runs, the fallback one too, the token column waiting empty, a base saved and loaded back whole, a second save replacing the first, one player's save invisible to another, the DB path's rules |
@@ -626,18 +641,20 @@ guard-post targeting, squad orders, artillery and damage resolution can
 address them. Their rules and serialization live in `sim_cities.go`.
 
 Intro raid members move as one (`driveParty`), with the crawler as the
-leader and `formationOffset` for their spacing. A raid chooses the nearest
-colony tank with oil (`raidTarget`), moves to `siphonReachUnits`, draws
+leader and `formationOffset` for their spacing. The first real attack has
+one raider and does not camp; later construction attacks camp and grow
+from one to four raiders. A raid chooses the nearest colony tank with oil
+(`raidTarget`), moves to `siphonReachUnits`, draws
 `siphonLitersPerSecond` from it until full/no oil/`raidSiphonTicks`, then
 leaves for the entry point. City sorties use the same raid and return
-rules, but their entry point is the city. They launch as soon as their
-factory and stores can pay: the first squad has raiders only, and newly
-built squads add mobile artillery. A force that returns with oil unloads
-at `cityUnloadPerSecond` 3 L/s per living vehicle. A full squad leaves as
-soon as it is empty; a damaged squad waits a minute and buys replacements.
-A force that returns empty or is destroyed is rebuilt after one minute.
-`movingParty` permits one active party region-wide; other cities wait for
-it to return, unload or be lost.
+rules, but their entry point is the city. The first city force has two
+raiders and no artillery; a replacement adds mobile artillery, and later
+forces grow to four raiders. A force that returns with oil unloads at
+`cityUnloadPerSecond` 3 L/s per living vehicle. A full squad waits
+`citySortieCooldownTicks` 90 seconds before its next raid. A damaged squad
+waits a minute and buys replacements; an empty or destroyed force is
+rebuilt after a minute. `movingParty` permits one active party region-wide;
+other cities wait for it to return, unload or be lost.
 
 Each newly founded city saves an `AnnounceUntil` tick one minute ahead.
 Until then, `threatWords` may show its status in the HUD. Its `ReportSettled`
@@ -1131,12 +1148,13 @@ one player's save invisible to another, and the DB path's rules
 (`:memory:` under `golib shot`, the settings folder otherwise, a
 missing one is an error).
 `economy_test.go` is an opt-in probe, not a test that asserts a current
-balance. With `NIEBLA_ECONOMY_REPORT` it runs each opening plan for one hour
-of simulation on seeds 0, 1 and 2, and writes a CSV row each game minute:
-oil, lilac, extracted resources, workers, infrastructure, swells, visits and
-enemies. It drives the same `Apply` actions a player can use, so a change to a
-rate or an opening policy is measured through the actual simulation rather
-than a second, approximate model. `DESIGN.md` records the baseline and the
-milestones each run must compare.
+balance. With `NIEBLA_ECONOMY_REPORT` it runs four opening policies for one
+hour on seeds 0, 1 and 2, and writes a CSV row each game minute: spendable
+and protector oil, lilac, extraction, workers, troopers, buildings, swells,
+visits, party composition, city construction and sorties. It uses only
+schematics that have arrived and drives the same `Apply` actions as the
+simulation. A rate or opening change is therefore measured in the real
+simulation rather than a second, approximate model. `DESIGN.md` records the
+results and the next balance decisions.
 Visual checks are shots with scripted clicks; see the
 command above.

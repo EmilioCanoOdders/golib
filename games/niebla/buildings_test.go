@@ -54,6 +54,28 @@ func TestMarkingPaysAndRaisesTheBuilding(t *testing.T) {
 	}
 }
 
+func TestBuildingsTakeFiveSecondsOfWorkToRaise(t *testing.T) {
+	s := newGame()
+	seedStock(s)
+	arriveAll(s)
+	col, row := groundNearCore()
+	Apply(s, MarkBuilding{Kind: BuildingFactory, Col: col, Row: row})
+	if buildingWorkTicks != 5*60 || s.Jobs[0].Left != 5*60 {
+		t.Fatalf("building work is %d ticks, want 5 seconds",
+			s.Jobs[0].Left)
+	}
+	for range buildingWorkTicks - 1 {
+		s.workJob(0)
+	}
+	if _, raised := buildingAt(s, col, row); raised || s.Jobs[0].Left != 1 {
+		t.Fatal("the building finished before its last work tick")
+	}
+	s.workJob(0)
+	if _, raised := buildingAt(s, col, row); !raised {
+		t.Fatal("the building did not finish on its fifth second")
+	}
+}
+
 func TestCellsFitSeveralBuildingsToATile(t *testing.T) {
 	s := newGame()
 	seedStock(s)

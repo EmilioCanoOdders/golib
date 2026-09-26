@@ -179,7 +179,6 @@ func TestASquadAttacksTheCrawlerFirstAndTheFogTakesTheRest(t *testing.T) {
 	home := squadOfTroopers(t, s, 6)
 	s.Raids.Visits = 1
 	visitNow(s)
-	tickUntil(s, 60*600, func() bool { return lastReport(s).Kind == ReportCamp })
 	crawler := crawlerOf(s)
 	Apply(s, OrderSquad{Squad: home.ID, Enemy: crawler.ID})
 	if sq := s.Squads[home.ID]; sq.Order != OrderAttack || sq.Focus != crawler.ID ||
@@ -224,7 +223,6 @@ func TestAFallenTrooperLeavesItsWreckAndADemolishedWarFactoryItsSquad(t *testing
 	home := squadOfTroopers(t, s, 1)
 	s.Raids.Visits = 1
 	visitNow(s)
-	tickUntil(s, 60*600, func() bool { return lastReport(s).Kind == ReportCamp })
 	Apply(s, OrderSquad{Squad: home.ID, Enemy: crawlerOf(s).ID})
 	if !tickUntil(s, 60*300, func() bool { return len(squadMembers(s, home.ID)) == 0 }) {
 		t.Fatalf("one trooper against a whole raid never fell")

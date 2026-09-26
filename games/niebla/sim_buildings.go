@@ -22,7 +22,7 @@ const (
 	pumpCostLilac      = 150.0   // kg
 	pumpFogTicks       = 10 * 60 // ticks an unprotected pump survives
 
-	buildingWorkTicks = 600 // ticks of robot work to raise any building: 10 s
+	buildingWorkTicks = 300 // ticks of robot work to raise any building: 5 s
 
 	// The factory's builders and workers: lilac and oil apiece, 12 s of work.
 	robotCostLilac    = 40.0 // kg

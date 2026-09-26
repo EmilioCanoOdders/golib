@@ -6,16 +6,17 @@ import (
 )
 
 const (
-	cityIntervalCycles    = 30
-	cityLimit             = 3
-	cityRadiusTiles       = 10.0
-	cityMinSeparation     = 900.0
-	cityBuildTicks        = 90 * 60
-	cityAnnouncementTicks = 60 * 60
-	cityOilReserve        = 900.0
-	cityLilacReserve      = 1800.0
-	cityRebuildTicks      = 60 * 60
-	cityUnloadPerSecond   = siphonLitersPerSecond
+	cityIntervalCycles      = 30
+	cityLimit               = 3
+	cityRadiusTiles         = 10.0
+	cityMinSeparation       = 900.0
+	cityBuildTicks          = 45 * 60
+	cityAnnouncementTicks   = 60 * 60
+	cityOilReserve          = 900.0
+	cityLilacReserve        = 1800.0
+	cityRebuildTicks        = 60 * 60
+	citySortieCooldownTicks = 90 * 60
+	cityUnloadPerSecond     = siphonLitersPerSecond
 )
 
 type City struct {
@@ -307,9 +308,12 @@ func cityBuildingSpec(kind BuildingKind) cityBuildingSpecValue {
 func (s *State) spawnCitySortie(city City, artillery bool) {
 	partyID := s.NextID
 	s.NextID++
-	count := raidFirstRaiders
+	count := cityFirstRaiders
 	if city.Sorties > 2 {
-		count = raidersOf(city.Sorties - 1)
+		count += int(city.Sorties - 2)
+		if count > raidMaxRaiders {
+			count = raidMaxRaiders
+		}
 	}
 	size := count
 	if artillery {
@@ -436,9 +440,11 @@ func (s *State) unloadCityParty(p *Party, members []Enemy) {
 		p.Wait = cityRebuildTicks
 		return
 	}
-	p.Stage = StageRaid
-	p.Wait = 0
+	p.Stage = StageRegroup
+	p.Wait = citySortieCooldownTicks
 	p.Siphon = raidSiphonTicks
+	city.NextSortie = s.Ticks + citySortieCooldownTicks
+	s.Cities[city.ID] = city
 }
 
 func (s *State) completeCityParty(p *Party) bool {
@@ -528,6 +534,8 @@ func cityPartyStatus(s *State, city int64) string {
 			return "unloading stolen oil"
 		case StageRebuild:
 			return "completing the squad"
+		case StageRegroup:
+			return "regrouping before the next attack"
 		}
 	}
 	return ""

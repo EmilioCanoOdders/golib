@@ -280,6 +280,10 @@ func threatWords(s *State) string {
 			left := (p.Wait + 59) / 60
 			return fmt.Sprintf("rival force completing its ranks, %s, %d:%02d",
 				where, left/60, left%60)
+		case StageRegroup:
+			left := (p.Wait + 59) / 60
+			return fmt.Sprintf("rival force regrouping, %s, attack in %d:%02d",
+				where, left/60, left%60)
 		case StageSettled:
 			continue
 		default:
