@@ -50,7 +50,7 @@ Last updated: 2026-09-19 (milestones M5, Shipping, and M6, 2D essentials, done; 
 | Sprites from PNG images, PNG sprite sheets and Aseprite files, with animations: `golib.NewSprite`, `golib.NewSpriteSheet`, `Screen.DrawSprite`, `golib.Animation` | Done (M4) |
 | Tiled maps: `golib.NewMap`, `Screen.DrawMap`, `Screen.DrawMapLayer`, tiles and objects by layer, custom properties | Done (M4) |
 | Sound effects from `.wav`, `.ogg`, `.mp3` and `.qoa` files: `golib.NewSoundFile`, and `Sound.SetVolume` | Done (M4) |
-| Sound effects designed in jfxr, the sound effect maker: `.jfxr` files through `golib.NewSoundFile`, made by a Go version of jfxr's synthesizer that matches jfxr's samples | Done (M4) |
+| Sound effects designed in jfxr, the sound effect maker: `.jfxr` files through `golib.NewSoundFile`, made by a Go version of jfxr's synthesizer that matches jfxr's samples; the same settings in code through `golib.NewSoundJfxr`, and `Sound.Unload` for sounds a game makes as it runs | Done (M4; settings in code and `Unload` 2026-09-26) |
 | Fonts from `.ttf` and `.otf` files, in any language: `golib.NewFont`, `golib.TextOptions` | Done (M4) |
 | Vectors and a 2D camera: `Vector2` methods, `golib.NewCamera`, `Screen.SetCamera` | Done (M6) |
 | Saving high scores, settings and progress: `golib.SaveData`, `golib.LoadData`, `golib.DeleteData` | Done (M6) |
