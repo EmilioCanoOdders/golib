@@ -983,8 +983,8 @@ var theme = golib.NewTune(themeSpec)
 
 | Name | What it does |
 | --- | --- |
-| `SetFullscreen` | `SetFullscreen(on bool)`: fullscreen or a window, from the next frame. Fullscreen covers the monitor without changing its resolution, and the screen keeps its size. Call it from `Update`; to start in fullscreen, set `Config.Fullscreen`, because `Run` replaces an earlier call with it. |
-| `IsFullscreen` | `IsFullscreen() bool`: the game is in fullscreen, or will be from the next frame. |
+| `SetFullscreen` | `SetFullscreen(on bool)`: fullscreen or a window, from the next frame. Fullscreen covers the monitor without changing its resolution, and the screen keeps its size. On macOS it is the system's own fullscreen, the one the window's green button enters, which slides into a space of its own without the menu bar or the Dock; the switch waits until no key or mouse button is held, because macOS loses a release that comes while the window slides. Call it from `Update`; to start in fullscreen, set `Config.Fullscreen`, because `Run` replaces an earlier call with it. |
+| `IsFullscreen` | `IsFullscreen() bool`: the game is in fullscreen, or will be from the next frame. It turns false by itself when the player leaves fullscreen on their own: with Esc in a browser, or the green button on macOS. |
 | `WindowFocused` | `WindowFocused() bool`: the window has the player's attention. False while they work in another program, so a game can draw a sign over itself or quieten its music; with `Config.PauseUnfocused`, `Run` stops updating the game meanwhile and keeps drawing it. Always true under `golib shot` and in tests. |
 
 ```go

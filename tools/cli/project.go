@@ -21,10 +21,11 @@ type project struct {
 	root         string
 	goos, goarch string
 
-	// runGo runs the project's go command, and runGame a game's executable.
-	// Tests replace both.
+	// runGo runs the project's go command, runGame a game's executable, and
+	// signApp signs a macOS app with macOS's codesign. Tests replace them.
 	runGo   func(call goCall) ([]byte, error)
 	runGame func(run gameRun) (exitCode int, timedOut bool, err error)
+	signApp func(app string) error
 }
 
 // goCall is one run of the project's go command.
@@ -68,6 +69,15 @@ func newProject(exe string, stdout, stderr io.Writer) (*project, error) {
 		cmd.Dir, cmd.Env = run.dir, run.env
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, stdout, stderr
 		return waitForGame(cmd, run.timeout)
+	}
+	p.signApp = func(app string) error {
+		// An ad hoc signature, "-", needs no Apple developer account: it
+		// seals the app's files, without saying who made them.
+		output, err := exec.Command("codesign", "--force", "--sign", "-", app).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("codesign: %v: %s", err, strings.TrimSpace(string(output)))
+		}
+		return nil
 	}
 	return p, nil
 }

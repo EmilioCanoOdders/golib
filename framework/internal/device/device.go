@@ -9,6 +9,9 @@
 //	raylib*.go   //go:build !js   raylib on Windows, Linux and macOS
 //	web*.go      //go:build js    WebGL 2 and Web Audio in a browser
 //
+// raylib_darwin.go holds what the window needs on macOS alone, and
+// raylib_other.go the same functions for Windows and Linux.
+//
 // Package golib must not import raylib itself. A test checks that, so the
 // contract stays the only way down, and a backend can be added without
 // touching the code above it.
@@ -21,8 +24,8 @@
 //     a render target, a shader, a font, a sound, a wave and a music. Only
 //     their ID, Width and Height fields are portable; nothing above this
 //     package reads anything else.
-//   - The functions in raylib.go, raylib_draw.go, raylib_audio.go and
-//     raylib_input.go, with the same behavior.
+//   - The functions in raylib.go, raylib_draw.go, raylib_audio.go,
+//     raylib_input.go and raylib_other.go, with the same behavior.
 //
 // The numbers below are the same on every backend, so a game reads the same
 // key wherever it runs. They are GLFW's key codes, which raylib passes on;
