@@ -103,6 +103,12 @@ func NewTexture(pixels []byte, width, height int) Texture {
 	return rl.LoadTextureFromImage(picture)
 }
 
+// UpdateTexture replaces every pixel of a texture: pixels are RGBA, one byte
+// a channel, the top row first, as many as the texture has.
+func UpdateTexture(texture Texture, pixels []byte) {
+	rl.UpdateTexture(texture, pixels)
+}
+
 // UnloadTexture frees a texture.
 func UnloadTexture(texture Texture) {
 	rl.UnloadTexture(texture)

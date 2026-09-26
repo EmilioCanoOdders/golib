@@ -11,6 +11,7 @@ For AI agents writing game code with GoLib, and for anyone who wants the whole f
 | Draw it | `Draw(screen *golib.Screen)` | [Drawing](#drawing) |
 | Write text in a font | `golib.NewFont`, `screen.DrawText` with `golib.TextOptions` | [Fonts](#fonts) |
 | Draw pictures and animations | `golib.NewSprite`, `golib.NewSpriteSheet`, `screen.DrawSprite`, `golib.Animation` | [Sprites and animations](#sprites-and-animations) |
+| Draw a picture pixel by pixel, such as an emulator's screen | `golib.NewImage`, `image.SetPixel`, `screen.DrawImage` | [Pictures made pixel by pixel](#pictures-made-pixel-by-pixel) |
 | Load levels made in Tiled | `golib.NewMap`, `screen.DrawMap`, `level.TilesIn`, `level.Objects` | [Maps](#maps) |
 | Read keys, mouse and gamepads | `input.KeyDown`, `input.KeyPressed`, `input.MousePosition`, `input.GamepadDown` | [Input](#input) |
 | Move, aim and chase | `golib.Vector2` and its `Add`, `Scale`, `Normalize`, `MoveTowards` | [Vectors, rectangles and collisions](#vectors-rectangles-and-collisions) |
@@ -479,6 +480,38 @@ var (
 - Pixels stay sharp: sprites are drawn without smoothing, at whole pixels, rounding x and y, as maps and text are. For pixel art, also set `Config.PixelArt` with a small screen, and round the camera's position too, so everything moves together.
 - `Width`, `Height`, `Frames` and `Animation` read the file, so they work in tests and before `Run`.
 - Only use art the user provides, and write where it came from, and its license, in `assets/ATTRIBUTION.md`, as `games/platformer` does.
+
+### Pictures made pixel by pixel
+
+A sprite is a picture from a file. An `Image` is one the game makes itself, pixel by pixel, as it runs: the screen of an emulator or a fantasy console, a plasma effect, a minimap, a picture a player paints.
+
+| Name | What it does |
+| --- | --- |
+| `NewImage` | `NewImage(width, height int) *Image`: a picture of that size, 1 to 4096 pixels each way, every pixel transparent (`Color{}`) until the game sets it. |
+| `Image` | A picture made in code. |
+| `Image.SetPixel` | `SetPixel(x, y int, color Color)`: sets a pixel, counted from 0, 0 at the top-left corner. Outside the picture it does nothing, so drawing can run off its edges. |
+| `Image.Pixel` | `Pixel(x, y int) Color`: a pixel's color, or `Color{}` outside the picture. |
+| `Image.Clear` | `Clear(color Color)`: sets every pixel. |
+| `Image.Width`, `Image.Height` | `Width() int`, `Height() int`: its size, in pixels. |
+| `Screen.DrawImage` | `DrawImage(img *Image, x, y float32, options ...DrawOptions)`: draws it with its top-left corner at x, y, one screen pixel for each of its pixels. `DrawOptions` scales, flips, rotates and tints it, as with `DrawSprite`. |
+
+```go
+var monitor = golib.NewImage(64, 64) // a package variable, made once
+
+func (g *game) Update(input *golib.Input, dt float32) {
+	monitor.Clear(golib.Black)
+	monitor.SetPixel(g.x, g.y, golib.Green)
+}
+
+func (g *game) Draw(screen *golib.Screen) {
+	screen.DrawImage(monitor, 32, 32, golib.DrawOptions{Scale: 4}) // 256 by 256 on the screen
+}
+```
+
+- Changing pixels is plain Go, and cheap: the picture goes to the graphics card once, at the next `DrawImage` after it changed, however many pixels changed. Setting a pixel to the color it has isn't a change.
+- It is drawn without smoothing, at whole pixels, so its pixels stay square and sharp at any scale, as a sprite's do.
+- A size below 1 or above 4096 stops `Run` with an error the first time the picture is drawn.
+- Make pictures once, as package variables or in the game's state, as sprites are: each stays on the graphics card until `Run` ends.
 
 ## Maps
 
