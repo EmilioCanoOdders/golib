@@ -12,7 +12,10 @@ import (
 // coming back for more, so a worked deposit shows a constant coming and
 // going.
 const (
-	startingBuilders = 1 // builder the core gives the colony
+	startingBuilders        = 1    // builder the core gives the colony
+	robotBuilderHealth      = 60.0 // hull points for builders
+	robotWorkerHealth       = 60.0 // hull points for workers
+	fogStillDamagePerSecond = 2.0  // hull points per second at full exposure
 
 	robotSpeed       = 30.0      // units (m) per second
 	robotLoadTicks   = 150       // ticks of loading at a deposit: 2.5 s
@@ -35,11 +38,25 @@ const (
 	goldenAngle = 2.399963229728653 // spreads robots around what they work at
 )
 
+func robotMaxHealth(kind RobotKind) float64 {
+	switch kind {
+	case RobotBuilder:
+		return robotBuilderHealth
+	case RobotWorker:
+		return robotWorkerHealth
+	case RobotCombat:
+		return trooperHealth
+	case RobotRepair:
+		return mechanicHealth
+	}
+	return 0
+}
+
 // stepSim moves the world one tick forward: the weather, the factories,
 // pipes, protector upkeep, rivals and guard posts, then robots in ID order,
-// so the outcome never depends on map iteration. A tanked robot empty of
-// oil outside every bubble is digested by the fog and leaves a quarter of
-// each resource in a wreck: its cost and onboard resources.
+// so the outcome never depends on map iteration. A tanked robot whose oil
+// or hull runs out outside every bubble is digested by the fog and leaves
+// a quarter of its cost and onboard resources in a wreck.
 func stepSim(s *State) {
 	stepTech(s)
 	stepFog(s)
@@ -59,7 +76,8 @@ func stepSim(s *State) {
 			continue
 		}
 		stepRobot(s, &r)
-		if r.tanked() && r.Tank <= 0 && !inSafeZone(s, r.X, r.Y) {
+		if r.tanked() && (r.Tank <= 0 || r.Health <= 0) &&
+			!inSafeZone(s, r.X, r.Y) {
 			delete(s.Robots, id)
 			s.dropRobotWreck(r)
 			continue
@@ -140,6 +158,10 @@ func stepRobot(s *State, r *Robot) {
 	if r.hasPost() && remainingAt(s, r.PostCol, r.PostRow) <= 0 {
 		r.clearPost()
 	}
+	if r.WorkTicks > 0 && r.Pile == 0 && r.hasPost() &&
+		oilPoolInFog(s, r.PostCol, r.PostRow) {
+		r.WorkTicks = 0
+	}
 	if r.Kind == RobotCombat {
 		r.shoot(s)
 	}
@@ -156,7 +178,26 @@ func stepRobot(s *State, r *Robot) {
 	if task.name != taskBuild {
 		r.Pipe, r.Section = 0, 0
 	}
+	startX, startY := r.X, r.Y
 	task.step(r, s)
+	moved := math.Hypot(r.X-startX, r.Y-startY) > 1e-4
+	stepStationaryWear(s, r, moved)
+}
+
+func stepStationaryWear(s *State, r *Robot, moved bool) {
+	if !r.tanked() || moved || inSafeZone(s, r.X, r.Y) {
+		r.StillTicks = 0
+		return
+	}
+	r.StillTicks++
+	if r.StillTicks <= fogStillGraceTicks {
+		return
+	}
+	exposure := fogExposureAt(s, r.X, r.Y)
+	fuelWear := fogStillBurnPerSecond * exposure / 60
+	hullDamage := fogStillDamagePerSecond * exposure / 60
+	r.Tank = math.Max(0, r.Tank-fuelWear)
+	r.Health = math.Max(0, r.Health-hullDamage)
 }
 
 func (r *Robot) hauling(s *State) bool {
@@ -322,6 +363,11 @@ func (r *Robot) posted(s *State) bool {
 }
 
 func (r *Robot) stepPost(s *State) {
+	if oilPoolInFog(s, r.PostCol, r.PostRow) {
+		x, y := parkSlot(int(r.ID) % parkSlots)
+		r.walkTowards(s, x, y)
+		return
+	}
 	cx, cy := postSpot(r.PostCol, r.PostRow, r.ID)
 	if r.walkTowards(s, cx, cy) {
 		r.WorkTicks = robotLoadTicks
@@ -475,6 +521,9 @@ func (s *State) takeLoad(r *Robot) {
 	d, ok := depositAt(r.PostCol, r.PostRow)
 	if !ok {
 		r.clearPost()
+		return
+	}
+	if d.Kind == kindOil && oilPoolInFog(s, r.PostCol, r.PostRow) {
 		return
 	}
 	key := depositKey(d)

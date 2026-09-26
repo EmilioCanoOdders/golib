@@ -6,11 +6,10 @@ import (
 	"golib"
 )
 
-// How a swell looks while it presses: waves of shade roll in across the
-// fog toward the line, like wind over snow, and the mist crawls with
-// static, as if the mites were a field and not a swarm. Both come and go
-// with the swell's pressure. They are drawn from the state's tick alone:
-// no randomness, nothing kept between frames, so a save redraws them.
+// Waves of shade roll in across the fog toward the line, like wind over
+// snow. Static crawls over exposed air even in calm, faint in the haze and
+// darker in thick fog. Both are drawn from the state's tick alone: no
+// randomness, nothing kept between frames, so a save redraws them.
 
 const (
 	swellWaves       = 7    // crests between the rim and the line
@@ -20,9 +19,9 @@ const (
 	swellWaveOpacity = 0.16 // a crest at its darkest, the swell pressed in whole
 	swellWaveArcs    = 96   // pieces a crest is drawn in
 
-	swellStaticSpecks  = 900 // specks on the screen, the swell pressed in whole
+	swellStaticSpecks  = 900 // specks on the screen at full exposure
 	swellStaticTicks   = 3   // updates a speck lasts
-	swellStaticOpacity = 0.3
+	swellStaticOpacity = 0.3 // opacity at full exposure
 )
 
 // drawSwellWaves paints the crests over the fog's cover, in the world.
@@ -94,24 +93,23 @@ func drawSwellCrest(
 // that jump every few ticks, only where the mist stands and thicker
 // where it is thicker. Call it with no camera set.
 func drawSwellStatic(s *State, screen *golib.Screen, camera *golib.Camera) {
-	pressure := float32(s.Fog.Pressure)
-	if pressure <= 0 {
-		return
-	}
 	beat := uint32(s.Ticks / swellStaticTicks)
-	specks := int(swellStaticSpecks * pressure)
-	for i := 0; i < specks; i++ {
+	clear := clearDiscs(s)
+	for i := 0; i < swellStaticSpecks; i++ {
 		x := hashUnit(beat, uint32(i), 1) * screenWidth
 		y := hashUnit(beat, uint32(i), 2) * screenHeight
 		world := camera.ToWorld(x, y)
+		if inDiscs(clear, world.X, world.Y) {
+			continue
+		}
 		ux, uy := unitsAtWorld(float64(world.X), float64(world.Y))
-		fog := float32(fogAt(s, ux, uy))
+		fog := float32(fogExposureAt(s, ux, uy))
 		if fog <= 0 {
 			continue
 		}
 		screen.DrawRectangle(
 			golib.Rectangle{X: float32(int(x)), Y: float32(int(y)), Width: 1, Height: 1},
-			golib.WithOpacity(golib.Black, swellStaticOpacity*pressure*fog),
+			golib.WithOpacity(golib.Black, swellStaticOpacity*fog),
 		)
 	}
 }

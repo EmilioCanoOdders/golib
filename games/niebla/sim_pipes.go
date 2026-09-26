@@ -457,6 +457,7 @@ const (
 	pumpNoPipe  = "no pipe"
 	pumpLaying  = "pipe being laid"
 	pumpDry     = "pool dry"
+	pumpFogged  = "pool covered by fog"
 	pumpBlocked = "pipe's end full"
 	pumpPumping = "pumping"
 )
@@ -478,6 +479,8 @@ func pumpStatus(s *State, b Building) string {
 	}
 	tcol, trow := pumpTile(b)
 	switch {
+	case oilPoolInFog(s, tcol, trow):
+		return pumpFogged
 	case len(pipes) == 0:
 		return pumpNoPipe
 	case !laid:
@@ -654,9 +657,13 @@ func stepPipes(s *State) {
 		if isPump(s, from) {
 			b := s.Buildings[from]
 			tcol, trow := pumpTile(b)
-			available = math.Min(
-				remainingAt(s, tcol, trow), pumpLitersPerSecond/60,
-			)
+			if oilPoolInFog(s, tcol, trow) {
+				available = 0
+			} else {
+				available = math.Min(
+					remainingAt(s, tcol, trow), pumpLitersPerSecond/60,
+				)
+			}
 		} else {
 			fill := math.Min(incoming[from], tankFillCapacity(s, from))
 			available = math.Max(0, incoming[from]-fill)

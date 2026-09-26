@@ -52,23 +52,40 @@ func drawRobots(
 				3*unitW*scale, r.Facing)
 			screen.DrawCircle(pack.X, pack.Y, radius*0.32, cargo)
 		}
-		maxHealth := 0.0
-		healthColor := guardColor
+		maxHealth := robotMaxHealth(r.Kind)
+		healthColor := robotColor
 		switch r.Kind {
+		case RobotWorker:
+			healthColor = factoryColor
 		case RobotCombat:
-			maxHealth = trooperHealth
+			healthColor = guardColor
 		case RobotRepair:
-			maxHealth = mechanicHealth
 			healthColor = factoryColor
 		}
 		if maxHealth > 0 && r.Health < maxHealth {
-			bar := golib.Rectangle{
+			drawUnitBar(screen, golib.Rectangle{
 				X: p.X - radius, Y: p.Y + radius*1.5,
 				Width: 2 * radius, Height: 2 / zoom,
-			}
-			screen.DrawRectangle(bar, fillBarColor)
-			bar.Width *= float32(math.Max(0, r.Health) / maxHealth)
-			screen.DrawRectangle(bar, healthColor)
+			}, r.Health/maxHealth, healthColor)
+		}
+		if r.Kind == RobotWorker {
+			scale := model.iconScale(zoom)
+			roof := p.Y - 6.4*scale*unitH
+			drawUnitBar(screen, golib.Rectangle{
+				X: p.X - radius, Y: roof - 12/zoom,
+				Width: 2 * radius, Height: 2 / zoom,
+			}, r.Tank/robotTankLiters, oilColor)
 		}
 	}
+}
+
+// drawUnitBar paints one status bar under a unit: the dark well first,
+// then the fill, as wide as part of the whole bar is.
+func drawUnitBar(
+	screen *golib.Screen, bar golib.Rectangle, part float64,
+	color golib.Color,
+) {
+	screen.DrawRectangle(bar, fillBarColor)
+	bar.Width *= float32(math.Max(0, part))
+	screen.DrawRectangle(bar, color)
 }

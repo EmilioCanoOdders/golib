@@ -46,9 +46,11 @@ var catalog = map[ThingType]ThingInfo{
 		Unit:    "L",
 		Primary: true,
 		Details: func(s *State, thing Thing) []Detail {
+			tcol, trow := cellTile(thing.CellCol, thing.CellRow)
 			return []Detail{
 				{"amount", fmt.Sprintf("[oil]%s[/]", si(thing.Amount, "L"))},
 				{"pool", fmt.Sprintf("%.1f ha", thing.Area)},
+				{"access", oilPoolAccess(s, tcol, trow)},
 				{"state", depositState(thing.Amount, thing.Full)},
 			}
 		},
@@ -112,13 +114,11 @@ var catalog = map[ThingType]ThingInfo{
 				{"task", robotCaption(s, r)},
 				{"model", model},
 			}
-			health, healthName := 0.0, "health"
-			switch r.Kind {
-			case RobotCombat:
-				health = trooperHealth
-			case RobotRepair:
-				health, healthName = mechanicHealth, "hull"
+			healthName := "hull"
+			if r.Kind == RobotCombat {
+				healthName = "health"
 			}
+			health := robotMaxHealth(r.Kind)
 			if health > 0 {
 				details = append(details, Detail{
 					healthName, fmt.Sprintf("%.0f / %.0f", math.Max(0, r.Health), health),

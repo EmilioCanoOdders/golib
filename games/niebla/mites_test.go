@@ -44,7 +44,7 @@ func swarm(h *miteHost) (spread, offX, offY float32) {
 	return spread / n, offX / n, offY / n
 }
 
-func TestMitesGatherByVolumeAndOnlyInTheFog(t *testing.T) {
+func TestMitesGatherByVolumeAndOnlyInExposedAir(t *testing.T) {
 	s, id := foggedRobot(t)
 	col, row := groundInTheFog()
 	s.Jobs = append(s.Jobs, Job{
@@ -66,6 +66,26 @@ func TestMitesGatherByVolumeAndOnlyInTheFog(t *testing.T) {
 	if len(f.hosts) != 2 {
 		t.Errorf("%d hosts, want two: the robot in the bubble has none",
 			len(f.hosts))
+	}
+}
+
+func TestMitesAlsoShowInTheClearHazeAtHalfStrength(t *testing.T) {
+	golib.SetRandomSeed(1)
+	s := newGame()
+	id := sortedRobotIDs(s)[0]
+	r := s.Robots[id]
+	r.X, r.Y = pointAtTiles(5)
+	s.Robots[id] = r
+	if got := fogExposureAt(s, r.X, r.Y); got != fogHazeExposure {
+		t.Fatalf("the robot stands in exposure %v, want %v",
+			got, fogHazeExposure)
+	}
+	f := newMiteField()
+	runMites(f, s, 3)
+	want := int(math.Floor(robotBodyAcross * robotBodyAcross *
+		robotBodyHeight * mitesPerCubicUnit * fogHazeExposure))
+	if got := len(f.hosts[robotMiteKey(id)].Mites); got != want {
+		t.Fatalf("the hazy robot has %d mites, want %d", got, want)
 	}
 }
 

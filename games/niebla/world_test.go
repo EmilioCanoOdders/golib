@@ -54,6 +54,10 @@ func TestNewGameStartsWithOneFueledBuilder(t *testing.T) {
 			t.Errorf("starting robot %d is %s with %v L, want a fueled builder",
 				r.ID, r.Kind, r.Tank)
 		}
+		if r.Health != robotBuilderHealth {
+			t.Errorf("starting builder has %v hull, want %v",
+				r.Health, robotBuilderHealth)
+		}
 		if r.hasPost() {
 			t.Errorf("robot %d starts with a post, want it idle", id)
 		}
@@ -171,11 +175,11 @@ func TestBuildersCarryOneThirdOfAWorkersLoad(t *testing.T) {
 func TestLegacyRobotKindsMigrateToVulnerableBuildersAndWorkers(t *testing.T) {
 	s := newGame()
 	builder := s.Robots[1]
-	builder.Kind, builder.Tank = "core", 0
+	builder.Kind, builder.Tank, builder.Health = "core", 0, 0
 	s.Robots[builder.ID] = builder
 	workerID := s.spawnRobot(RobotWorker, 100, 100)
 	worker := s.Robots[workerID]
-	worker.Kind = "built"
+	worker.Kind, worker.Health = "built", 0
 	s.Robots[workerID] = worker
 	buildingID := s.NextID
 	s.NextID++
@@ -194,6 +198,12 @@ func TestLegacyRobotKindsMigrateToVulnerableBuildersAndWorkers(t *testing.T) {
 	}
 	if got := s.Robots[workerID]; got.Kind != RobotWorker {
 		t.Errorf("legacy built robot migrated as %+v", got)
+	}
+	if got := s.Robots[builder.ID].Health; got != robotBuilderHealth {
+		t.Errorf("legacy builder hull is %v, want %v", got, robotBuilderHealth)
+	}
+	if got := s.Robots[workerID].Health; got != robotWorkerHealth {
+		t.Errorf("legacy worker hull is %v, want %v", got, robotWorkerHealth)
 	}
 	if got := s.Buildings[buildingID].WorkKind; got != RobotWorker {
 		t.Errorf("legacy factory production kind is %q, want worker", got)

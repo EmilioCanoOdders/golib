@@ -21,6 +21,10 @@ import "math"
 const (
 	fogCycleTicks = 1800 // ticks a cycle lasts: 30 s
 
+	fogHazeExposure       = 0.5 // the clear haze's share of the fog's full wear
+	fogStillGraceTicks    = 120 // ticks a unit may stand before the fog wears it
+	fogStillBurnPerSecond = 1.0 // L/s at full exposure, while standing still
+
 	fogSwellPeriod    = 18.0 // cycles of calm before the first swell
 	fogSwellQuickener = 0.90 // each swell shortens the next calm by this
 	fogSwellMinPeriod = 4.0  // cycles of calm at the least
@@ -117,6 +121,33 @@ func swellReach(s *State) float32 {
 // core: the calm line, pressed in as far as the swell's pressure says.
 func fogLineNow(s *State) float32 {
 	return fogLineRadius - swellReach(s)*float32(s.Fog.Pressure)
+}
+
+// fogExposureAt returns the colony's fog wear at a point: none inside a
+// colony bubble, half strength in the haze and full strength in deep fog.
+func fogExposureAt(s *State, x, y float64) float64 {
+	if inSafeZone(s, x, y) {
+		return 0
+	}
+	return math.Max(fogHazeExposure, fogAt(s, x, y))
+}
+
+// oilPoolInFog reports whether an oil pool's heart is covered, including
+// the clear haze outside the core and colony protectors.
+func oilPoolInFog(s *State, col, row int) bool {
+	d, ok := depositAt(col, row)
+	if !ok || d.Kind != kindOil {
+		return false
+	}
+	x, y := cellCenterUnits(d.HeartCol, d.HeartRow)
+	return fogExposureAt(s, x, y) > 0
+}
+
+func oilPoolAccess(s *State, col, row int) string {
+	if oilPoolInFog(s, col, row) {
+		return "covered by fog"
+	}
+	return "clear"
 }
 
 // fogDistanceAt returns how far the tile under a world point sits from

@@ -22,6 +22,38 @@ func safePool(t *testing.T) Deposit {
 	return d
 }
 
+func outsideOilPool(t *testing.T, s *State) Deposit {
+	t.Helper()
+	for _, d := range land.deposits {
+		if d.Kind != kindOil {
+			continue
+		}
+		x, y := cellCenterUnits(d.HeartCol, d.HeartRow)
+		if !inSafeZone(s, x, y) {
+			return d
+		}
+	}
+	t.Fatal("the region has no oil pool outside the core bubble")
+	return Deposit{}
+}
+
+func protectorCellNearPool(t *testing.T, s *State, d Deposit) (int, int) {
+	t.Helper()
+	x, y := cellCenterUnits(d.HeartCol, d.HeartRow)
+	for row := d.HeartRow - 16; row <= d.HeartRow+16; row++ {
+		for col := d.HeartCol - 16; col <= d.HeartCol+16; col++ {
+			px, py := cellCenterUnits(col, row)
+			if math.Hypot(px-x, py-y) > protectorBubbleTiles*unitsPerTile ||
+				!canPlace(s, BuildingProtector, col, row) {
+				continue
+			}
+			return col, row
+		}
+	}
+	t.Fatal("no clear buildable cell lies under a protector's bubble")
+	return 0, 0
+}
+
 // pumpOn puts a finished pump on a pool's middle, skipping the robots'
 // work.
 func pumpOn(t *testing.T, s *State, d Deposit) Building {
@@ -96,6 +128,86 @@ func TestAPumpStandsOnAPoolAndAPoolTakesOne(t *testing.T) {
 	}
 	if canPlace(s, BuildingPump, pc+1, pr) {
 		t.Error("a pool with a pump rising took a second one")
+	}
+}
+
+func TestFogBlocksAnOilPoolUntilAProtectorClearsIt(t *testing.T) {
+	s := newGame()
+	seedStock(s)
+	arriveAll(s)
+	noRivals(s)
+	d := outsideOilPool(t, s)
+	tcol, trow := cellTile(d.HeartCol, d.HeartRow)
+	if !oilPoolInFog(s, tcol, trow) ||
+		oilPoolAccess(s, tcol, trow) != "covered by fog" {
+		t.Fatal("an outside oil pool is not reported as covered by fog")
+	}
+
+	r := s.Robots[1]
+	Apply(s, AssignRobot{ID: r.ID, Col: tcol, Row: trow})
+	r = s.Robots[r.ID]
+	r.WorkTicks = 1
+	r.X, r.Y = postSpot(tcol, trow, r.ID)
+	s.Robots[r.ID] = r
+	before := remainingAt(s, tcol, trow)
+	stepRobot(s, &r)
+	if r.WorkTicks != 0 || !r.hasPost() ||
+		remainingAt(s, tcol, trow) != before {
+		t.Fatalf("the covered pool loaded oil or lost its robot's post")
+	}
+	r.Carry = 0
+	s.takeLoad(&r)
+	if remainingAt(s, tcol, trow) != before || r.Carry != 0 {
+		t.Fatal("a direct load took oil from a covered pool")
+	}
+
+	col, row := protectorCellNearPool(t, s, d)
+	raised(t, s, BuildingProtector, col, row)
+	if oilPoolInFog(s, tcol, trow) || oilPoolAccess(s, tcol, trow) != "clear" {
+		t.Fatal("the protector did not clear the oil pool")
+	}
+	s.takeLoad(&r)
+	if remainingAt(s, tcol, trow) >= before || r.Carry <= 0 {
+		t.Fatal("the cleared pool did not resume extraction")
+	}
+}
+
+func TestFogStopsAndRestartsAnExternalPump(t *testing.T) {
+	s := newGame()
+	seedStock(s)
+	arriveAll(s)
+	noRivals(s)
+	d := outsideOilPool(t, s)
+	pc, pr := pumpCell(d)
+	pump := raised(t, s, BuildingPump, pc, pr)
+	col, row := groundNearCore()
+	silo := raised(t, s, BuildingSilo, col, row)
+	pipe := layNow(t, s, pump.ID, silo.ID)
+	tcol, trow := cellTile(pc, pr)
+	before := remainingAt(s, tcol, trow)
+	stepPipes(s)
+	if got := s.Pipes[pipe.ID].Flow; got != 0 {
+		t.Fatalf("a pump under fog sent %v L, want none", got)
+	}
+	if remainingAt(s, tcol, trow) != before ||
+		pumpStatus(s, pump) != pumpFogged {
+		t.Fatal("the covered pool lost oil or the pump missed its fog status")
+	}
+
+	col, row = protectorCellNearPool(t, s, d)
+	raised(t, s, BuildingProtector, col, row)
+	stepPipes(s)
+	pipe = s.Pipes[pipe.ID]
+	if math.Abs(pipe.Offered-pumpLitersPerSecond/60) > 1e-9 {
+		t.Fatalf("a cleared pump offered %v L, want %v",
+			pipe.Offered, pumpLitersPerSecond/60)
+	}
+	if math.Abs(pipe.Flow-tankFillPerSecond/60) > 1e-9 {
+		t.Fatalf("a cleared pump moved %v L, want %v",
+			pipe.Flow, tankFillPerSecond/60)
+	}
+	if remainingAt(s, tcol, trow) >= before || pumpStatus(s, pump) != pumpPumping {
+		t.Fatal("the protected pool did not resume pumping")
 	}
 }
 

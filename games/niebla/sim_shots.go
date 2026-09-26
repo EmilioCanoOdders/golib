@@ -180,9 +180,8 @@ func (s *State) hurtEnemy(id int64, damage float64) {
 	}
 }
 
-// hurtColonyUnit damages a trooper or mechanic; one that falls leaves a
-// quarter of its cost and onboard resources in a wreck. Workers have no
-// health to take.
+// hurtColonyUnit applies rival fire to troopers and mechanics; one that
+// falls leaves a quarter of its cost and onboard resources in a wreck.
 func (s *State) hurtColonyUnit(id int64, damage float64) {
 	r, ok := s.Robots[id]
 	if !ok || (r.Kind != RobotCombat && r.Kind != RobotRepair) {

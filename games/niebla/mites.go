@@ -166,7 +166,7 @@ func (f *miteField) host(key string, x, y float64, dt float32) *miteHost {
 // want counts the mites a host calls for: its body's volume, thinned by
 // how much fog stands on it. Under a bubble it calls for none.
 func (h *miteHost) want(s *State) {
-	fog := fogAt(s, float64(h.X), float64(h.Y))
+	fog := fogExposureAt(s, float64(h.X), float64(h.Y))
 	volume := float64(h.Across * h.Across * h.Height)
 	h.Wanted = int(volume * mitesPerCubicUnit * fog)
 	if h.Wanted > mitesMaxPerHost {

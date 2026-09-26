@@ -29,9 +29,9 @@
 //   - sim_pipes.go holds the pumps and the pipes: the curve through the
 //     player's clicks, its price by the section, the robots laying it
 //     and the oil it carries; pipes.go draws them and lays them.
-//   - sim_fog.go holds the fog's law: its cycles and swells, how far
-//     the line presses in, and what a swell means for walkers and
-//     tanks.
+//   - sim_fog.go holds the fog's law: cycles, swells, exposure and oil
+//     pools covered outside the colony's bubbles; sim_robots.go applies
+//     stationary wear and sim_pipes.go stops covered pools' pumps.
 //   - region.go holds the region's measures, the ground of the seed in
 //     hand and the isometric projection, and worldgen.go generates that
 //     ground from a seed - relief by wave function collapse, cover,

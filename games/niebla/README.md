@@ -194,14 +194,14 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); camera, selection, open cards, robot roster, individual assignment mode and pointer modes live here, never serialized; the schematics' callout, rivals' HUD, reach overlays and autosave are view state too |
 | `radial.go` | The build menu: the two rings a click on empty ground opens - the build groups (industry, military, logistics), then the group's blueprints - laid out around the cell every frame, and `backRadial`/`closeRadial`/`openRadial` for the scene |
 | `glyphs.go` | The marks the build menu wears: a group's own glyph, a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both - and the pipe's mark, the tube the region lifts on posts |
-| `state.go` | The simulation's state and save-schema version: builders, workers, troopers and mechanics with their saved screen-facing octant, buildings with their tanks, production type, reloads and damage, stock, deposits, jobs, piles, pipes, weather and rival tables, plus the schematics ledger; `newGame` gives the colony one fueled builder |
+| `state.go` | The simulation's state and save-schema version: builders, workers, troopers and mechanics with saved hull, facing and fog-stillness ticks, buildings with their tanks, production type, reloads and damage, stock, deposits, jobs, piles, pipes, weather and rival tables, plus the schematics ledger; `newGame` gives the colony one fueled builder |
 | `actions.go` | The actions (`Tick`, `SendRobot`, ID-specific `AssignRobot` and `RecallRobot`, `MarkBuilding`, typed `QueueRobot`, `QueueMechanic`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
-| `sim_robots.go` | The robots' rules and tuning: `robotDay`, common priorities, builders alone claiming construction and pipe work, workers mining posts, builders and unassigned workers collecting piles, `postRobots` and worker-only `pickRobot`, movement, pipe-section claims and idle ranks |
+| `sim_robots.go` | The robots' rules and tuning: `robotDay`, common priorities, builders alone claiming construction and pipe work, workers mining posts, builders and unassigned workers collecting piles, oil-pool waits under fog, stationary hull damage and tank wear, `postRobots` and worker-only `pickRobot`, movement, pipe-section claims and idle ranks |
 | `sim_piles.go` | Demolition, unit wrecks and loose items: `canDemolish`, the 25% unit recovery (`dropRobotWreck`), the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, unprotected pump exposure, protector upkeep, storage, refueling and production choices for builders, workers, troopers and mechanics |
 | `sim_oil.go` | Oil's spendable tanks and dedicated protector reserves: `oilTotal`, `oilCap`, `payOil`, all physical tank capacity, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
-| `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus`; tanks fill from pipes at a shared 1.6 L/s limit and pass excess onward, while protectors keep their reserve and upkeep; each pipe records offered, moved and cumulative liters for the view |
-| `sim_fog.go` | The fog's law and tuning: cycles, swells, where the line stands now (`fogLineNow`), the drag a walker keeps (`fogDrag`) |
+| `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus`; fog-covered oil pools stop pumps without losing oil, protectors clear them, tanks fill from pipes at a shared 1.6 L/s limit and pass excess onward, while protectors keep their reserve and upkeep; each pipe records offered, moved and cumulative liters for the view |
+| `sim_fog.go` | The fog's law and tuning: cycles, swells, local exposure (`fogExposureAt`), oil pools covered outside bubbles, where the line stands now (`fogLineNow`), and the drag a walker keeps (`fogDrag`) |
 | `sim_enemies.go` | The introduction and rival movement: `Enemy` with its saved facing octant, `Party`, `Raids`, `Mark` and `Report`; scout and introductory raid, saved entry bearing, timed city arrivals, party stages, siphoning and return, fog exposure, wrecks, guard posts and the state's PRNG |
 | `sim_cities.go` | Rival cities: serializable production, deterministic building order, finite local oil/mineral reserves, city arrival and old-save migration, city-produced sorties and mobile artillery |
 | `sim_tech.go` | The schematics: the robot factory is the opening drop, first delivery unlocks infrastructure, then the scout's theft, frontier clock, first raid and rival factory trigger their drops; `stepTech`, `kindUnlocked`, `dropArrived` and `techPending` derive arrivals and `State.Tech` keeps which drops were opened |
@@ -212,7 +212,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `enemies.go` | The rivals on the screen: the scouts' marks on the ground, shadows and eight-view PNG models for all four moving rival chassis, damage bars and the words the player is told (`threatWords` for the HUD, `reportWords` and `drawReport` for the news) |
 | `mist.go` | The fog on the screen: a haze outside every repulsor's circle and `mistLayers` layers that thicken it past the line, each the region minus the clear circles (`clearDiscs`: the core's, the protectors', the rivals'), cut in strips whose gaps join into quads (`drawMist`, `mistGaps`), so the circles are round at every zoom and the air inside them is clear |
 | `bubble_edges.go` | The core's and protectors' joined clear ground: circle intersections divide each boundary into arcs, and only the arcs outside every other bubble are drawn, leaving one exterior outline |
-| `swell.go` | How a pressing swell looks, by its pressure: waves of shade rolling in to the line, stopping at the clear circles, and one-pixel static over the mist; a pure picture of the state |
+| `swell.go` | How a pressing swell looks: waves of shade roll in to the line, stopping at clear circles; one-pixel static also appears in calm haze, at half strength, and grows darker with exposure |
 | `region.go` | The region's measures, `land` (the generated ground of the seed in hand) and `useRegion`, the isometric `project` that lifts by the relief and its inverse `unproject`, tile helpers, `Deposit` and `depositAt`; pure Go, no drawing |
 | `worldgen.go` | The generator, a pure function of the seed: relief by wave function collapse, ground cover, deposits as fields of richness; its own PRNG and noise; pure Go, no drawing |
 | `ground.go` | The ground's painter: relief as lit slopes, cover colors with a grain, blocks sized to the zoom and culled to the view, rocks, bushes, tufts, and the deposits cell by cell (`oreCut` wears them from the rim in) |
@@ -221,7 +221,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
 | `inspect.go` | The inspection panel: layout, hit testing, painting, clickable paginated worker portraits, remotely opened robot cards, individual recall and return buttons, other card actions and the integrity line of a damaged building; the cell's outline (`cellDiamond`) |
 | `robots_panel.go` | The fixed colony roster under the squad strip: builders, available workers, workers grouped by deposit and mechanics; current activity, paging, individual deposit assignment and recall |
-| `mites.go` | The fog's wear, for looks only: mites of darkness orbiting whatever stands in the mist, by its volume, trailing walkers and closing in on what stands still; view, never state |
+| `mites.go` | The fog's wear, for looks only: mites of darkness orbiting whatever stands in exposed air, by its volume, trailing walkers and closing in on what stands still; half strength in haze, view and never state |
 | `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, orange bands sized by offered flow and animated by liters moved) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
 | `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset/replay the world, next arrival, create city, finish one city building, finish/send a battalion, fast-forward and next schematics —; view only, acting through `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
 | `tech.go` | The schematics on the screen: the badge over the core - breathing halos around the drop's mark - while an unopened drop waits, the callout its click opens (`techWords`, `techWrap`) with a square per thing the drop brings (`techBrings`, `drawTechSquares`), and the words (`techWords`) and ink (`techInk`) of each drop; view, never state |
@@ -229,7 +229,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and amplitude-modulated crystal pings, gunfire and shell impacts, low interface clicks, a site-marking thump and a low fanfare for new rival reports. Ordinary world emitters fade steeply with distance and become quiet beyond the view; cannon reports keep their longer, gentler range. Individual shell whistles track their own positions through the descending half of flight. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |
 | `tools/soundgen/` | The maker of the wind, oil and mineral sounds and `assets/sounds/alert.wav`: stdlib Go renders the noise beds as WAV for conversion to OGG, the mineral ring as a seamless WAV with irregular pitch drift of at most one semitone, the crystal ping with amplitude modulation, and the low alert fanfare with `--alert`; run it only when a sound changes |
 | `draw.go` | The region painter: the core's monolith, buildings with their damage bars, the bubbles' outside edges, build-site wireframes, the marking ghost, the stores' fill bars (`drawFillBar`) and the idle count by the core |
-| `units.go` | The colony's four unit models on the ground, with Blender-rendered shadows, cargo, charge feedback and combat-unit health bars |
+| `units.go` | The colony's four unit models on the ground, with Blender-rendered shadows, cargo, charge feedback, combat-unit health bars and the workers' oil-tank bar over their bodies |
 | `worldsprites.go` | The eight eight-direction model and shadow sheets in the world and the scaled model icons; converts the world ground point to a screen pixel before drawing so moving sprites do not jump by the camera's zoom |
 | `orientation.go` | The screen-space eight-way facing derived from an isometric movement vector, and the ground-plane yaw used for world details |
 | `sources/models/studio.py` | One shared Blender authoring toolkit: geometry primitives, materials, 2:1 camera, light, world-yaw conversion, eight-view model sheets and isolated shadow masks |
@@ -244,12 +244,12 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `world_test.go` | The simulation driven directly: the starting builder, explicit individual assignment, worker-only auto-assignment, role-specific carrying, loot and construction priorities, migration, dry deposits, determinism and JSON round trip |
 | `economy_test.go` | The deterministic economy probe: safe harvesting, worker growth and a protected oil outpost over three seeds, sampled each minute into an opt-in CSV report with protector fuel separated from spendable oil |
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
-| `pipes_test.go` | Pumps and pipes driven directly: pump and site cards stay on the pump cell, an exposed pump is eaten unless sheltered, pipes are paid and laid by sections, robots claim one section each, tanks share their pipe-fill limit across inlets and pass excess through a chain, protectors keep their reserve and upkeep, source outlets share flow, blocked tanks throttle pumps, bands show offered versus actual flow, pipes move oil between tanks, workers haul and refuel, illegal pipe actions are refused, pipe removal drops its cost as a pile, curves follow bends, and saves resume deterministically; can write a pump/protector flow fixture with `NIEBLA_PIPE_FLOW_SHOT_STATE` |
+| `pipes_test.go` | Pumps and pipes driven directly: oil-pool fog stops robot loading and pump flow without draining the pool, a protector restores extraction, an exposed pump is eaten unless sheltered, pipes are paid and laid by sections, robots claim one section each, tanks share their pipe-fill limit across inlets and pass excess through a chain, protectors keep their reserve and upkeep, source outlets share flow, blocked tanks throttle pumps, bands show offered versus actual flow, pipes move oil between tanks, workers haul and refuel, illegal pipe actions are refused, pipe removal drops its cost as a pile, curves follow bends, and saves resume deterministically; can write a pump/protector flow fixture with `NIEBLA_PIPE_FLOW_SHOT_STATE` |
 | `protector_test.go` | Protector fuel: upkeep drains its dedicated tank, radius fades below the configured threshold and vanishes empty, robots and pipes refill it, the reserve stays unavailable to other costs, old saves migrate once with starting charge, and an opt-in state fixture supports visual shots |
-| `mites_test.go` | The mites driven with no window: counted by volume and only in the fog, tight on what stands still and trailing a walker, fading over what is gone, the falloff's layers |
+| `mites_test.go` | The mites driven with no window: counted by volume and exposure, half strength in the haze, tight on what stands still and trailing a walker, fading over what is gone, the falloff's layers |
 | `dev_test.go` | The dev actions: a held swell stays up and doesn't count, a placed robot is built, the city tool buttons have separate hit boxes, `unitsAtWorld` undoes `project` |
 | `cities_test.go` | City founding beyond artillery range, shared intro bearing, pylon-first construction, finite local economy, first sortie without artillery, second with mobile artillery, dev actions, replay and JSON persistence |
-| `fog_test.go` | The fog driven directly: cycles, the first swell on schedule, the pressed line, the bubble's margin, the pushed band's drag, the swell's burn, the HUD's forecast |
+| `fog_test.go` | The fog driven directly: cycles, swell timing, line and bubble margin, pushed-band drag, stationary wear by exposure, movement and bubble resets, saved wear and the HUD forecast |
 | `identity_test.go` | The identity derived from a machine ID: stable, distinct, and the parsers of what `reg query`, `ioreg` and the machine-id files say |
 | `store_test.go` | The database driven directly: an identity kept across runs, the fallback one too, the token column waiting empty, a base saved and loaded back whole, a second save replacing the first, one player's save invisible to another, the DB path's rules |
 | `tech_test.go` | The schematics driven directly: factory at start, first delivery brings infrastructure before the scout, later triggers fire on time, locked actions are refused, old saves keep earned drops, `DevNextTech` brings the ladder in order, and the ledger survives a round trip |
@@ -265,9 +265,10 @@ robot-sized form:
   parties, rival cities and their production, reports and projectiles.
   The ground itself is generated from `State.Seed` and never enters the
   state. It has no pointers, channels or functions, so it serializes as it
-  is. `State.Version` 2 migrates saves: legacy `core` units become fueled
-  builders, `built` units become workers, and factories keep their selected
-  product while it is in progress.
+  is. `State.Version` 3 migrates saves: legacy `core` units become fueled
+  builders, `built` units become workers, factories keep their selected
+  product while it is in progress, and builders and workers receive their
+  initial hull.
 - Actions (`actions.go`) are structs (`Tick`, `SendRobot`, `AssignRobot`,
   `RecallRobot`, typed `QueueRobot`, `QueueMechanic`);
   `Apply` mutates the state it is given — one owner, no copies — and is
@@ -511,6 +512,23 @@ in (`drawSwellWaves`, in the world, under the fog line) and static over
 the mist (`drawSwellStatic`, in screen pixels) - from `State.Ticks`
 alone, through `hashUnit`, with no randomness and no memory.
 
+`fogExposureAt` is zero in the core or a colony protector bubble, 0.5 in
+the clear haze, then rises with `fogAt` to 1 in deep fog. A tanked robot
+that has not moved outside a colony bubble for `fogStillGraceTicks` (2 s)
+loses oil at `fogStillBurnPerSecond` (1 L/s times exposure) and hull at
+`fogStillDamagePerSecond` (2 points/s times exposure); movement resets
+`Robot.StillTicks`, and old saves start that counter at zero. The ordinary
+load burn remains separate. Mites and static specks also follow exposure:
+the haze shows them at half strength. Rivals keep their existing
+`fogAt` exposure timer.
+
+Any oil pool outside colony bubbles is covered even in calm haze.
+`oilPoolInFog` blocks robot loading and pump flow but never changes
+`State.Drain`; a protector over the pool restores access. A worker assigned
+to a covered pool keeps its post and waits at the core. Pool cards and pump
+cards say when the fog blocks access. Lilac mining is not blocked by this
+oil-pool rule.
+
 A swell starts whole at a cycle's end — which is what makes the HUD's
 forecast exact: while it says `swell next cycle` (the ghost line stands
 where the fog will press in), the swell rises at that very boundary.
@@ -532,13 +550,17 @@ pulled into construction; `SendRobot` chooses only an unassigned worker,
 and `AssignRobot` retasks the selected unit by ID.
 
 Builders and workers burn oil while carrying; mechanics spend it on
-repairs. Troopers carry nothing and pay for their shots. Under the low
+repairs. Troopers carry nothing and pay for their shots. Every unit has
+hull: builders and workers have 60 points, troopers 80 and mechanics 60.
+Standing outside a bubble for two seconds makes the fog drain oil and
+damage hull by exposure; moving resets the counter. Under the low
 line (`robotLowTankAt`) the tank claims its day and walks the unit to the
 nearest charger or the core, where it stands until full — even past the
 low line, so it does not dance between post and work. Full is
-`tankFullSlack` short of the brim. Outside a bubble, an empty tank means
-the fog digests any of these units, including the opening builder. Burn
-and drag are dials in `sim_buildings.go`.
+`tankFullSlack` short of the brim. Outside a bubble, an empty tank or hull
+means the fog digests any of these units, including the opening builder.
+Load burn and drag are dials in `sim_buildings.go`; stationary fuel and
+hull wear are tuned in `sim_robots.go` and use `fogExposureAt`.
 
 When the fog digests a built unit, `stepSim` leaves a wreck with
 `unitWreckRefund` 0.25 of each resource: build cost, cargo and remaining
@@ -998,12 +1020,15 @@ piles survive a save (and a save from before them takes one), and the
 cards carry their trash cans. `fog_test.go` does the same for the fog slice: the
 cycles tick, the first swell rises on schedule and drains whole, the
 line presses in and never reaches the bubble, the pushed band drags
-more, a swell burns outside but not inside, and the HUD forecasts.
+more, stationary wear starts after two seconds and scales from haze to
+deep fog, hull and tank damage are tested in haze and swell, and deep fog
+digests a stationary builder by its hull. Movement and bubbles stop wear,
+saves resume it, and the HUD forecasts.
 `mites_test.go` pins the fog's mites, which are view but need no
-window: their count follows the body's volume and the fog on it, none
-under a bubble; they sit on a robot that stands still and trail one that
-walks; they fade over a host that left the state; and the layers they
-are drawn with stack into `miteFalloff`.
+window: their count follows the body's volume and exposure, half strength
+in the haze and none under a bubble; they sit on a robot that stands still
+and trail one that walks; they fade over a host that left the state; and
+the layers they are drawn with stack into `miteFalloff`.
 `enemies_test.go` pins the rivals' introduction: the scout arrives on
 time, steals, leaves its mark and goes; the raid camps, steals and
 leaves; guard-post fire spends oil and wrecks drop loot; and a crawlerless

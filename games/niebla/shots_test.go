@@ -231,6 +231,7 @@ func TestRivalShotsDamageMechanicsButNotWorkers(t *testing.T) {
 	s := newGame()
 	noRivals(s)
 	worker := s.Robots[1]
+	workerHealth := worker.Health
 	col, row := groundNearCore()
 	home := raised(t, s, BuildingWarFactory, col, row)
 	cx, cy := cellCenterUnits(col, row)
@@ -248,8 +249,9 @@ func TestRivalShotsDamageMechanicsButNotWorkers(t *testing.T) {
 	if got := s.Robots[id].Health; got != mechanicHealth-15 {
 		t.Fatalf("the rival bullet left the mechanic at %v health", got)
 	}
-	if got := s.Robots[worker.ID].Health; got != 0 {
-		t.Errorf("a worker gained health from a shot: %v", got)
+	if got := s.Robots[worker.ID].Health; got != workerHealth {
+		t.Errorf("a worker took rival-fire damage: %v to %v",
+			workerHealth, got)
 	}
 
 	s.fire(Shot{

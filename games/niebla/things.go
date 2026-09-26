@@ -110,7 +110,7 @@ type Thing struct {
 	Amount  float64 // the type's headline quantity, in its SI unit
 	Caption string  // a headline that replaces the summary, a robot's task
 	Ref     int64   // the entity's ID in the state: robots, buildings, piles
-	CellCol int     // sites: the cell the job stands on
+	CellCol int     // deposits: heart cell; sites: the cell the job stands on
 	CellRow int     //
 	Full    float64 // deposits: what the body held at first
 	Area    float64 // deposits: the ground its ore covers, in hectares
@@ -252,10 +252,12 @@ func depositThing(d Deposit) Thing {
 		kind = TypeLilac
 	}
 	return Thing{
-		Type: kind,
-		ID:   fmt.Sprintf("%s@%s", kind, depositKey(d)),
-		Full: d.Full,
-		Area: float64(d.Cells) * buildingCell * buildingCell / 10000,
+		Type:    kind,
+		ID:      fmt.Sprintf("%s@%s", kind, depositKey(d)),
+		CellCol: d.HeartCol,
+		CellRow: d.HeartRow,
+		Full:    d.Full,
+		Area:    float64(d.Cells) * buildingCell * buildingCell / 10000,
 	}
 }
 
@@ -385,6 +387,9 @@ func robotCaption(s *State, r Robot) string {
 	case taskCollect:
 		return "fetching loose items"
 	case taskPost:
+		if oilPoolInFog(s, r.PostCol, r.PostRow) {
+			return "waiting for fog"
+		}
 		return postWord(r) + " run"
 	case taskSquad:
 		if squadOf(s, r.Squad).Order == OrderAttack {

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"math"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -119,6 +121,168 @@ func TestASwellNeverReachesTheBubble(t *testing.T) {
 	}
 	if line := fogLineNow(s); line < coreBubbleRadius+fogSwellMargin {
 		t.Errorf("the pushed line at %v ignores the bubble's margin", line)
+	}
+}
+
+func TestClearHazeCarriesHalfExposureAndBubblesClearIt(t *testing.T) {
+	s := newGame()
+	x, y := pointAtTiles(5)
+	if fogAt(s, x, y) != 0 {
+		t.Fatalf("the point at five tiles is in the calm fog, want clear haze")
+	}
+	if got := fogExposureAt(s, x, y); got != fogHazeExposure {
+		t.Fatalf("clear haze exposure is %v, want %v", got, fogHazeExposure)
+	}
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	if got := fogExposureAt(s, cx, cy); got != 0 {
+		t.Errorf("the core bubble has exposure %v, want none", got)
+	}
+	s.raise(BuildingProtector, int(x/buildingCell), int(y/buildingCell))
+	if got := fogExposureAt(s, x, y); got != 0 {
+		t.Errorf("the protector bubble has exposure %v, want none", got)
+	}
+}
+
+func stationaryBuilder(t *testing.T, distance float64) *State {
+	t.Helper()
+	x, y := pointAtTiles(distance)
+	return stationaryBuilderAt(t, x, y)
+}
+
+func stationaryBuilderDeepFog(t *testing.T) *State {
+	t.Helper()
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	offset := 13 * unitsPerTile / math.Sqrt2
+	return stationaryBuilderAt(t, cx+offset, cy+offset)
+}
+
+func stationaryBuilderAt(t *testing.T, x, y float64) *State {
+	t.Helper()
+	s := newGame()
+	col, row := int(math.Floor(x/buildingCell)),
+		int(math.Floor(y/buildingCell))
+	if col < 0 || row < 0 || col >= regionCellCols || row >= regionCellRows {
+		t.Fatal("the test site falls outside the region")
+	}
+	cx, cy := cellCenterUnits(col, row)
+	angle := float64(1) * goldenAngle
+	r := s.Robots[1]
+	r.X = cx + math.Cos(angle)*11
+	r.Y = cy + math.Sin(angle)*11
+	s.Robots[r.ID] = r
+	s.Jobs = []Job{{
+		Kind: BuildingProtector, Col: col, Row: row, Left: 1000,
+	}}
+	return s
+}
+
+func TestTheFogWearsAStationaryRobotAfterItsGrace(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		distance float64
+		deep     bool
+		swell    bool
+		fuelLoss float64
+		hullLoss float64
+	}{
+		{name: "haze", distance: 5, fuelLoss: 1, hullLoss: 2},
+		{name: "deep fog", deep: true, fuelLoss: 2, hullLoss: 4},
+		{name: "swell", distance: 11, swell: true, fuelLoss: 2, hullLoss: 4},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var s *State
+			if test.deep {
+				s = stationaryBuilderDeepFog(t)
+			} else {
+				s = stationaryBuilder(t, test.distance)
+			}
+			if test.swell {
+				swellUp(s)
+			}
+			before := s.Robots[1].Tank
+			beforeHealth := s.Robots[1].Health
+			runTicks(s, 4*60)
+			r := s.Robots[1]
+			if got := before - r.Tank; math.Abs(got-test.fuelLoss) > 0.001 {
+				t.Fatalf("four stationary seconds wore %v L, want %v",
+					got, test.fuelLoss)
+			}
+			if got := beforeHealth - r.Health; math.Abs(got-test.hullLoss) > 0.001 {
+				t.Errorf("four stationary seconds damaged %v hull, want %v",
+					got, test.hullLoss)
+			}
+			if r.StillTicks != 4*60 {
+				t.Errorf("the robot stood for %d ticks, want %d",
+					r.StillTicks, 4*60)
+			}
+		})
+	}
+}
+
+func TestDeepFogDigestsAStationaryRobotByItsHull(t *testing.T) {
+	s := stationaryBuilderDeepFog(t)
+	s.Jobs[0].Left = 100000
+	r := s.Robots[1]
+	col, row := robotCell(r)
+	runTicks(s, 60*60)
+	if _, alive := s.Robots[r.ID]; alive {
+		t.Fatal("the builder survived a minute of standing in deep fog")
+	}
+	if _, found := pileAt(s, col, row); !found {
+		t.Fatal("the hull-digested builder left no wreck")
+	}
+}
+
+func TestStationaryWearResetsOnMovementAndInsideABubble(t *testing.T) {
+	t.Run("movement", func(t *testing.T) {
+		s := newGame()
+		x, y := pointAtTiles(11)
+		r := s.Robots[1]
+		r.X, r.Y = x, y
+		r.StillTicks = fogStillGraceTicks + 10
+		s.Robots[r.ID] = r
+		Apply(s, Tick{})
+		if got := s.Robots[r.ID].StillTicks; got != 0 {
+			t.Fatalf("a walking robot accumulated %d still ticks", got)
+		}
+	})
+	t.Run("bubble", func(t *testing.T) {
+		s := stationaryBuilder(t, 3)
+		r := s.Robots[1]
+		r.Tank -= 20
+		r.StillTicks = fogStillGraceTicks + 10
+		wantTank := r.Tank
+		wantHealth := r.Health
+		s.Robots[r.ID] = r
+		runTicks(s, 4*60)
+		r = s.Robots[1]
+		if r.StillTicks != 0 || r.Tank != wantTank ||
+			r.Health != wantHealth {
+			t.Fatalf("inside a bubble the robot has %d still ticks and %v L",
+				r.StillTicks, r.Tank)
+		}
+	})
+}
+
+func TestStationaryFogWearResumesFromASave(t *testing.T) {
+	s := stationaryBuilder(t, 11)
+	r := s.Robots[1]
+	r.StillTicks = fogStillGraceTicks - 30
+	s.Robots[r.ID] = r
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resumed State
+	if err := json.Unmarshal(data, &resumed); err != nil {
+		t.Fatal(err)
+	}
+	resumed.enterRegion()
+	runTicks(s, 60)
+	runTicks(&resumed, 60)
+	if !reflect.DeepEqual(s.Robots[1], resumed.Robots[1]) {
+		t.Fatalf("the saved robot resumed as %+v, want %+v",
+			resumed.Robots[1], s.Robots[1])
 	}
 }
 

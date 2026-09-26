@@ -39,7 +39,7 @@ type State struct {
 	Tech       map[string]bool    // the schematics that arrived: drop ID -> opened (sim_tech.go)
 }
 
-const stateVersion = 2
+const stateVersion = 3
 
 // Fog is the region's weather, where the fog's breath has got to. The
 // swell rises at a cycle's end and drains tick by tick; NextIn counts
@@ -81,24 +81,25 @@ const (
 // tick, so a save reproduces its future. What a robot claims - a post or a
 // pipe section - is state too, since the other robots read it.
 type Robot struct {
-	ID        int64
-	Kind      RobotKind // builder, worker, combat or repair
-	X, Y      float64   // position, in units (1 u = 1 m)
-	Facing    uint8     // screen-facing octant; zero points right
-	Tank      float64   // liters of oil left
-	PostCol   int       // the tile of the patch it was sent to; -1 when free
-	PostRow   int       //
-	WorkTicks int64     // ticks of loading left at its post
-	Carry     float64   // what it carries, in the cargo's SI unit
-	Cargo     ThingType // oil, lilac, or "" while empty
-	Pile      int64     // the pile it is loading from; 0 while loading at its post
-	Pipe      int64     // the pipe whose section it claimed to lay; 0 with no claim
-	Section   int64     // the claimed section, from the pipe's source out
-	Squad     int64     // troopers: the war factory whose squad it is in
-	Factory   int64     // mechanics: the war factory that built it
-	Health    float64   // troopers and mechanics: what is left of it
-	Reload    int64     // troopers: ticks until the next shot
-	Aim       int64     // troopers: the vehicle the last shot went to
+	ID         int64
+	Kind       RobotKind // builder, worker, combat or repair
+	X, Y       float64   // position, in units (1 u = 1 m)
+	Facing     uint8     // screen-facing octant; zero points right
+	Tank       float64   // liters of oil left
+	StillTicks int64     // ticks spent standing outside every bubble
+	PostCol    int       // the tile of the patch it was sent to; -1 when free
+	PostRow    int       //
+	WorkTicks  int64     // ticks of loading left at its post
+	Carry      float64   // what it carries, in the cargo's SI unit
+	Cargo      ThingType // oil, lilac, or "" while empty
+	Pile       int64     // the pile it is loading from; 0 while loading at its post
+	Pipe       int64     // the pipe whose section it claimed to lay; 0 with no claim
+	Section    int64     // the claimed section, from the pipe's source out
+	Squad      int64     // troopers: the war factory whose squad it is in
+	Factory    int64     // mechanics: the war factory that built it
+	Health     float64   // hull points left
+	Reload     int64     // troopers: ticks until the next shot
+	Aim        int64     // troopers: the vehicle the last shot went to
 }
 
 // tanked reports whether the robot runs on a tank of oil.
@@ -255,6 +256,9 @@ func (s *State) migrateState() {
 		case "built":
 			r.Kind = RobotWorker
 		}
+		if health := robotMaxHealth(r.Kind); r.Health <= 0 && health > 0 {
+			r.Health = health
+		}
 		s.Robots[id] = r
 	}
 	for _, id := range sortedBuildingIDs(s) {
@@ -276,11 +280,8 @@ func (s *State) spawnRobot(kind RobotKind, x, y float64) int64 {
 	if r.tanked() {
 		r.Tank = robotTankLiters
 	}
-	if kind == RobotCombat {
-		r.Health = trooperHealth
-	}
-	if kind == RobotRepair {
-		r.Health = mechanicHealth
+	if health := robotMaxHealth(kind); health > 0 {
+		r.Health = health
 	}
 	s.Robots[id] = r
 	return id
