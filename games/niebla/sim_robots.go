@@ -296,7 +296,11 @@ func (r *Robot) stepLayPipe(s *State) {
 }
 
 func (r *Robot) collecting(s *State) bool {
-	if r.Kind == RobotCombat || r.Kind == RobotRepair {
+	if r.Kind == RobotWorker {
+		if r.hasPost() {
+			return false
+		}
+	} else if r.Kind != RobotBuilder {
 		return false
 	}
 	_, found := nearestPile(s, *r)

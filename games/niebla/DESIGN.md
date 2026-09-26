@@ -77,7 +77,7 @@ What is built can be unbuilt, and nothing is lost but the walking. (What a rival
 
 **The pile**, not a scatter. Loose items are one entity per demolished cell, a container drawn on the cell's middle that stands for everything lying there: a small heap of crates and drums, lilac or amber by what it holds, never under the dot size when far out, with a card of its own (`loose items`, its liters and kilograms, open by itself like any primary thing). It has no mass, no health and no capacity: it is bookkeeping with a picture, and the moment a robot takes the last of it, it is gone from the state. Scattering the items over the footprint was the other option and lost: a cell is 25 m across, so at any zoom but the closest a scatter reads as noise or as nothing, it multiplies entities and cards for no decision the player can take, and one pile keeps the state a small table (`State.Piles`, by ID: cell, oil, lilac). Until it is emptied a pile holds its cell - nothing can be marked there - and robots walk through it as they walk through everything. The fog leaves piles alone for now; whether it should nibble at what is left outside a bubble is an open dial, not a rule.
 
-**Picking up.** Clearing piles is a line in the robot's day, after raising build jobs and before working its own post: what already lies on the ground comes home before anything new is dug. A robot with nothing better to do walks to the nearest pile that holds something the stores have room for, loads like at a deposit (`robotLoadTicks`, one kind per trip, lilac first, up to `robotCarryLilac` / `robotCarryOil`) and hauls it in. A pile the stores have no room for just waits - which is what happens to the overflow of a full silo torn down - so robots never stand around with their arms full because of it.
+**Picking up.** Clearing piles is a line in the robot's day, after raising build jobs and before working its own post: what already lies on the ground comes home before anything new is dug. Any builder, or a worker without a deposit assignment, can walk to the nearest pile that holds something the stores have room for; an assigned worker sticks to its post instead. A builder carries only a third of a worker's load. Loading follows the deposit rule (`robotLoadTicks`, one kind per trip, lilac first, up to `robotCarryLilac` / `robotCarryOil`) before the robot hauls it in. A pile the stores have no room for just waits - which is what happens to the overflow of a full silo torn down - so robots never stand around with their arms full because of it.
 
 **Where a load goes.** The walk home ends at the nearest store of the cargo's kind: a warehouse or the core for lilac (solids), and for oil the nearest tank with room - a silo, a charger, a protector or the core - which is also where that oil then is (see [Oil has a place](#oil-has-a-place)). The core is a store like the others, and a robot unloads at its side (`storeStandoff` 11 u), not out at a parking spot. Lilac stays one stock and its roofs one sum; the nearest warehouse is only where the walking ends. A robot doesn't remember where its cargo came from, so this is one rule for every load, from a pile or from a deposit - which also makes silos and warehouses worth placing near the work, not just worth having.
 
@@ -308,10 +308,11 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - Builders first bring home any load they already carry and refuel when
   low, then raise buildings, take ordered ones down and lay pipes before
   collecting piles or working their own deposit post. Workers carry loads
-  home, refuel, finish loading, collect piles, work their assigned post
-  and idle; they never build or lay pipes. Both kinds have the same speed
-  and tank. A builder carries only one third of a worker's oil or lilac
-  load, enough for an emergency, not routine hauling. Troopers follow
+  home, refuel and finish loading; assigned workers return to their post,
+  while unassigned workers collect piles. Workers never build or lay pipes.
+  Both kinds have the same speed and tank. A builder carries only one third
+  of a worker's oil or lilac load, enough for an emergency, not routine
+  hauling. Troopers follow
   their squad; mechanics repair the oldest damaged building and then wait
   at their war factory.
 - `send robot` on a deposit card assigns one unassigned worker and never
@@ -330,9 +331,10 @@ For whoever works on the game, not for the player: in the region, hold Control a
   site cancelled at once. A builder walks over and works the order down
   (5 s of work, `demolishWorkTicks` 300); its tasks die as it falls, and
   its whole cost, plus what the stores lose the roof for, falls on its
-  cell as one pile of loose items that the robots haul back to the
-  stores. A protector can't be ordered down, or finish going, while its
-  current bubble is the only one over another building.
+  cell as one pile of loose items that builders and unassigned workers
+  haul back to the stores. Assigned workers stay at their deposits. A
+  protector can't be ordered down, or finish going, while its current
+  bubble is the only one over another building.
 - Rivals come for the oil, one moving party at a time: a scout four minutes in, which siphons 25 L and leaves its mark, then an introductory raid from the scout's bearing. Thirty cycles after the raid leaves, a crawler arrives and establishes a city that builds a repulsor, extractors and a war factory. The factory sends raiders first without artillery, then mobile artillery. Cities do not attack by themselves; their mobile forces do. Structures can be destroyed, wrecks drop loot, and the colony's artillery shells visible rival targets for lilac and oil (see [The rivals](#the-rivals)).
 - A war factory builds troopers, up to six, and they are its squad: one
   click orders them to guard a spot or attack a rival party, a chosen
@@ -357,7 +359,9 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - Buildings grow the colony out of the bubble: the oil-fed shadow protector holds a small bubble of its own, and only under an active bubble may any other building stand. Silos and warehouses give the stores a bigger roof; the charger refills built robots' tanks away from the core; the factory turns lilac and oil into new robots.
 - Four unit roles: builders (white) construct and lay pipes, workers
   (blue) harvest and haul, war-factory troopers fight as squads, and
-  mechanics repair buildings. The starting builder is a gift; every
+  mechanics repair buildings. Builders and unassigned workers haul loose
+  items; workers assigned to deposits stay on their mining work. The
+  starting builder is a gift; every
   factory-built unit costs lilac and oil. Builders, workers and mechanics
   burn oil from their tanks **while carrying something, and at no other
   time**; troopers pay for their shots. Low, a tanked unit walks to the
@@ -546,7 +550,8 @@ The robots, in `sim_robots.go`: `startingBuilders` 1, `robotSpeed` 30 u/s,
 `robotCarryOil` 30 L and `robotCarryLilac` 20 kg per worker trip; a builder
 carries `builderCarryPart` one third as much. `robotLoadTicks` is 150 (2.5 s
 loading at a deposit). Builders alone raise sites, take ordered buildings
-down and lay pipes; both roles can collect piles and work an explicitly
+down and lay pipes; builders and unassigned workers collect piles, while
+assigned workers stay at their posts. Builders can also work an explicitly
 assigned post. The idle ranks by
 the core use `parkSlots` 10 places, `parkRankSize` 5 to a rank,
 `parkSpacing` 7 u and `parkFromCore` 10 u before the monolith's broad face.
@@ -613,6 +618,10 @@ gift, and the first delivery brings infrastructure. The live rules are in
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-26: workers assigned to deposits no longer leave their posts to
+  collect loose items. Builders and unassigned workers still collect them;
+  builders carry only a third of a worker's load. Pinned by
+  `TestAssignedWorkersSkipLootButBuildersStillCollect`.
 - 2026-09-26: demolition stops being instant: somebody goes and does it.
   The trash can's second press **orders** a building taken down
   (`Building.Demolish`, the ticks of work left) instead of taking it

@@ -196,7 +196,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `glyphs.go` | The marks the build menu wears: a group's own glyph, a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both - and the pipe's mark, the tube the region lifts on posts |
 | `state.go` | The simulation's state and save-schema version: builders, workers, troopers and mechanics with their saved screen-facing octant, buildings with their tanks, production type, reloads and damage, stock, deposits, jobs, piles, pipes, weather and rival tables, plus the schematics ledger; `newGame` gives the colony one fueled builder |
 | `actions.go` | The actions (`Tick`, `SendRobot`, ID-specific `AssignRobot` and `RecallRobot`, `MarkBuilding`, typed `QueueRobot`, `QueueMechanic`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
-| `sim_robots.go` | The robots' rules and tuning: `robotDay`, common priorities, builders alone claiming construction and pipe work, workers mining posts, both roles collecting piles, `postRobots` and worker-only `pickRobot`, movement, pipe-section claims and idle ranks |
+| `sim_robots.go` | The robots' rules and tuning: `robotDay`, common priorities, builders alone claiming construction and pipe work, workers mining posts, builders and unassigned workers collecting piles, `postRobots` and worker-only `pickRobot`, movement, pipe-section claims and idle ranks |
 | `sim_piles.go` | Demolition, unit wrecks and loose items: `canDemolish`, the 25% unit recovery (`dropRobotWreck`), the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, unprotected pump exposure, protector upkeep, storage, refueling and production choices for builders, workers, troopers and mechanics |
 | `sim_oil.go` | Oil's spendable tanks and dedicated protector reserves: `oilTotal`, `oilCap`, `payOil`, all physical tank capacity, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
@@ -241,7 +241,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `robots_panel_test.go` | Roster grouping, paging, row bounds, button placement and selected-unit details |
 | `shots_test.go` | Bullet and shell impacts, building damage, mechanic repair rate and oil, defender damage and wrecks, and old war-factory saves |
 | `squads_test.go` | Trooper production and squad behavior, mechanic limits, target selection, health and wrecks |
-| `world_test.go` | The simulation driven directly: the starting builder, explicit individual assignment, worker-only auto-assignment, role-specific carrying, construction priorities, migration, dry deposits, determinism and JSON round trip |
+| `world_test.go` | The simulation driven directly: the starting builder, explicit individual assignment, worker-only auto-assignment, role-specific carrying, loot and construction priorities, migration, dry deposits, determinism and JSON round trip |
 | `economy_test.go` | The deterministic economy probe: safe harvesting, worker growth and a protected oil outpost over three seeds, sampled each minute into an opt-in CSV report with protector fuel separated from spendable oil |
 | `buildings_test.go` | The buildings driven directly: marking pays and raises, the fog refuses ground, the factory's robots, refueling, digestion, the fog's drag, full stores and silos, the protector's bubble on its cell |
 | `pipes_test.go` | Pumps and pipes driven directly: pump and site cards stay on the pump cell, an exposed pump is eaten unless sheltered, pipes are paid and laid by sections, robots claim one section each, protectors fill before passing surplus and keep their upkeep, source outlets share flow, bands show offered versus actual flow, pipes move oil between tanks, workers haul and refuel, illegal pipe actions are refused, pipe removal drops its cost as a pile, curves follow bends, and saves resume deterministically; can write a pump/protector flow fixture with `NIEBLA_PIPE_FLOW_SHOT_STATE` |
@@ -276,8 +276,9 @@ robot-sized form:
   tick from `robotDay`. Everyone brings carried loads home and minds its
   tank first. Builders then finish loading, build protector jobs before
   other sites, lay pipe, collect piles and work an explicitly assigned
-  post; workers skip construction and pipe work, then collect piles and
-  work their post. Mechanics and troopers use their own task lines.
+  post; workers skip construction and pipe work, returning to an assigned
+  post or collecting piles when unassigned. Mechanics and troopers use
+  their own task lines.
   Captions read the same priority (`Robot.taskNow`), and actions change
   saved assignments.
   Anything that iterates entities iterates them in sorted ID order.
@@ -356,12 +357,13 @@ costing 40 kg of lilac and 30 L of oil and taking 12 seconds.
 
 Builders alone claim construction jobs and pipe sections. They also collect
 loose piles and can work a deposit when assigned directly, but their cargo
-capacity is one third of a worker's. Workers harvest and haul, collect loose
-piles, and never claim a build job or pipe section. Both roles share speed
-and tank size. `SendRobot` chooses only an unassigned worker; it never
-silently changes another worker's post. `AssignRobot` names a builder or
-worker ID, sets its deposit post, and cancels unfinished loading while
-letting cargo already carried reach storage.
+capacity is one third of a worker's. Workers harvest and haul; only workers
+without a deposit assignment collect loose piles, so a posted worker stays
+on its mining work. Workers never claim a build job or pipe section. Both
+roles share speed and tank size. `SendRobot` chooses only an unassigned
+worker; it never silently changes another worker's post. `AssignRobot` names
+a builder or worker ID, sets its deposit post, and cancels unfinished
+loading while letting cargo already carried reach storage.
 
 The roster button below the squad strip opens `robots_panel.go`. It groups
 builders, unassigned workers, workers by deposit and mechanics, and shows
@@ -571,11 +573,12 @@ blueprint's cost times `demolishRefund`, the cost of the unit a factory
 was building, and what the stores lose the roof for (`spillOverflow`).
 A pile holds its cell against `canPlace` until its last item leaves,
 which deletes it. A protector can't go while it alone shelters another
-building or a site (`canDemolish`, on `shelteredWithout`). Robots pick
-piles up after build jobs and before their posts: the nearest pile that
-holds something the stores have free room for (`freeRoom` counts what
-is already on its way home, so nobody loads what won't fit), one kind
-per trip, lilac first, loading for `robotLoadTicks`; `Robot.Pile` says
+building or a site (`canDemolish`, on `shelteredWithout`). Builders and
+unassigned workers pick piles up after build jobs and before their posts:
+the nearest pile that holds something the stores have free room for
+(`freeRoom` counts what is already on its way home, so nobody loads what
+won't fit), one kind per trip, lilac first, loading for `robotLoadTicks`;
+assigned workers skip this task and stay at their posts. `Robot.Pile` says
 which pile a loading robot stands at, 0 at its post.
 
 ### The rivals

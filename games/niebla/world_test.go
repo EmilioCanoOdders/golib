@@ -412,8 +412,16 @@ func TestBuildJobsComeFirst(t *testing.T) {
 	// it before the worker finishes its first load.
 	jobCol, jobRow := coreCol*5+1, coreRow*5
 	s.Jobs = []Job{{Col: jobCol, Row: jobRow, Left: 30}}
+	s.dropPile(jobCol+5, jobRow, 0, 30)
 	jobX, jobY := cellCenterUnits(jobCol, jobRow)
 	builder := s.Robots[1]
+	if got := builder.taskNow(s).name; got != taskBuild {
+		t.Fatalf(
+			"the builder's task is %q, want %q before the pile",
+			got,
+			taskBuild,
+		)
+	}
 	d0 := math.Hypot(builder.X-jobX, builder.Y-jobY)
 	Apply(s, Tick{})
 	builder = s.Robots[1]
@@ -438,6 +446,44 @@ func TestBuildJobsComeFirst(t *testing.T) {
 	}
 	if s.Stock.Oil <= startingStockOil {
 		t.Fatal("the worker never delivered its load during construction")
+	}
+}
+
+func TestAssignedWorkersSkipLootButBuildersStillCollect(t *testing.T) {
+	s := newGame()
+	workerID := addWorker(s)
+	col, row, ok := nearestTileOf(kindLilac)
+	if !ok {
+		t.Fatal("the region has no lilac to test")
+	}
+	s.dropPile(col+4, row, 0, 30)
+
+	worker := s.Robots[workerID]
+	if got := worker.taskNow(s).name; got != taskCollect {
+		t.Fatalf("an unassigned worker's task is %q, want %q", got, taskCollect)
+	}
+	Apply(s, AssignRobot{ID: workerID, Col: col, Row: row})
+	worker = s.Robots[workerID]
+	if got := worker.taskNow(s).name; got != taskPost {
+		t.Errorf("an assigned worker's task is %q, want %q", got, taskPost)
+	}
+
+	builder := s.Robots[1]
+	if got := builder.taskNow(s).name; got != taskCollect {
+		t.Errorf(
+			"an unassigned builder's task is %q, want %q",
+			got,
+			taskCollect,
+		)
+	}
+	Apply(s, AssignRobot{ID: builder.ID, Col: col, Row: row})
+	builder = s.Robots[builder.ID]
+	if got := builder.taskNow(s).name; got != taskCollect {
+		t.Errorf(
+			"an assigned builder's task is %q, want %q",
+			got,
+			taskCollect,
+		)
 	}
 }
 

@@ -108,6 +108,7 @@ func TestOffscreenGuidesFollowReportsAndPendingSchematics(t *testing.T) {
 
 func TestOffscreenCityGuideExpiresAfterOneMinute(t *testing.T) {
 	s := newPlayScene(newGame())
+	s.state.Tech[techIndustryID] = true
 	s.camera.Bounds = golib.Rectangle{}
 	s.camera.Zoom = 4
 	s.camera.Target = golib.Vector2{X: 640, Y: 372}
