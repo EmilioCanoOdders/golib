@@ -54,6 +54,7 @@ func demolishNow(t *testing.T, s *State, id int64) {
 
 func TestDemolishingLeavesTheCostAsAPileAndTheRobotsHaulItHome(t *testing.T) {
 	s := newGame()
+	noRivals(s)
 	col, row := groundNearCore()
 	b := raised(t, s, BuildingCharger, col, row)
 	before := s.Stock
@@ -148,6 +149,7 @@ func TestDemolishingAFactoryCancelsItsRobot(t *testing.T) {
 
 func TestDemolishingASiloSpillsWhatItsTankHeld(t *testing.T) {
 	s := newGame()
+	noRivals(s)
 	col, row := groundNearCore()
 	b := raised(t, s, BuildingSilo, col, row)
 	s.Stock.Oil = coreOilCap

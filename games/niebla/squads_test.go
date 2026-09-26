@@ -189,9 +189,9 @@ func TestASquadAttacksTheCrawlerFirstAndTheFogTakesTheRest(t *testing.T) {
 	if !tickUntil(s, 60*300, func() bool { return crawlerOf(s).ID == 0 }) {
 		t.Fatalf("the squad never brought the crawler down")
 	}
-	if len(s.Enemies) != raidFirstRaiders {
+	if got := len(partyMembers(s, crawler.Party)); got != raidFirstRaiders {
 		t.Errorf("%d raiders stand when the crawler falls, want all %d: it goes first",
-			len(s.Enemies), raidFirstRaiders)
+			got, raidFirstRaiders)
 	}
 	hurt := false
 	for _, r := range squadMembers(s, home.ID) {

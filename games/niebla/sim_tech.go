@@ -12,8 +12,9 @@ package main
 // State.Tech, so a save with the badge unclicked keeps it.
 
 // Tuning: the factory blueprint is the opening gift. The first delivery
-// brings logistics. The frontier kit's clock drop sits in the calm before
-// the first raid; the guard post answers the scout's inevitable theft.
+// brings logistics. The frontier kit's clock drop sits before the first
+// raid; the guard answers the scout's theft, and the war factory arrives
+// when the first city is founded.
 const (
 	techFrontierTicks       = 5*60*60 + 30*60 // mid-valley, before the first raid
 	legacyTechIndustryTicks = 7 * 60 * 60     // old saves' factory unlock
@@ -62,7 +63,9 @@ var techLadder = []techDrop{
 	{techFrontierID, []BuildingKind{BuildingProtector, BuildingPump},
 		func(s *State) bool { return s.Ticks >= techFrontierTicks }},
 	{techMobileID, []BuildingKind{BuildingWarFactory},
-		func(s *State) bool { return s.Raids.Visits >= 2 }},
+		func(s *State) bool {
+			return s.Raids.PressureCity != 0 || s.Raids.Visits >= 2
+		}},
 	{techArtilleryID, []BuildingKind{BuildingArtillery},
 		func(s *State) bool {
 			for _, cityID := range sortedCityIDs(s) {

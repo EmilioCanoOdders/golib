@@ -393,8 +393,14 @@ func enemyDetails(s *State, thing Thing) []Detail {
 					Detail{"oil reserve", si(math.Round(city.OilDeposit), "L")},
 					Detail{"mineral reserve", si(math.Round(city.LilacDeposit), "kg")},
 					Detail{"forces sent", fmt.Sprintf("%d", city.Sorties)},
-					Detail{"next force", fmt.Sprintf("%d:%02d", left/3600, left/60%60)},
 				)
+				if status := cityPartyStatus(s, city.ID); status != "" {
+					details = append(details, Detail{"active force", status})
+				} else {
+					details = append(details, Detail{
+						"next force", fmt.Sprintf("%d:%02d", left/3600, left/60%60),
+					})
+				}
 			}
 		}
 	}

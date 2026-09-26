@@ -140,9 +140,19 @@ Pipes may cross anything, the fog too, and are drawn over it like the sites.
 Open: whether mites wear a pipe in the mist, junction buildings (a splitter with no tank) if ports prove short, priorities between a source's pipes, and whether a pipe needs upkeep.
 
 ## The rivals
-The scout is the first contact: four minutes in it steals up to 25 L, paints its mark and leaves. The next visit is a simple crawler-led raiding party. It enters on the scout's saved bearing, camps, gives the player time to respond, steals from the nearest oil tank and leaves on that route. This is the last independently scheduled raid.
-
-Thirty fog cycles (15 minutes) after that party leaves, a crawler arrives from a new deterministic bearing and drives to a settlement site 10 tiles (2 km) from the core, beyond the colony artillery's 1.5 km range. It establishes a city there, with the crawler serving as its construction rig. The Nexus comes after the pylon. Later cities arrive no sooner than 30 cycles apart, up to three; each city is part of the saved state. The city has a fixed 170 m repulsor post. Its first sortie needs no mobile artillery in calm weather, while the later artillery shields a whole battalion when the fog swells. The colony is told when a crawler approaches and when the city establishes.
+The scout is the first contact: one minute in it steals up to 25 L, paints
+its mark and leaves. One minute after it leaves or is destroyed, the second
+attack arrives on the scout's saved bearing, and a rival city starts
+building 10 tiles (2 km) from the core on that same bearing, beyond the
+colony artillery's 1.5 km range. Its crawler serves as the construction
+rig. The Nexus comes after the pylon. While that city is being built,
+another attack arrives one minute after the previous party leaves or is
+destroyed. Only one party moves at a time. Later cities arrive no sooner
+than 30 cycles apart, up to three; each city is part of the saved state.
+The city has a fixed 170 m repulsor post. Its first sortie needs no mobile
+artillery in calm weather, while later squads include mobile artillery to
+shield the force when the fog swells. The colony is told when the first
+city establishes and when later crawlers approach.
 
 For one minute after a city establishes, the HUD announces its location and
 status. Its founding report and offscreen arrow use that same deadline,
@@ -151,9 +161,28 @@ unless newer news replaces them; other reports and arrows last
 
 The arrival crawler stays as the city's construction rig. The Nexus ID is reserved at founding, but its entity appears only after the antimist pylon is built. It has no repulsor of its own; the pylon covers it and the rest of the city. The extractor, lilac mine and military factory follow the Nexus, each a gray rival structure with health and a `cityBuildTicks` 90 s build. Oil and lilac are finite city-local reserves (`cityOilReserve` 900 L and `cityLilacReserve` 1800 kg). The extractors add to city stores; the factory spends them on sorties. Destroying an extractor stops that resource. Destroying the factory stops new forces; destroying the Nexus removes the city. City buildings never fire.
 
-Once the factory and stores are ready, the first battalion assembles at the city and waits visibly for `campPrepareTicks`. It has raiders but no mobile artillery, walks directly to the nearest colony oil tank, siphons and returns to its city. The city waits `citySortieTicks` 5 min after a force returns, and never fields two sorties at once. Only one moving party can be in the region at a time; other cities wait their turn. The second battalion and later ones include mobile artillery: it carries its own 170 m antimist bubble and shells colony buildings on the way in. A shot cannot damage the core. The first force can make the trip in calm weather while it is within the fog line; the later artillery keeps the formation repulsed through swells. The route is a straight line for now.
+Once the factory and stores are ready, the first battalion attacks
+immediately. It has raiders but no mobile artillery, walks directly to the
+nearest colony oil tank, siphons and returns to its city. A force that
+returns with stolen oil unloads at `cityUnloadPerSecond` 3 L/s per vehicle.
+If its full squad survives, it attacks again as soon as it is empty; if it
+lost a vehicle, it waits one minute and replaces the missing unit before
+attacking again. A force that returns empty or is destroyed is rebuilt
+after one minute. Only one moving party can be in the region at a time;
+other cities wait their turn. New squads include mobile artillery: it
+carries its own 170 m antimist bubble and shells colony buildings on the
+way in. A shot cannot damage the core. The first force can make the trip
+in calm weather while it is within the fog line; artillery keeps the
+formation repulsed through swells. The route is a straight line for now.
 
-The scout and introduction party are the only normal visits scheduled independently of cities. After the introduction, the city clock schedules arrivals only; raids are produced by factories. Rivals' small arms can answer colony fire at their vehicles, but the city and its buildings do not automatically shoot back. Rival structures are gray and subdued to distinguish them from the colony at every zoom. Wrecks still drop their own salvage and stolen oil as a pile for the colony's robots to haul.
+The scout, the repeated attacks during the first city's construction, and
+later city arrivals are scheduled by the rival clock. Once a city is
+complete, its factory produces and reuses forces as described above.
+Rivals' small arms can answer colony fire at their vehicles, but the city
+and its buildings do not automatically shoot back. Rival structures are
+gray and subdued to distinguish them from the colony at every zoom. Wrecks
+still drop their own salvage and stolen oil as a pile for the colony's
+robots to haul.
 
 The colony's guard post remains its short-range oil-paid answer; squads
 remain direct orders through the war factory and keys 1-9. The player's
@@ -291,12 +320,15 @@ For whoever works on the game, not for the player: in the region, hold Control a
   database too. What the scene held of the old region (the picked cell, an
   open menu, a pipe in hand, the mites) goes with it. It is the way out of a
   save whose ground the generator has since changed.
-- **rivals: next visit** (`DevNextVisit`): brings the next timed arrival now, the scout/intro raid before the cities and a city crawler afterward. It waits while a non-settled party is moving.
-- **rivals: stop waiting** (`DevHurryRivals`): ends the wait of a camped intro party or city battalion, so it moves on the next tick.
+- **rivals: next visit** (`DevNextVisit`): brings the next timed arrival now:
+  the scout, an intro/construction attack, or a later city crawler. It waits
+  while a non-settled party is active.
+- **rivals: stop waiting** (`DevHurryRivals`): ends a camped party's wait or
+  a city force's squad-completion wait.
 - **rivals: new city** (`DevNewCity`): establishes a city now, up to `cityLimit` 3.
 - **finish city build** (`DevFinishCityBuilding`): completes one next building in the oldest city.
-- **finish battalion** (`DevFinishCityBattalion`): creates the oldest city's next complete force, assembled and waiting.
-- **send battalion** (`DevSendCityBattalion`): ends that city's current assembly wait; it starts moving on the next tick.
+- **finish battalion** (`DevFinishCityBattalion`): creates the oldest city's next complete force and starts its attack.
+- **send battalion** (`DevSendCityBattalion`): ends that city's squad-completion wait, so missing units join on the next tick.
 - **fast forward x8**, under `replay seed`: the play scene sends `devFastTicks` 8 ticks an update instead of one until the button is pressed again, so a wait passes sooner. It is view, not state: the ticks are the same ones, so a game played fast is the same game.
 - **place robots** (`DevSpawnRobot`): arms the pointer, and every left click on the region puts a built robot there, its tank full, for nothing - in the fog too, which is what it is for. The button again, or a right click, disarms it. While armed, clicks don't inspect or open the build menu.
 
@@ -304,10 +336,11 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - The robot factory's schematic waits over the core from the start. The
   first delivered load brings infrastructure (silo, warehouse, charger);
   the guard post comes when the scout's theft is inevitable, the frontier
-  kit (protector, pump, pipes) at 5:30, the war factory after the
-  introductory raid, and artillery when a rival city completes its war
-  factory. A drop's badge waits until opened; the menu offers only what
-  the cell could really take, and unaffordable options stand washed out
+  kit (protector, pump, pipes) at 5:30, the war factory when the first
+  peripheral city begins construction, and artillery when a rival city
+  completes its war factory. A drop's badge waits until opened; the menu
+  offers only what the cell could really take, and unaffordable options
+  stand washed out
   with their shortfall boxed in red (see [Construction model](#construction-model)).
 - One generated region, a pure function of `State.Seed` (`worldgen.go`): a gentle relief with great plains, ground cover in zones, oil pools and lilac veins that thin out toward their rims, fog everywhere else. Buildings ask for a flat cell.
 - The core gives the colony one white builder, with a full oil tank. It
@@ -344,7 +377,18 @@ For whoever works on the game, not for the player: in the region, hold Control a
   haul back to the stores. Assigned workers stay at their deposits. A
   protector can't be ordered down, or finish going, while its current
   bubble is the only one over another building.
-- Rivals come for the oil, one moving party at a time: a scout four minutes in, which siphons 25 L and leaves its mark, then an introductory raid from the scout's bearing. Thirty cycles after the raid leaves, a crawler arrives and establishes a city that builds a repulsor, extractors and a war factory. The factory sends raiders first without artillery, then mobile artillery. Cities do not attack by themselves; their mobile forces do. Structures can be destroyed, wrecks drop loot, and the colony's artillery shells visible rival targets for lilac and oil (see [The rivals](#the-rivals)).
+- Rivals come for the oil, one moving party at a time. The scout arrives
+  after one minute. One minute after it leaves or is destroyed, an attack
+  arrives on its bearing as the first peripheral city starts building on
+  that bearing. During construction, another attack follows one minute
+  after the previous party leaves or is destroyed. Once the city has a
+  factory and enough stores, it sends forces immediately. A force that
+  returns with oil unloads; a complete force attacks again right away,
+  while a damaged one replaces its missing units after a minute. A force
+  that returns empty or is destroyed is rebuilt after a minute. Later
+  cities arrive on the city clock. Structures can be destroyed, wrecks
+  drop loot, and the colony's artillery shells visible rival targets for
+  lilac and oil (see [The rivals](#the-rivals)).
 - A war factory builds troopers, up to six, and they are its squad: one
   click orders them to guard a spot or attack a rival party, a chosen
   vehicle first. It can also build one mechanic. The mechanic is not in
@@ -629,6 +673,14 @@ gift, and the first delivery brings infrastructure. The live rules are in
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-26: tightened the rival pressure in the introduction. The scout
+  arrives after one minute; one minute after it leaves or is destroyed,
+  the second attack and first peripheral city begin together on its saved
+  bearing. Another attack follows each party's end by one minute while the
+  city is built. Completed cities launch as soon as they can pay; returned
+  oil is unloaded at 3 L/s per vehicle, full squads turn around immediately,
+  damaged squads replace losses after a minute, and empty or destroyed
+  forces are rebuilt after a minute.
 - 2026-09-26: after two seconds standing in exposed air, units lose up to
   2 hull points/s and 1 L/s at full exposure, half those rates in the haze;
   moving resets the wait, and the core and protector bubbles cancel it.

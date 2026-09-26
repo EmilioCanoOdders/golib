@@ -89,8 +89,96 @@ func TestTheFirstScoutSiphonsLeavesItsMarkAndGoes(t *testing.T) {
 		t.Errorf("%d vehicles left and %d visits counted, want 0 and 1",
 			len(s.Enemies), s.Raids.Visits)
 	}
-	if got, want := s.Raids.NextAt-s.Ticks, calmTicks(1); got != want {
+	if got, want := s.Raids.NextAt-s.Ticks,
+		int64(raidFollowupTicks); got != want {
 		t.Errorf("the next visit comes in %d ticks, want %d", got, want)
+	}
+}
+
+func TestSecondVisitFoundsThePressureCityOnTheScoutsBearing(t *testing.T) {
+	s := newGame()
+	runTicks(s, raidFirstScoutTicks-1)
+	if len(s.Enemies) != 0 {
+		t.Fatal("the scout arrived before its one-minute mark")
+	}
+	runTicks(s, 1)
+	if len(s.Enemies) != 1 {
+		t.Fatalf("the first visit has %d vehicles, want the scout", len(s.Enemies))
+	}
+	if len(s.Cities) != 0 {
+		t.Fatal("the city was founded before the scout left")
+	}
+	var scout int64
+	for _, id := range sortedEnemyIDs(s) {
+		if s.Enemies[id].Kind == EnemyScout {
+			scout = id
+		}
+	}
+	s.killEnemy(scout)
+	runTicks(s, 1)
+	if got := s.Raids.NextAt - s.Ticks; got != raidFollowupTicks {
+		t.Fatalf("the second visit is in %d ticks, want %d", got, raidFollowupTicks)
+	}
+	runTicks(s, int(raidFollowupTicks)-1)
+	if len(s.Cities) != 0 {
+		t.Fatal("the city started before the one-minute follow-up")
+	}
+	runTicks(s, 1)
+	if len(s.Cities) != 1 || len(s.Parties) != 1 {
+		t.Fatalf("the follow-up created %d cities and %d parties, want one each",
+			len(s.Cities), len(s.Parties))
+	}
+	city := s.Cities[s.Raids.PressureCity]
+	party := s.Parties[sortedPartyIDs(s)[0]]
+	if city.Stage != 0 || party.Stage != StageApproach {
+		t.Fatalf("follow-up started city stage %d and party stage %q",
+			city.Stage, party.Stage)
+	}
+	if math.Abs(city.Angle-s.Raids.FirstBearing) > 0.001 {
+		t.Fatalf("city bearing %.3f differs from scout bearing %.3f",
+			city.Angle, s.Raids.FirstBearing)
+	}
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	distance := math.Hypot(city.X-cx, city.Y-cy) / unitsPerTile
+	if math.Abs(distance-cityRadiusTiles) > 0.001 {
+		t.Fatalf("the pressure city is %.3f tiles from the core, want %.1f",
+			distance, cityRadiusTiles)
+	}
+	if !kindUnlocked(s, BuildingWarFactory) {
+		t.Fatal("the mobile schematics did not arrive with the pressure city")
+	}
+}
+
+func TestPressurePartiesRepeatOneMinuteAfterDisappearanceDuringConstruction(t *testing.T) {
+	s := newGame()
+	s.Raids.Visits = 1
+	s.Raids.FirstBearing = 0.7
+	s.Raids.BearingKnown = true
+	s.Raids.NextAt = s.Ticks + 1
+	runTicks(s, 1)
+	first := s.Parties[sortedPartyIDs(s)[0]]
+	if s.Raids.PressureCity == 0 || first.Stage != StageApproach {
+		t.Fatal("the second visit did not start the city's construction")
+	}
+	for _, id := range sortedEnemyIDs(s) {
+		delete(s.Enemies, id)
+	}
+	runTicks(s, 1)
+	if got := s.Raids.NextAt - s.Ticks; got != raidFollowupTicks {
+		t.Fatalf("the next party is in %d ticks, want %d", got,
+			raidFollowupTicks)
+	}
+	runTicks(s, int(raidFollowupTicks)-1)
+	if len(s.Parties) != 0 {
+		t.Fatal("another party appeared before the one-minute wait ended")
+	}
+	runTicks(s, 1)
+	second := s.Parties[sortedPartyIDs(s)[0]]
+	if second.Stage != StageApproach ||
+		math.Abs(second.EntryX-first.EntryX) > 0.001 ||
+		math.Abs(second.EntryY-first.EntryY) > 0.001 {
+		t.Fatalf("the repeated party entered at %.1f, %.1f, want %.1f, %.1f",
+			second.EntryX, second.EntryY, first.EntryX, first.EntryY)
 	}
 }
 
@@ -99,12 +187,10 @@ func TestARaidCampsGetsReadyStealsAndLeaves(t *testing.T) {
 	seedStock(s)
 	s.Raids.Visits = 1
 	visitNow(s)
-	if got, want := len(s.Enemies), 1+raidFirstRaiders; got != want {
+	party := s.Parties[sortedPartyIDs(s)[0]]
+	if got, want := len(partyMembers(s, party.ID)),
+		1+raidFirstRaiders; got != want {
 		t.Fatalf("the first raid brings %d vehicles, want %d", got, want)
-	}
-	var party Party
-	for _, p := range s.Parties {
-		party = p
 	}
 	if party.Stage != StageApproach {
 		t.Fatalf("the raid comes in at stage %q, want approach", party.Stage)
@@ -193,12 +279,14 @@ func TestRaidersWithoutTheirCrawlerAreDigested(t *testing.T) {
 	s := newGame()
 	s.Raids.Visits = 1
 	visitNow(s)
+	partyID := sortedPartyIDs(s)[0]
 	var crawler int64
 	for _, e := range s.Enemies {
 		if e.Kind == EnemyCrawler {
 			crawler = e.ID
 		}
 	}
+	partyID = s.Enemies[crawler].Party
 	runTicks(s, 60*30) // far enough in that running back out takes longer than the fog
 	for _, e := range s.Enemies {
 		if e.Fogged != 0 {
@@ -207,14 +295,14 @@ func TestRaidersWithoutTheirCrawlerAreDigested(t *testing.T) {
 	}
 	s.killEnemy(crawler)
 	runTicks(s, enemyFogTicks-1)
-	if len(s.Enemies) != raidFirstRaiders {
+	if got := len(partyMembers(s, partyID)); got != raidFirstRaiders {
 		t.Fatalf("%d raiders stand before the fog's time, want %d",
-			len(s.Enemies), raidFirstRaiders)
+			got, raidFirstRaiders)
 	}
 	runTicks(s, 2)
-	if len(s.Enemies) != 0 || len(s.Parties) != 0 {
+	if len(partyMembers(s, partyID)) != 0 || len(s.Parties) != 0 {
 		t.Errorf("%d vehicles and %d parties after the fog's time, want none",
-			len(s.Enemies), len(s.Parties))
+			len(partyMembers(s, partyID)), len(s.Parties))
 	}
 	if lastReport(s).Kind != ReportDestroyed {
 		t.Errorf("the last report is %q, want destroyed", lastReport(s).Kind)
@@ -251,8 +339,8 @@ func TestRivalsReplayAndSurviveASave(t *testing.T) {
 	old := newGame()
 	old.Enemies, old.Parties, old.Marks, old.Raids = nil, nil, nil, Raids{}
 	runTicks(old, raidFirstScoutTicks+60*600)
-	if old.Raids.Visits != 1 || len(old.Marks) != 1 {
-		t.Errorf("an old save saw %d visits and %d marks, want the scout's",
+	if old.Raids.Visits < 1 || len(old.Marks) != 1 {
+		t.Errorf("an old save saw %d visits and %d marks, want the scout's mark",
 			old.Raids.Visits, len(old.Marks))
 	}
 }

@@ -6,7 +6,6 @@ import (
 )
 
 const (
-	cityFirstDelayCycles  = 30
 	cityIntervalCycles    = 30
 	cityLimit             = 3
 	cityRadiusTiles       = 10.0
@@ -15,7 +14,8 @@ const (
 	cityAnnouncementTicks = 60 * 60
 	cityOilReserve        = 900.0
 	cityLilacReserve      = 1800.0
-	citySortieTicks       = 5 * 60 * 60
+	cityRebuildTicks      = 60 * 60
+	cityUnloadPerSecond   = siphonLitersPerSecond
 )
 
 type City struct {
@@ -30,8 +30,8 @@ type City struct {
 	Lilac         float64
 	OilDeposit    float64
 	LilacDeposit  float64
-	NextSortie    int64
-	Sorties       int64
+	NextSortie    int64 // earliest tick a new city force can launch
+	Sorties       int64 // complete city forces produced
 	BuildingIDs   []int64
 }
 
@@ -92,6 +92,9 @@ func (s *State) migrateSettledCities() {
 				X: e.X, Y: e.Y, Health: enemySpecOf(EnemyCityRepulsor).health,
 				City: cityID,
 			}
+			if s.Raids.PressureCity == 0 {
+				s.Raids.PressureCity = cityID
+			}
 			p := s.Parties[partyID]
 			p.City = cityID
 			s.Parties[partyID] = p
@@ -128,6 +131,21 @@ func (s *State) foundCity(x, y, angle float64) int64 {
 	s.Cities[id] = city
 	s.report(ReportSettled, 0, x, y)
 	return id
+}
+
+func (s *State) foundCityOnBearing(angle float64) int64 {
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	x := clamp64(
+		cx+math.Cos(angle)*cityRadiusTiles*unitsPerTile,
+		1,
+		float64(regionCols*unitsPerTile)-1,
+	)
+	y := clamp64(
+		cy+math.Sin(angle)*cityRadiusTiles*unitsPerTile,
+		1,
+		float64(regionRows*unitsPerTile)-1,
+	)
+	return s.foundCity(x, y, angle)
 }
 
 func (s *State) nextCitySpot() (float64, float64, float64, bool) {
@@ -255,7 +273,7 @@ func stepCity(s *State, city *City) {
 	city.Oil -= citySortieOil
 	city.Lilac -= citySortieLilac
 	city.Sorties++
-	city.NextSortie = s.Ticks + citySortieTicks
+	city.NextSortie = s.Ticks
 	s.spawnCitySortie(*city, city.Sorties >= 2)
 }
 
@@ -293,11 +311,16 @@ func (s *State) spawnCitySortie(city City, artillery bool) {
 	if city.Sorties > 2 {
 		count = raidersOf(city.Sorties - 1)
 	}
+	size := count
+	if artillery {
+		size++
+	}
 	p := Party{
-		ID: partyID, Stage: StageCamp, City: city.ID,
-		Wait: campPrepareTicks, Siphon: raidSiphonTicks, Artillery: artillery,
+		ID: partyID, Stage: StageRaid, City: city.ID,
+		Siphon: raidSiphonTicks, Artillery: artillery,
 		CampX: city.X, CampY: city.Y,
 		EntryX: city.X, EntryY: city.Y,
+		Size: size,
 	}
 	if s.Parties == nil {
 		s.Parties = map[int64]Party{}
@@ -364,7 +387,11 @@ func (s *State) finishCityBuilding(city *City) {
 	s.report(ReportCityBuilding, 0, city.X, city.Y)
 	s.Reports[len(s.Reports)-1].Stage = int64(stage)
 	if city.Stage == len(cityBuildOrder) {
-		city.NextSortie = s.Ticks + citySortieTicks
+		city.NextSortie = s.Ticks
+		if s.Raids.PressureCity == city.ID {
+			s.Raids.NextAt = s.Ticks +
+				int64(cityIntervalCycles)*fogCycleTicks
+		}
 	}
 }
 
@@ -377,7 +404,95 @@ func (s *State) finishCitySortie(city *City) {
 	}
 	city.Sorties++
 	s.spawnCitySortie(*city, city.Sorties >= 2)
-	city.NextSortie = s.Ticks + citySortieTicks
+	city.NextSortie = s.Ticks
+}
+
+func (s *State) unloadCityParty(p *Party, members []Enemy) {
+	city, ok := s.Cities[p.City]
+	if !ok {
+		return
+	}
+	carrying := false
+	for _, member := range members {
+		e := s.Enemies[member.ID]
+		amount := math.Min(e.Oil, cityUnloadPerSecond/60)
+		e.Oil -= amount
+		city.Oil += amount
+		carrying = carrying || e.Oil > 0
+		s.Enemies[e.ID] = e
+	}
+	if carrying {
+		s.Cities[city.ID] = city
+		return
+	}
+	for _, member := range members {
+		e := s.Enemies[member.ID]
+		e.Oil = 0
+		s.Enemies[e.ID] = e
+	}
+	s.Cities[city.ID] = city
+	if p.Size > 0 && len(members) < p.Size {
+		p.Stage = StageRebuild
+		p.Wait = cityRebuildTicks
+		return
+	}
+	p.Stage = StageRaid
+	p.Wait = 0
+	p.Siphon = raidSiphonTicks
+}
+
+func (s *State) completeCityParty(p *Party) bool {
+	city, ok := s.Cities[p.City]
+	if !ok {
+		return false
+	}
+	var raiders, artillery int
+	for _, e := range partyMembers(s, p.ID) {
+		if e.Kind == EnemyRaider {
+			raiders++
+		}
+		if e.Kind == EnemyArtillery {
+			artillery++
+		}
+	}
+	expectedArtillery := 0
+	if p.Artillery {
+		expectedArtillery = 1
+	}
+	expectedRaiders := p.Size - expectedArtillery
+	missing := expectedRaiders - raiders + expectedArtillery - artillery
+	if missing <= 0 {
+		return true
+	}
+	share := float64(missing) / float64(p.Size)
+	oil := citySortieOil * share
+	lilac := citySortieLilac * share
+	if city.Oil < oil || city.Lilac < lilac {
+		return false
+	}
+	city.Oil -= oil
+	city.Lilac -= lilac
+	s.Cities[city.ID] = city
+	for i := raiders; i < expectedRaiders; i++ {
+		dx, dy := formationOffset(i)
+		id := s.NextID
+		s.NextID++
+		s.Enemies[id] = Enemy{
+			ID: id, Kind: EnemyRaider, Party: p.ID, City: city.ID,
+			X: city.X + dx, Y: city.Y + dy,
+			Health: enemySpecOf(EnemyRaider).health,
+		}
+	}
+	if artillery < expectedArtillery {
+		id := s.NextID
+		s.NextID++
+		s.Enemies[id] = Enemy{
+			ID: id, Kind: EnemyArtillery, Party: p.ID, City: city.ID,
+			X: city.X, Y: city.Y,
+			Health: enemySpecOf(EnemyArtillery).health,
+		}
+	}
+	return true
 }
 
 func movingParty(s *State) bool {
@@ -396,6 +511,26 @@ func cityHasRepulsor(s *State, city City) bool {
 		}
 	}
 	return false
+}
+
+func cityPartyStatus(s *State, city int64) string {
+	for _, id := range sortedPartyIDs(s) {
+		p := s.Parties[id]
+		if p.City != city {
+			continue
+		}
+		switch p.Stage {
+		case StageRaid:
+			return "attacking"
+		case StageLeave:
+			return "returning"
+		case StageUnload:
+			return "unloading stolen oil"
+		case StageRebuild:
+			return "completing the squad"
+		}
+	}
+	return ""
 }
 
 func cityBuildingPosition(city City, stage int) (float64, float64) {

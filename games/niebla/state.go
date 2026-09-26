@@ -39,7 +39,7 @@ type State struct {
 	Tech       map[string]bool    // the schematics that arrived: drop ID -> opened (sim_tech.go)
 }
 
-const stateVersion = 3
+const stateVersion = 4
 
 // Fog is the region's weather, where the fog's breath has got to. The
 // swell rises at a cycle's end and drains tick by tick; NextIn counts
@@ -236,6 +236,26 @@ func (s *State) enterRegion() {
 func (s *State) migrateState() {
 	if s.Version >= stateVersion {
 		return
+	}
+	if s.Version < 4 && len(s.Cities) > 0 && s.Raids.PressureCity == 0 {
+		ids := sortedCityIDs(s)
+		s.Raids.PressureCity = ids[0]
+	}
+	if s.Version < 4 {
+		for _, id := range sortedPartyIDs(s) {
+			p := s.Parties[id]
+			if p.City == 0 || p.Size > 0 {
+				continue
+			}
+			members := partyMembers(s, id)
+			p.Size = len(members)
+			for _, e := range members {
+				if e.Kind == EnemyArtillery {
+					p.Artillery = true
+				}
+			}
+			s.Parties[id] = p
+		}
 	}
 	if s.Version < 1 {
 		for _, id := range sortedBuildingIDs(s) {

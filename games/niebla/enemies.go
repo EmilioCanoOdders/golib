@@ -274,6 +274,12 @@ func threatWords(s *State) string {
 				return "an intruder, " + where
 			}
 			return "raid under way, " + where
+		case StageUnload:
+			return "rival force unloading at its city, " + where
+		case StageRebuild:
+			left := (p.Wait + 59) / 60
+			return fmt.Sprintf("rival force completing its ranks, %s, %d:%02d",
+				where, left/60, left%60)
 		case StageSettled:
 			continue
 		default:
@@ -329,7 +335,7 @@ func reportWords(r Report) string {
 	case ReportBaseDown:
 		return fmt.Sprintf("The rival city to the %s has fallen.", where)
 	case ReportSortie:
-		return fmt.Sprintf("[danger]A rival battalion is assembling to the %s.[/]",
+		return fmt.Sprintf("[danger]A rival battalion is attacking from the %s.[/]",
 			where)
 	case ReportCityIncoming:
 		return fmt.Sprintf("[danger]A crawler approaches from the %s.[/] "+

@@ -17,10 +17,8 @@ import (
 
 // Tuning: the rivals' numbers, with units in the name.
 const (
-	raidFirstScoutTicks = 4 * 60 * 60 // ticks before the scout: 4 min
-	raidCalmTicks       = 5 * 60 * 60 // ticks between a party's end and the next: 5 min
-	raidCalmQuickener   = 0.9         // each visit shortens the next calm by this
-	raidCalmMinTicks    = 2 * 60 * 60 // ticks of calm at the least: 2 min
+	raidFirstScoutTicks = 60 * 60 // ticks before the scout: 1 min
+	raidFollowupTicks   = 60 * 60 // ticks between pressure parties: 1 min
 
 	campPrepareTicks    = 3 * 60 * 60 // ticks the first raid camps before it moves: 3 min
 	campPrepareShortens = 0.8         // each raid camps this much of the last one's time
@@ -118,6 +116,8 @@ const (
 	StageCamp     PartyStage = "camp"     // getting ready
 	StageRaid     PartyStage = "raid"     // driving to a tank and siphoning it
 	StageLeave    PartyStage = "leave"    // driving back out
+	StageUnload   PartyStage = "unload"   // unloading at the city
+	StageRebuild  PartyStage = "rebuild"  // completing a damaged city force
 	StageSettled  PartyStage = "settled"
 )
 
@@ -127,20 +127,22 @@ type Party struct {
 	Stage          PartyStage
 	EntryX, EntryY float64 // where it came in, and where it leaves
 	CampX, CampY   float64
-	Wait           int64 // ticks of camp left
+	Wait           int64 // ticks of camp or squad rebuild left
 	Siphon         int64 // ticks of siphoning left before it gives up
 	City           int64 // city that produced this sortie; 0 for introduction visits
 	Artillery      bool  // sortie includes mobile artillery
 	CityArrives    bool  // this crawler is founding a city, not a raid
+	Size           int   // city sortie's full vehicle count, before any losses
 }
 
-// Raids is the rivals' clock: how many visits have ended, which is how
-// they grow, and the tick the next one comes at.
+// Raids is the rivals' clock: ended visits, the next arrival, the saved
+// bearing and the first city whose construction drives the pressure loop.
 type Raids struct {
 	Visits       int64
 	NextAt       int64
 	FirstBearing float64
 	BearingKnown bool
+	PressureCity int64 // the first city, founded with the second visit
 }
 
 // Mark is what a scout paints on the ground before it leaves.
@@ -274,21 +276,28 @@ func stepRaids(s *State) {
 	if s.Raids.NextAt == 0 {
 		s.Raids.NextAt = s.Ticks + raidFirstScoutTicks
 	}
-	if s.Ticks >= s.Raids.NextAt {
-		if s.Raids.Visits >= 2 {
-			if len(s.Cities) >= cityLimit {
-				s.Raids.NextAt = s.Ticks + int64(cityIntervalCycles)*fogCycleTicks
-				return
-			}
-			if s.spawnCityVisit() {
-				s.Raids.NextAt = s.Ticks +
-					int64(cityIntervalCycles)*fogCycleTicks
-			} else {
-				s.Raids.NextAt = s.Ticks + fogCycleTicks
-			}
-			return
-		}
+	if s.Ticks < s.Raids.NextAt {
+		return
+	}
+	if s.Raids.Visits == 0 ||
+		(s.Raids.PressureCity == 0 && s.Raids.Visits == 1) {
 		s.spawnVisit()
+		return
+	}
+	if city, ok := s.Cities[s.Raids.PressureCity]; ok &&
+		city.Stage < len(cityBuildOrder) {
+		s.spawnVisit()
+		return
+	}
+	if len(s.Cities) >= cityLimit {
+		s.Raids.NextAt = s.Ticks +
+			int64(cityIntervalCycles)*fogCycleTicks
+		return
+	}
+	if s.spawnCityVisit() {
+		s.Raids.NextAt = s.Ticks + int64(cityIntervalCycles)*fogCycleTicks
+	} else {
+		s.Raids.NextAt = s.Ticks + fogCycleTicks
 	}
 }
 
@@ -312,12 +321,6 @@ func raidersOf(visit int64) int {
 func prepareTicks(visit int64) int64 {
 	ticks := float64(campPrepareTicks) * math.Pow(campPrepareShortens, float64(visit-1))
 	return int64(math.Max(campPrepareMinTicks, ticks))
-}
-
-// calmTicks returns the calm after a visit ends.
-func calmTicks(visits int64) int64 {
-	ticks := float64(raidCalmTicks) * math.Pow(raidCalmQuickener, float64(visits-1))
-	return int64(math.Max(raidCalmMinTicks, ticks))
 }
 
 // spawnVisit brings the next party in at a bearing the state rolls: the
@@ -366,6 +369,9 @@ func (s *State) spawnVisit() {
 			Health: enemySpecOf(kind).health,
 		}
 		s.NextID++
+	}
+	if s.Raids.Visits == 1 && s.Raids.PressureCity == 0 {
+		s.Raids.PressureCity = s.foundCityOnBearing(angle)
 	}
 }
 
@@ -435,11 +441,50 @@ func stepParty(s *State, p Party) {
 			}
 			p.Stage = StageLeave
 		}
+	case StageUnload:
+		if _, ok := s.Cities[p.City]; !ok {
+			for _, e := range members {
+				delete(s.Enemies, e.ID)
+			}
+			s.endParty(p, ReportDestroyed, 0, p.CampX, p.CampY)
+			return
+		}
+		s.unloadCityParty(&p, members)
+	case StageRebuild:
+		if _, ok := s.Cities[p.City]; !ok {
+			for _, e := range members {
+				delete(s.Enemies, e.ID)
+			}
+			s.endParty(p, ReportDestroyed, 0, p.CampX, p.CampY)
+			return
+		}
+		p.Wait--
+		if p.Wait <= 0 {
+			if !s.completeCityParty(&p) {
+				p.Wait = 60
+			} else {
+				p.Stage = StageRaid
+				p.Siphon = raidSiphonTicks
+			}
+		}
 	case StageLeave:
 		if s.driveParty(members, p.EntryX, p.EntryY) {
 			stolen := 0.0
 			for _, e := range members {
 				stolen += e.Oil
+			}
+			if p.City != 0 && stolen > 0 {
+				city, ok := s.Cities[p.City]
+				if ok {
+					city.NextSortie = s.Ticks
+					s.Cities[city.ID] = city
+				}
+				p.Stage = StageUnload
+				s.Parties[p.ID] = p
+				s.report(ReportLeft, stolen, p.EntryX, p.EntryY)
+				return
+			}
+			for _, e := range members {
 				delete(s.Enemies, e.ID)
 			}
 			s.endParty(p, ReportLeft, stolen, p.EntryX, p.EntryY)
@@ -449,32 +494,34 @@ func stepParty(s *State, p Party) {
 	s.Parties[p.ID] = p
 }
 
-// endParty takes a party out of the state, tells the player and starts
-// the calm before the next visit. The scout's own report is its mark's,
-// and a party that had settled counted as a visit when it dug in.
+// endParty removes a party, reports its end and schedules what follows.
 func (s *State) endParty(p Party, kind ReportKind, oil, x, y float64) {
 	delete(s.Parties, p.ID)
-	if s.Raids.Visits > 0 || kind == ReportDestroyed {
+	if p.City != 0 || s.Raids.Visits > 0 || kind == ReportDestroyed {
 		s.report(kind, oil, x, y)
 	}
 	if p.City != 0 {
 		if city, ok := s.Cities[p.City]; ok {
-			city.NextSortie = s.Ticks + citySortieTicks
+			city.NextSortie = s.Ticks + cityRebuildTicks
 			s.Cities[city.ID] = city
 		}
 		return
 	}
-	s.startCalm()
-	if s.Raids.Visits >= 2 {
-		s.Raids.NextAt = s.Ticks +
-			int64(cityFirstDelayCycles)*fogCycleTicks
-	}
+	s.scheduleNextParty()
 }
 
-// startCalm counts a visit as over and sets the clock for the next.
-func (s *State) startCalm() {
+func (s *State) scheduleNextParty() {
 	s.Raids.Visits++
-	s.Raids.NextAt = s.Ticks + calmTicks(s.Raids.Visits)
+	city, exists := s.Cities[s.Raids.PressureCity]
+	if s.Raids.PressureCity == 0 && s.Raids.Visits == 1 {
+		s.Raids.NextAt = s.Ticks + raidFollowupTicks
+		return
+	}
+	if exists && city.Stage < len(cityBuildOrder) {
+		s.Raids.NextAt = s.Ticks + raidFollowupTicks
+		return
+	}
+	s.Raids.NextAt = s.Ticks + int64(cityIntervalCycles)*fogCycleTicks
 }
 
 func (s *State) fireCityArtillery(e Enemy) {

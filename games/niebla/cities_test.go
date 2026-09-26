@@ -129,11 +129,38 @@ func TestOldSettledBaseMigratesToCityState(t *testing.T) {
 	party := s.Parties[8]
 	city, ok := s.Cities[party.City]
 	if !ok || party.City == 0 || city.Stage != 2 || city.AnnounceUntil != 0 ||
+		s.Raids.PressureCity != city.ID ||
 		!cityHasBuilding(s, city, EnemyBase) ||
 		!cityHasRepulsor(s, city) ||
 		s.Enemies[9].Health != enemySpecOf(EnemyBase).health ||
 		s.Enemies[9].Reload != 0 {
 		t.Fatalf("old settlement migrated to party %+v and city %+v", party, city)
+	}
+}
+
+func TestVersionThreeCitySaveMigratesItsPressureCityAndPartySize(t *testing.T) {
+	s := newGame()
+	cityID := s.foundCity(3500, 3200, 0.4)
+	s.Version = 3
+	partyID := s.NextID
+	s.NextID++
+	s.Parties[partyID] = Party{
+		ID: partyID, City: cityID, Stage: StageUnload,
+	}
+	for _, kind := range []EnemyKind{EnemyRaider, EnemyArtillery} {
+		id := s.NextID
+		s.NextID++
+		s.Enemies[id] = Enemy{
+			ID: id, Kind: kind, Party: partyID, City: cityID,
+			Health: enemySpecOf(kind).health,
+		}
+	}
+	s.migrateState()
+	party := s.Parties[partyID]
+	if s.Version != stateVersion || s.Raids.PressureCity != cityID ||
+		party.Size != 2 || !party.Artillery {
+		t.Fatalf("version 3 city state migrated to %+v with raids %+v",
+			party, s.Raids)
 	}
 }
 
@@ -174,8 +201,8 @@ func TestCityBuildsEconomyAndLaunchesArtilleryOnlyOnItsSecondSortie(t *testing.T
 	stepCity(s, &city)
 	s.Cities[cityID] = city
 	first := s.Parties[sortedPartyIDs(s)[0]]
-	if first.Stage != StageCamp || first.Artillery {
-		t.Fatalf("the first city force is %+v, want a waiting force without artillery", first)
+	if first.Stage != StageRaid || first.Artillery {
+		t.Fatalf("the first city force is %+v, want an immediate force without artillery", first)
 	}
 	delete(s.Parties, first.ID)
 	for _, id := range sortedEnemyIDs(s) {
@@ -237,12 +264,167 @@ func TestReturnedCityForceStartsTheSortieCooldownAtHome(t *testing.T) {
 	s.Ticks = 600
 	s.endParty(party, ReportLeft, 60, 3300, 2950)
 	city := s.Cities[cityID]
-	if city.NextSortie != s.Ticks+citySortieTicks {
+	if city.NextSortie != s.Ticks+cityRebuildTicks {
 		t.Fatalf("next sortie is due at %d, want %d",
-			city.NextSortie, s.Ticks+citySortieTicks)
+			city.NextSortie, s.Ticks+cityRebuildTicks)
 	}
 	if s.Raids.Visits != 0 {
 		t.Fatalf("a city sortie counted as %d intro visits", s.Raids.Visits)
+	}
+}
+
+func TestReturnedFullCityForceUnloadsThenAttacksAgain(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	cityID := s.foundCity(4500, 2500, 0)
+	city := s.Cities[cityID]
+	for range cityBuildOrder {
+		s.finishCityBuilding(&city)
+	}
+	city.Oil, city.Lilac = 500, 1000
+	s.Cities[cityID] = city
+	s.spawnCitySortie(city, false)
+	partyID := sortedPartyIDs(s)[0]
+	party := s.Parties[partyID]
+	if party.Size != 2 {
+		t.Fatalf("force has size %d, want 2", party.Size)
+	}
+	for _, id := range sortedEnemyIDs(s) {
+		e := s.Enemies[id]
+		if e.Party != partyID {
+			continue
+		}
+		e.Oil = 12
+		s.Enemies[id] = e
+	}
+	party.Stage = StageLeave
+	s.Parties[partyID] = party
+	stepParty(s, party)
+	if s.Parties[partyID].Stage != StageUnload {
+		t.Fatalf("returned force is at stage %q, want unload",
+			s.Parties[partyID].Stage)
+	}
+	oil := s.Cities[cityID].Oil
+	runTicks(s, 59)
+	want := 59 * (2*cityUnloadPerSecond/60 + cityOilExtractPerSecond/60)
+	if got := s.Cities[cityID].Oil - oil; math.Abs(got-want) > 0.001 {
+		t.Fatalf("the city received %.3f L in 59 ticks, want %.3f L",
+			got, want)
+	}
+	if !tickUntil(s, 10*60, func() bool {
+		return s.Parties[partyID].Stage == StageRaid
+	}) {
+		t.Fatal("the full force did not return to attack after unloading")
+	}
+	if got := s.Cities[cityID].Oil; got < 524 {
+		t.Fatalf("the city unloaded to %.3f L, want at least 524 L", got)
+	}
+	if got := len(partyMembers(s, partyID)); got != party.Size {
+		t.Fatalf("the force has %d members after unloading, want %d",
+			got, party.Size)
+	}
+}
+
+func TestDamagedCityForceUnloadsThenCompletesItsSquad(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	cityID := s.foundCity(4500, 2500, 0)
+	city := s.Cities[cityID]
+	for range cityBuildOrder {
+		s.finishCityBuilding(&city)
+	}
+	city.Oil, city.Lilac = 500, 1000
+	city.Sorties = 1
+	s.Cities[cityID] = city
+	s.spawnCitySortie(city, true)
+	partyID := sortedPartyIDs(s)[0]
+	party := s.Parties[partyID]
+	if party.Size != 3 {
+		t.Fatalf("force has size %d, want 3", party.Size)
+	}
+	loaded := false
+	for _, id := range sortedEnemyIDs(s) {
+		e := s.Enemies[id]
+		if e.Party != partyID {
+			continue
+		}
+		if e.Kind == EnemyArtillery {
+			delete(s.Enemies, id)
+			continue
+		}
+		if e.Kind == EnemyRaider && e.Oil == 0 && !loaded {
+			e.Oil = 6
+			s.Enemies[id] = e
+			loaded = true
+		}
+	}
+	if got := len(partyMembers(s, partyID)); got != 2 {
+		t.Fatalf("force has %d members after losing artillery, want 2", got)
+	}
+	party.Stage = StageLeave
+	s.Parties[partyID] = party
+	stepParty(s, party)
+	if s.Parties[partyID].Stage != StageUnload {
+		t.Fatalf("damaged force is at stage %q, want unload",
+			s.Parties[partyID].Stage)
+	}
+	if !tickUntil(s, 5*60, func() bool {
+		return s.Parties[partyID].Stage == StageRebuild
+	}) {
+		t.Fatalf("the damaged force did not enter squad completion: %+v, %d members",
+			s.Parties[partyID], len(partyMembers(s, partyID)))
+	}
+	runTicks(s, int(cityRebuildTicks)-1)
+	if s.Parties[partyID].Stage != StageRebuild ||
+		len(partyMembers(s, partyID)) != 2 {
+		t.Fatal("the missing vehicle was restored before the one-minute wait")
+	}
+	runTicks(s, 1)
+	if s.Parties[partyID].Stage != StageRaid ||
+		len(partyMembers(s, partyID)) != 3 {
+		t.Fatal("the force did not complete its ranks and attack again")
+	}
+	for _, e := range partyMembers(s, partyID) {
+		if e.Kind == EnemyArtillery {
+			return
+		}
+	}
+	t.Fatal("the damaged force did not replace its artillery")
+}
+
+func TestDestroyedCityForceWaitsOneMinuteBeforeRebuilding(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	cityID := s.foundCity(4500, 2500, 0)
+	city := s.Cities[cityID]
+	for range cityBuildOrder {
+		s.finishCityBuilding(&city)
+	}
+	city.Oil, city.Lilac = 500, 1000
+	s.Cities[cityID] = city
+	stepCity(s, &city)
+	s.Cities[cityID] = city
+	partyID := sortedPartyIDs(s)[0]
+	for _, id := range sortedEnemyIDs(s) {
+		if s.Enemies[id].Party == partyID {
+			s.killEnemy(id)
+		}
+	}
+	runTicks(s, 1)
+	if len(s.Parties) != 0 {
+		t.Fatal("the destroyed force remained in the region")
+	}
+	if got := s.Cities[cityID].NextSortie - s.Ticks; got != cityRebuildTicks {
+		t.Fatalf("the rebuild wait is %d ticks, want %d", got,
+			cityRebuildTicks)
+	}
+	runTicks(s, int(cityRebuildTicks)-1)
+	if len(s.Parties) != 0 {
+		t.Fatal("the city rebuilt before waiting one minute")
+	}
+	runTicks(s, 1)
+	if len(s.Parties) != 1 {
+		t.Fatal("the city did not rebuild a force after one minute")
 	}
 }
 
@@ -297,16 +479,15 @@ func TestDevelopmentActionsFinishOneCityStepAndReleaseItsForce(t *testing.T) {
 		t.Fatalf("finish battalion created %d waiting forces", len(s.Parties))
 	}
 	party := s.Parties[sortedPartyIDs(s)[0]]
-	if party.Stage != StageCamp || party.Wait <= 0 {
-		t.Fatalf("finished force did not wait: %+v", party)
+	if party.Stage != StageRaid || party.Wait != 0 {
+		t.Fatalf("finished force did not attack immediately: %+v", party)
 	}
 	Apply(s, DevSendCityBattalion{})
 	if s.Parties[party.ID].Wait != 0 {
 		t.Fatal("send battalion did not release its wait")
 	}
-	Apply(s, Tick{})
 	if s.Parties[party.ID].Stage != StageRaid {
-		t.Fatal("released city force did not move on the next tick")
+		t.Fatal("the city force stopped attacking")
 	}
 }
 

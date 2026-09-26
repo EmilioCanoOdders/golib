@@ -205,17 +205,24 @@ func TestTheFrontierKitComesOnItsClock(t *testing.T) {
 	}
 }
 
-func TestMobileUnitsWaitForTheFirstRaidToLeave(t *testing.T) {
+func TestMobileUnitsUnlockAtTheFirstCityAndKeepTheOldSaveTrigger(t *testing.T) {
 	s := newGame()
 	s.Raids.Visits = 1
 	runTicks(s, 1)
 	if kindUnlocked(s, BuildingWarFactory) {
-		t.Fatal("the war factory came after the scout, not after the first raid")
+		t.Fatal("the war factory arrived before the pressure city")
 	}
-	s.Raids.Visits = 2
+	s.Cities[9] = City{ID: 9}
+	s.Raids.PressureCity = 9
 	runTicks(s, 1)
 	if !kindUnlocked(s, BuildingWarFactory) {
-		t.Fatal("the war factory never came after the first raid")
+		t.Fatal("the war factory did not arrive with the pressure city")
+	}
+	legacy := newGame()
+	legacy.Raids.Visits = 2
+	runTicks(legacy, 1)
+	if !kindUnlocked(legacy, BuildingWarFactory) {
+		t.Fatal("an old save did not keep its completed-visit trigger")
 	}
 }
 
