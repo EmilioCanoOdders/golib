@@ -18,6 +18,42 @@ func finishedCityForTest(s *State) int64 {
 	return cityID
 }
 
+func assertCityBuildsPylonBeforeNexus(
+	t *testing.T,
+	s *State,
+	city *City,
+) {
+	t.Helper()
+	if city.Stage != 0 || cityHasRepulsor(s, *city) ||
+		cityHasBuilding(s, *city, EnemyBase) {
+		t.Fatalf("city did not start with the pylon: %+v", *city)
+	}
+	for range cityBuildTicks - 1 {
+		stepCity(s, city)
+	}
+	if city.Stage != 0 || city.Work != 1 ||
+		cityHasRepulsor(s, *city) || cityHasBuilding(s, *city, EnemyBase) {
+		t.Fatalf("the pylon started before its full build time: %+v", *city)
+	}
+	stepCity(s, city)
+	if city.Stage != 1 || city.Work != cityBuildTicks ||
+		!cityHasRepulsor(s, *city) || cityHasBuilding(s, *city, EnemyBase) {
+		t.Fatalf("the Nexus appeared before the pylon was built: %+v", *city)
+	}
+	for range cityBuildTicks - 1 {
+		stepCity(s, city)
+	}
+	if city.Stage != 1 || city.Work != 1 ||
+		!cityHasRepulsor(s, *city) || cityHasBuilding(s, *city, EnemyBase) {
+		t.Fatalf("the Nexus started before its full build time: %+v", *city)
+	}
+	stepCity(s, city)
+	if city.Stage != 2 || !cityHasRepulsor(s, *city) ||
+		!cityHasBuilding(s, *city, EnemyBase) {
+		t.Fatalf("the Nexus did not follow the completed pylon: %+v", *city)
+	}
+}
+
 func TestIntroVisitsShareTheScoutsBearing(t *testing.T) {
 	s := newGame()
 	visitNow(s)
@@ -90,7 +126,7 @@ func TestAResidentCrawlerArrivesBeforeTheCityBuilds(t *testing.T) {
 	}
 }
 
-func TestRivalCityBuildingsTakeFortyFiveSecondsEach(t *testing.T) {
+func TestRivalCityBuildsPylonBeforeNexusInSeparateSteps(t *testing.T) {
 	s := newGame()
 	cityID := s.foundCity(3500, 3200, 0.4)
 	city := s.Cities[cityID]
@@ -98,16 +134,8 @@ func TestRivalCityBuildingsTakeFortyFiveSecondsEach(t *testing.T) {
 		t.Fatalf("city building work is %d ticks, want 45 seconds",
 			city.Work)
 	}
-	for range cityBuildTicks - 1 {
-		stepCity(s, &city)
-	}
-	if city.Stage != 0 || city.Work != 1 {
-		t.Fatalf("the first city building finished early at %+v", city)
-	}
-	stepCity(s, &city)
-	if city.Stage != 1 || !cityHasRepulsor(s, city) {
-		t.Fatal("the city did not complete its first building on time")
-	}
+	assertCityBuildsPylonBeforeNexus(t, s, &city)
+	s.Cities[cityID] = city
 }
 
 func TestCityRebuildsMissingBuildingsBeforeResumingProduction(t *testing.T) {
@@ -299,6 +327,8 @@ func TestRazedCityRefoundsWithACrawlerAtANewSite(t *testing.T) {
 		s.Enemies[city.BuildingIDs[0]].Kind != EnemyCityCrawler {
 		t.Fatalf("the refounded city did not start its normal build: %+v", city)
 	}
+	assertCityBuildsPylonBeforeNexus(t, s, &city)
+	s.Cities[cityID] = city
 }
 
 func TestVersionNineCityWithMissingBuildingGetsFreshBuildWork(t *testing.T) {
