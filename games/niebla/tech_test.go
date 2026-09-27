@@ -179,6 +179,12 @@ func TestOpeningCalloutsExplainTheNextStep(t *testing.T) {
 	if title != "guard post" || body != wantGuardBody {
 		t.Fatalf("guard callout is %q, %q", title, body)
 	}
+	title, body = techWords(techArtilleryID)
+	wantArtilleryBody := "Three normal attacks have ended. Build artillery " +
+		"to shell rival targets the colony sees."
+	if title != "artillery" || body != wantArtilleryBody {
+		t.Fatalf("artillery callout is %q, %q", title, body)
+	}
 }
 
 func TestGuardUnlockWaitsForTheFirstScoutToLeaveTheCoreBubble(t *testing.T) {
@@ -329,29 +335,6 @@ func TestMobileUnitsUnlockAtTheFirstCityAndKeepTheOldSaveTrigger(t *testing.T) {
 	runTicks(legacy, 1)
 	if !kindUnlocked(legacy, BuildingWarFactory) {
 		t.Fatal("an old save did not keep its completed-visit trigger")
-	}
-}
-
-func TestArtilleryWaitsForARivalFactory(t *testing.T) {
-	s := newGame()
-	if dropArrived(s, techArtilleryID) {
-		t.Fatal("artillery came to a region with no rival city")
-	}
-	s.Cities[9] = City{ID: 9}
-	s.Enemies[10] = Enemy{ID: 10, Kind: EnemyBase, City: 9}
-	s.Cities[9] = City{ID: 9, Stage: 1, BuildingIDs: []int64{10}}
-	stepTech(s)
-	if dropArrived(s, techArtilleryID) {
-		t.Fatal("artillery came before the rival factory was built")
-	}
-	s.Enemies[11] = Enemy{ID: 11, Kind: EnemyCityFactory, City: 9}
-	city := s.Cities[9]
-	city.Stage = len(cityBuildOrder)
-	city.BuildingIDs = append(city.BuildingIDs, 11)
-	s.Cities[9] = city
-	stepTech(s)
-	if !dropArrived(s, techArtilleryID) || !kindUnlocked(s, BuildingArtillery) {
-		t.Fatal("the rival factory completed but artillery never arrived")
 	}
 }
 
@@ -699,7 +682,7 @@ func TestOldGuardUnlocksMigrateWithoutNewBadges(t *testing.T) {
 			t.Run(fmt.Sprintf("ledger=%v/%s", hasLedger, trigger),
 				func(t *testing.T) {
 					s := newGame()
-					s.Version = stateVersion - 1
+					s.Version = stateVersion - 2
 					s.Ticks = 2
 					if hasLedger {
 						s.Tech = map[string]bool{techIndustryID: true}
@@ -732,7 +715,7 @@ func TestOldGuardUnlocksMigrateWithoutNewBadges(t *testing.T) {
 
 func TestOldPendingGuardBadgeStaysPendingAfterMigration(t *testing.T) {
 	s := newGame()
-	s.Version = stateVersion - 1
+	s.Version = stateVersion - 2
 	s.Tech = map[string]bool{
 		techIndustryID: true,
 		techGuardID:    false,

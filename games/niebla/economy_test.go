@@ -35,6 +35,7 @@ type economyMilestones struct {
 	firstIntroAttackEndedAt int64
 	firstPressureSortieAt   int64
 	firstPressureLullAt     int64
+	artillerySchematicsAt   int64
 	repairProtocolArrivedAt int64
 }
 
@@ -45,6 +46,7 @@ func newEconomyMilestones() economyMilestones {
 		firstIntroAttackEndedAt: -1,
 		firstPressureSortieAt:   -1,
 		firstPressureLullAt:     -1,
+		artillerySchematicsAt:   -1,
 		repairProtocolArrivedAt: -1,
 	}
 }
@@ -64,6 +66,9 @@ func (m *economyMilestones) observe(s *State) {
 	}
 	if m.firstPressureLullAt < 0 && s.Raids.PressureSortieResolved {
 		m.firstPressureLullAt = s.Ticks
+	}
+	if m.artillerySchematicsAt < 0 && dropArrived(s, techArtilleryID) {
+		m.artillerySchematicsAt = s.Ticks
 	}
 	if m.repairProtocolArrivedAt < 0 && repairProtocolUnlocked(s) {
 		m.repairProtocolArrivedAt = s.Ticks
@@ -107,7 +112,8 @@ func TestWriteEconomyReport(t *testing.T) {
 		"city_stage", "city_work_ticks", "city_sorties", "city_oil",
 		"city_lilac", "scout_cleared_core_tick", "first_building_hit_tick",
 		"first_intro_attack_end_tick", "first_pressure_sortie_tick",
-		"first_pressure_sortie_lull_tick", "repair_protocol_tick",
+		"first_pressure_sortie_lull_tick", "artillery_schematics_tick",
+		"repair_protocol_tick",
 		"mechanics", "building_damage",
 	}); err != nil {
 		t.Fatalf("writing the report header: %v", err)
@@ -407,6 +413,7 @@ func economyRow(
 		economyTick(milestones.firstIntroAttackEndedAt),
 		economyTick(milestones.firstPressureSortieAt),
 		economyTick(milestones.firstPressureLullAt),
+		economyTick(milestones.artillerySchematicsAt),
 		economyTick(milestones.repairProtocolArrivedAt),
 		strconv.Itoa(mechanics),
 		quantity(damage),
@@ -449,7 +456,12 @@ func TestEconomyMilestonesRememberTheirTicks(t *testing.T) {
 	s.Raids.PressureSortieResolved = true
 	s.Parties[701] = Party{ID: 701, Stage: StageRaid}
 	milestones.observe(s)
+	if milestones.artillerySchematicsAt != -1 {
+		t.Fatalf("artillery arrived after only %d normal visits",
+			milestones.artillerySchematicsAt)
+	}
 	s.Ticks = 500
+	s.Raids.Visits = 4
 	s.Parties[701] = Party{ID: 701, Stage: StageUnload}
 	s.Tech[techRepairID] = false
 	milestones.observe(s)
@@ -459,6 +471,7 @@ func TestEconomyMilestonesRememberTheirTicks(t *testing.T) {
 		milestones.firstIntroAttackEndedAt != 200 ||
 		milestones.firstPressureSortieAt != 300 ||
 		milestones.firstPressureLullAt != 400 ||
+		milestones.artillerySchematicsAt != 500 ||
 		milestones.repairProtocolArrivedAt != 500 {
 		t.Fatalf("the economy probe recorded %+v", milestones)
 	}

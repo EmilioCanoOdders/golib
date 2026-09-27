@@ -5,7 +5,8 @@ package main
 // saw (DESIGN.md, "Introduction to the game"): it comes in a valley of
 // calm, just before the thing it answers makes it necessary, never in
 // the middle of a peak the player is busy with. A drop arrives when its
-// trigger says so - the clock, the rivals' visits, a city factory -
+// trigger says so - the clock, normal rival visits, or an old save's city
+// factory -
 // and waits over the core as a glowing badge until the player opens it.
 // The trigger is derived from the state, so an old save wakes up with
 // exactly what it has earned; only "opened" is written down, in
@@ -14,11 +15,13 @@ package main
 // Tuning: the factory blueprint is the opening gift. The first delivery
 // brings logistics. The frontier kit's clock drop sits before the first
 // raid; the guard answers the scout's theft, and the war factory arrives
-// when the first city is founded.
+// when the first city is founded; artillery waits through three ordinary
+// attacks, not the scout or city-produced sorties.
 const (
 	techFrontierTicks       = 5*60*60 + 30*60 // mid-valley, before the first raid
 	legacyTechIndustryTicks = 7 * 60 * 60     // old saves' factory unlock
 	techRepairFallbackTicks = 12 * 60 * 60    // no first city force by minute 12
+	techArtilleryVisits     = 4               // scout plus three normal attacks
 )
 
 // The drops' names. Treat them as identifiers, not prose: the view keys
@@ -60,12 +63,10 @@ var techLadder = []techDrop{
 		}},
 	{techArtilleryID, []BuildingKind{BuildingArtillery},
 		func(s *State) bool {
-			for _, cityID := range sortedCityIDs(s) {
-				if cityHasBuilding(s, s.Cities[cityID], EnemyCityFactory) {
-					return true
-				}
+			if s.Raids.LegacyArtillery {
+				return rivalFactoryExists(s)
 			}
-			return false
+			return s.Raids.Visits >= techArtilleryVisits
 		}},
 	{techRepairID, nil, repairProtocolTrigger},
 }
@@ -145,10 +146,21 @@ func legacyTechArrived(s *State, id string) bool {
 		return false
 	case techGuardID:
 		return legacyGuardTechArrived(s)
+	case techArtilleryID:
+		return rivalFactoryExists(s)
 	}
 	for i := range techLadder {
 		if techLadder[i].id == id {
 			return techLadder[i].trigger(s)
+		}
+	}
+	return false
+}
+
+func rivalFactoryExists(s *State) bool {
+	for _, cityID := range sortedCityIDs(s) {
+		if cityHasBuilding(s, s.Cities[cityID], EnemyCityFactory) {
+			return true
 		}
 	}
 	return false

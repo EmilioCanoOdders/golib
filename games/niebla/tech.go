@@ -192,7 +192,8 @@ func techWords(id string) (title, body string) {
 			"Troopers are its squad. Keys 1-9 give the order."
 	case techArtilleryID:
 		return "artillery",
-			"It shells what the colony sees. Every shell costs lilac and oil."
+			"Three normal attacks have ended. Build artillery to shell rival " +
+				"targets the colony sees."
 	case techRepairID:
 		return "repair protocol",
 			"Rival fire damaged a building. Build a mechanic at a war factory " +

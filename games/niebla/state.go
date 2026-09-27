@@ -39,7 +39,7 @@ type State struct {
 	Tech       map[string]bool    // the schematics that arrived: drop ID -> opened (sim_tech.go)
 }
 
-const stateVersion = 6
+const stateVersion = 7
 
 // Fog is the region's weather, where the fog's breath has got to. The
 // swell rises at a cycle's end and drains tick by tick; NextIn counts
@@ -313,6 +313,9 @@ func (s *State) migrateState() {
 			legacyGuardTechArrived(s) {
 			s.Tech[techGuardID] = true
 		}
+	}
+	if s.Version < 7 {
+		s.Raids.LegacyArtillery = true
 	}
 	s.Version = stateVersion
 }

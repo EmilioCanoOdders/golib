@@ -172,6 +172,11 @@ The guard-post schematic arrives when the first scout, returning after its
 theft, crosses outward past the core's fixed 800 m bubble. Its oil and mark
 do not unlock the post while it is still inside.
 
+Artillery arrives after the third normal crawler-and-raider attack ends.
+The scout is not an attack, and sorties produced by city factories do not
+count. Rival factory completion alone does not unlock artillery in new
+saves; older saves keep that former trigger.
+
 The colony's guard posts and troopers, and rival crawlers and raiders, all
 have a `smallArmsRangeUnits` reach of 130 m. A guard post on the first
 attack's approach to the nearest tank should end that first raid at 20% hull
@@ -379,7 +384,8 @@ For whoever works on the game, not for the player: in the region, hold Control a
   the fixed 800 m core bubble; the mark and oil alone do not unlock it. The
   frontier kit (protector, pump, pipes) comes at 5:30, and the war factory
   comes when the first peripheral city begins construction. Artillery arrives
-  when a rival city completes its war factory. The repair protocol is a later,
+  after three normal attacks end; the scout and city-produced sorties do not
+  count. The repair protocol is a later,
   unit-only drop: it waits until the first real attack has ended, rival fire
   has damaged a colony building, and the first city force unloads, rebuilds,
   regroups or is destroyed. If no first force is produced, its timing falls
@@ -809,10 +815,16 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-27: artillery schematics now arrive after the third normal attack
+  ends. The scout and city-produced sorties do not count, and completing a
+  rival factory alone no longer unlocks artillery in new saves. Version 7
+  preserves the old factory trigger and any artillery badge already pending
+  in older saves. The economy probe saw no arrival by minute 60 in its four
+  plans over seeds 0, 1 and 2; visits topped at 2 in every run.
 - 2026-09-27: the guard-post schematic now arrives when the first scout,
   returning after its theft, crosses outward past the core's fixed 800 m
   bubble. Its mark and stolen oil no longer unlock it inside the bubble.
-  Version 6 saves the crossing, and older saves retain guard access earned
+  Version 7 saves the crossing, and older saves retain guard access earned
   under the former mark-or-oil trigger without receiving a new badge. The
   economy probe records the crossing at tick 12,051 for seeds 0, 1 and 2;
   tests and paired shots pin the timing and its presentation.

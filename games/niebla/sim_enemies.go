@@ -155,6 +155,7 @@ type Raids struct {
 	PressureSortieStarted  bool  // the pressure city's first force was produced
 	PressureSortieResolved bool  // its first force reached a lull or was destroyed
 	LegacyRepairUnlocked   bool  // an old save already had mechanic production
+	LegacyArtillery        bool  // old saves use the rival-factory trigger
 }
 
 // Mark is what a scout paints on the ground before it leaves.
