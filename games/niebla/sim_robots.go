@@ -59,6 +59,7 @@ func robotMaxHealth(kind RobotKind) float64 {
 func stepSim(s *State) {
 	s.Deaths = nil
 	s.BuildingDeaths = nil
+	s.Costs = nil
 	stepTech(s)
 	stepFog(s)
 	stepFactories(s)

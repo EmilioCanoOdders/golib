@@ -186,6 +186,7 @@ func (d *devTools) resetWorld(s *playScene, seed int64) {
 	s.expanded = map[string]bool{}
 	s.mites = newMiteField()
 	s.fx = newFxField()
+	s.costs = newSpendingField()
 	s.saveNow()
 }
 

@@ -262,8 +262,11 @@ func stepProtectors(s *State) {
 		if b.Kind != BuildingProtector || b.Oil <= 0 {
 			continue
 		}
-		b.Oil = math.Max(0, b.Oil-protectorOilPerSecond/60)
+		spent := math.Min(b.Oil, protectorOilPerSecond/60)
+		b.Oil = math.Max(0, b.Oil-spent)
 		s.Buildings[id] = b
+		x, y := cellCenterUnits(b.Col, b.Row)
+		s.recordCost(costBuilding, b.ID, x, y, 0, spent, true)
 	}
 }
 

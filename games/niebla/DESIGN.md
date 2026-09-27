@@ -360,8 +360,10 @@ Open: independent city choices and production strategies, pathfinding, cities se
 
 ## Architecture
 
-One-tick `UnitDeath` receipts are reducer output for the view, excluded
-from JSON and cleared by the next tick.
+`UnitDeath` and `CostReceipt` receipts are transient reducer output for the
+view, excluded from JSON and cleared by the next tick. Continuous expenses
+are grouped by their source and shown once per simulated second; their
+animation is never saved.
 
 The game is a deterministic simulation first, and a picture of it second. These rules are law; every feature bends around them.
 
@@ -406,6 +408,10 @@ static data generated from `State.Seed`, never state. `play.go` and
   - **A store shows how full it is** on its body, in a vertical bar
     filling from the bottom: a silo and charger in oil, a warehouse in
     lilac against all its roofs, and the core in both oil and lilac.
+  - Resource costs float up above their source: placing buildings or pipes,
+    starting unit production, repairs, protector upkeep and weapon fire.
+    Recurring costs are totaled once per second in oil amber or lilac violet.
+    Robot travel fuel, fog fuel loss and refills are not shown.
   - An expanded oil or lilac card offers `send robot` while another
     worker can be assigned. It lists assigned units as up to eight
     clickable portraits per page. A portrait opens that unit's card,
@@ -754,6 +760,11 @@ fast-forward cannot swallow a short-lived shot between updates.
 Landed (2026-09-22), in `audio.go`, all of it view: the world speaks where it happens and the view weighs it. Every world sound is multiplied by how close the view stands (`nearness`: a whisper at stop 0, whole from stop 3, never nothing) and by its distance to the view's middle (a little past the view's width on screen), so far out the world whispers under the wind. The wind loop and the oil pools' buried seethe are synthesized by `tools/soundgen` and read as files (`wind-loop.ogg`, `oil-bed.ogg`), so they loop with no seam; the wind is three layers driven by one long gust - a deep rumble always there, an air that swells with it, a whistle only the strongest gusts sing - so being far out sounds like the atmosphere and not like a fault. the bed lives at the nearest pool with oil left (never a dry one) and drops a bloop (`oil-drip.ogg`) every 5-20 s and a thicker gurgle (`oil-gurgle.ogg`, CC-BY) every 30-70 s, while the lilac veins, the minerals, sparkle: a soft crystal ping, one of three pitches varied by the play, every 0.4-2.5 s at the nearest vein with ore - and the more veins the view hears, the louder and the sooner the next ping, so the shimmer grows with the mineral in earshot. The war's shots are learned the way the lights learn them, by comparing the state's with the ones seen last: the colony's artillery its cannon recording (`artillery-fire.ogg`, CC0), a rival base's gun the filtered, echoing one of the same (`artillery-fire-distant.ogg`), small arms two short reports (`gun-a/b.ogg`, CC0) held to one sound every few ticks, a shell in the last second over the view falls whistling (a falling note made in code, once per shell), and its landing is a wide whump of noise, made in code too. The interface clicks (`click.ogg`, CC0): opening the build menu, picking a group or a blueprint, every card's button, the schematics' badge, calling a squad, the trash can's two presses. Still to come: the fog's own low loop outside bubbles, the repulsor hum, robot blips, a digestion crunch, a construction chime, sirens. Fully playable muted.
 
 ## Tuning
+In `spending.go`, `spendingPeriod` 1 s groups recurring costs and
+`spendingLife` 1.2 s sets how long their floating numbers remain visible;
+`spendingRise` is 34 screen px/s. One-time costs appear at once. Robot
+carrying/fog fuel burn and refills produce no cost receipts.
+
 In `audio.go`: `audioFalloff` 3.2 and `audioViewReach` 1.5 for world
 sounds, capped at `audioReach` 2800 m; cannon reports use `shellFalloff`
 1.3 and `shellReach` 3800 m. `tinkVolume` is `0.2125 / 24`, and
@@ -995,6 +1006,12 @@ time and rerun all four probe policies.
   integrity returns. The mechanic still spends its own 0.2 L per point;
   either repair resource can pause the work. Building cards show the cost
   left. Pinned by `shots_test.go`, `markup_test.go` and the repair-cost shot.
+- 2026-09-27: paid building and pipe placements and unit production now show
+  floating oil and lilac costs at their source. Protector upkeep, shots and
+  mechanic repairs report their ongoing costs as one-second totals; robot
+  carrying/fog fuel use and refills stay hidden. Receipts are transient and
+  never enter saves. Small oil costs retain two decimal places. Pinned by
+  `costs_test.go`.
 - 2026-09-27: the guard unlocks when the first scout crosses outward past
   the core bubble; the frontier kit follows one minute later. That crossing
   tick is saved; old saves keep the former 5:30 clock after

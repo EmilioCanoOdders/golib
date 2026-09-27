@@ -41,6 +41,7 @@ type playScene struct {
 	state *State
 	mites *miteField  // the fog's wear on what stands in it; looks only
 	fx    *fxField    // shots' light, flashes, sparks and smoke; looks only
+	costs *spendingField
 	au    *audioField // the region's sound; looks and hears only
 	dev   devTools
 
@@ -100,6 +101,7 @@ func newPlayScene(state *State) *playScene {
 		state:    state,
 		mites:    newMiteField(),
 		fx:       newFxField(),
+		costs:    newSpendingField(),
 		au:       newAudioField(),
 		expanded: map[string]bool{},
 	}
@@ -112,6 +114,7 @@ func newPlayScene(state *State) *playScene {
 }
 
 func (s *playScene) Update(input *golib.Input, dt float32) {
+	s.state.Costs = nil
 	mx, my := input.MousePosition()
 	s.mouse = golib.Vector2{X: mx, Y: my}
 	// Esc or Back saves the base and returns to the menu, the way out of
@@ -160,12 +163,14 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 	ticks := s.dev.ticksPerUpdate()
 	var deaths []UnitDeath
 	var buildingDeaths []BuildingDeath
+	costs := append([]CostReceipt(nil), s.state.Costs...)
 	for i := 0; i < ticks; i++ {
 		Apply(s.state, Tick{})
 		deaths = append(deaths, s.state.Deaths...)
 		buildingDeaths = append(
 			buildingDeaths, s.state.BuildingDeaths...,
 		)
+		costs = append(costs, s.state.Costs...)
 		s.au.update(s, 1)
 		if report, ok := latestReport(s.state); ok &&
 			(!hadReport || report != previousReport) {
@@ -183,6 +188,7 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 	s.clampRobotPanel()
 	s.mites.update(s.state, dt)
 	s.fx.update(s.state, dt, deaths, buildingDeaths)
+	s.costs.update(costs, float32(ticks)/60)
 	s.savedTicks += int64(ticks)
 	if s.savedTicks >= autosaveTicks {
 		s.saveNow()
@@ -774,6 +780,7 @@ func (s *playScene) Draw(screen *golib.Screen) {
 		s.drawOrderingPreview(screen)
 	}
 	screen.SetCamera(nil)
+	s.costs.draw(s.camera, screen)
 	drawSwellStatic(s.state, screen, s.camera)
 	drawIdleCount(s.state, screen, s.camera)
 	drawTechBadge(s, screen)

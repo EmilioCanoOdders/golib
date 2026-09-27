@@ -117,6 +117,8 @@ func (a MarkBuilding) apply(s *State) {
 	s.Jobs = append(s.Jobs, Job{
 		Kind: a.Kind, Col: a.Col, Row: a.Row, Left: buildingWorkTicks,
 	})
+	x, y := cellCenterUnits(a.Col, a.Row)
+	s.recordCost(costPlacement, 0, x, y, lilac, oil, false)
 }
 
 // QueueRobot puts a factory to work on one more robot, paying lilac and
@@ -172,6 +174,8 @@ func queueUnit(s *State, id int64, kind RobotKind) {
 	s.payOil(oil)
 	b.Work, b.WorkKind = ticks, kind
 	s.Buildings[b.ID] = b
+	x, y := cellCenterUnits(b.Col, b.Row)
+	s.recordCost(costBuilding, b.ID, x, y, lilac, oil, false)
 }
 
 // OrderSquad tells a war factory's squad what to do: attack the party of
@@ -301,6 +305,8 @@ func (a LayPipe) apply(s *State) {
 		Sections: sections,
 		Left:     sections * pipeSectionWorkTicks,
 	}
+	start, _ := pipeEndSpot(s, a.From)
+	s.recordCost(costPipe, id, start.X, start.Y, pipeCost(sections), 0, false)
 }
 
 // RemovePipe takes a pipe up at once, laid or not: what it was made of

@@ -40,6 +40,8 @@ type State struct {
 	// The latest tick's death events, for view effects; never saved.
 	Deaths         []UnitDeath     `json:"-"`
 	BuildingDeaths []BuildingDeath `json:"-"`
+	// Resource expenses for the view; the next tick replaces them.
+	Costs []CostReceipt `json:"-"`
 }
 
 // UnitDeath is a one-tick simulation event for the view. It is not saved:

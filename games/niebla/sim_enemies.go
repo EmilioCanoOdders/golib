@@ -884,6 +884,7 @@ func stepGuards(s *State) {
 			continue
 		}
 		s.payOil(guardShotOil)
+		s.recordCost(costBuilding, b.ID, x, y, 0, guardShotOil, true)
 		b.Reload, b.Aim = guardReloadTicks, target.ID
 		s.Buildings[id] = b
 		s.fire(Shot{

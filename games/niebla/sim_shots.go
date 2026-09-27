@@ -274,13 +274,18 @@ func (s *State) mend(id int64, mechanic *Robot) {
 		if repair <= 0 {
 			return
 		}
-		lilac, oil := buildingRepairCost(b.Kind, repair)
+		lilac, repairOil := buildingRepairCost(b.Kind, repair)
 		b.Damage = math.Max(0, b.Damage-repair)
+		mechanicOil := repair * repairOilPerPoint
 		mechanic.Tank = math.Max(0,
-			mechanic.Tank-repair*repairOilPerPoint)
+			mechanic.Tank-mechanicOil)
 		s.Stock.Lilac = math.Max(0, s.Stock.Lilac-lilac)
-		s.payOil(oil)
+		s.payOil(repairOil)
 		s.Buildings[id] = b
+		x, y := cellCenterUnits(b.Col, b.Row)
+		s.recordCost(costBuilding, b.ID, x, y, lilac, repairOil, true)
+		s.recordCost(costRobot, mechanic.ID, mechanic.X, mechanic.Y,
+			0, mechanicOil, true)
 	}
 }
 
@@ -327,6 +332,8 @@ func stepArtillery(s *State) {
 		}
 		s.Stock.Lilac -= artilleryShellLilac
 		s.payOil(artilleryShellOil)
+		s.recordCost(costBuilding, b.ID, x, y,
+			artilleryShellLilac, artilleryShellOil, true)
 		b.Reload, b.Aim = artilleryReloadTicks, target.ID
 		s.Buildings[id] = b
 		muzzleX, muzzleY := shellLaunchPoint(x, y, target.X, target.Y)

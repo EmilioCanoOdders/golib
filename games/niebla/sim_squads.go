@@ -175,6 +175,7 @@ func (r *Robot) shoot(s *State) {
 		return
 	}
 	r.Tank -= trooperShotOil
+	s.recordCost(costRobot, r.ID, r.X, r.Y, 0, trooperShotOil, true)
 	r.Reload, r.Aim = trooperReloadTicks, target.ID
 	s.fire(Shot{
 		Kind: ShotBullet, FromX: r.X, FromY: r.Y, ToX: target.X, ToY: target.Y,
