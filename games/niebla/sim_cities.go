@@ -27,6 +27,7 @@ type City struct {
 	AnnounceUntil int64
 	Stage         int
 	Work          int64
+	MiteDamage    float64 // damage to the city building site
 	Oil           float64
 	Lilac         float64
 	OilDeposit    float64
@@ -391,6 +392,7 @@ func (s *State) finishCityBuilding(city *City) {
 	city.BuildingIDs = append(city.BuildingIDs, eid)
 	city.Stage++
 	city.Work = cityBuildTicks
+	city.MiteDamage = 0
 	s.report(ReportCityBuilding, 0, city.X, city.Y)
 	s.Reports[len(s.Reports)-1].Stage = int64(stage)
 	if city.Stage == len(cityBuildOrder) {

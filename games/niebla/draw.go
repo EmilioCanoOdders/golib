@@ -66,7 +66,8 @@ func drawPiles(s *State, screen *golib.Screen, zoom float32, sheltered bool) {
 			continue
 		}
 		gx, gy := project(float32(x), float32(y))
-		k := buildingIcon(heapAcross, heapHeight, zoom)
+		scale := pileMiteScale(p)
+		k := buildingIcon(heapAcross*scale, heapHeight*scale, zoom)
 		crate, drum := 6*k, 4.5*k
 		if p.Lilac >= pileDust {
 			isoBox(screen, gx-crate*unitW*0.45, gy, crate, 5*k,

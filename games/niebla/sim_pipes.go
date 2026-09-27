@@ -52,6 +52,7 @@ type Pipe struct {
 	Offered  float64     // liters offered by the source in the latest tick
 	Flow     float64     // liters moved in the latest simulation tick
 	Moved    float64     // liters moved since the pipe began carrying oil
+	Damage   float64     // damage from mites
 	// Ticks of work left by section, from the source out. It is nil until
 	// the first tick of work and once the pipe is laid: Left alone then
 	// says the work went in from the source out, as old saves have it.

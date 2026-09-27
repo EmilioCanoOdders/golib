@@ -20,7 +20,6 @@ const (
 	protectorCostLilac = 180.0   // kg
 	protectorCostOil   = 40.0    // L: the protector's initial charge
 	pumpCostLilac      = 150.0   // kg
-	pumpFogTicks       = 10 * 60 // ticks an unprotected pump survives
 
 	buildingWorkTicks = 300 // ticks of robot work to raise any building: 5 s
 
@@ -202,26 +201,6 @@ func canPlace(s *State, kind BuildingKind, col, row int) bool {
 	x, y := cellCenterUnits(col, row)
 	return kind == BuildingProtector || kind == BuildingPump ||
 		inSafeZone(s, x, y)
-}
-
-func stepPumpExposure(s *State) {
-	for _, id := range sortedBuildingIDs(s) {
-		b := s.Buildings[id]
-		if b.Kind != BuildingPump {
-			continue
-		}
-		x, y := cellCenterUnits(b.Col, b.Row)
-		if inSafeZone(s, x, y) {
-			continue
-		}
-		b.Damage += buildingHealth(b.Kind) / pumpFogTicks
-		if b.Damage < buildingHealth(b.Kind) {
-			s.Buildings[id] = b
-			continue
-		}
-		s.takeDown(b, wreckRefund)
-		s.report(ReportPumpEaten, 0, x, y)
-	}
 }
 
 // inSafeZone reports whether a world point stands inside a bubble: the

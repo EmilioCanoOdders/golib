@@ -15,7 +15,6 @@ const (
 	startingBuilders        = 1    // builder the core gives the colony
 	robotBuilderHealth      = 60.0 // hull points for builders
 	robotWorkerHealth       = 60.0 // hull points for workers
-	fogStillDamagePerSecond = 2.0  // hull points per second at full exposure
 
 	robotSpeed       = 30.0      // units (m) per second
 	robotLoadTicks   = 150       // ticks of loading at a deposit: 2.5 s
@@ -64,7 +63,6 @@ func stepSim(s *State) {
 	stepFactories(s)
 	stepPipes(s)
 	stepProtectors(s)
-	stepPumpExposure(s)
 	stepSquads(s)
 	stepEnemies(s)
 	stepGuards(s)
@@ -78,7 +76,7 @@ func stepSim(s *State) {
 		}
 		stepRobot(s, &r)
 		if r.tanked() && (r.Tank <= 0 || r.Health <= 0) &&
-			!inSafeZone(s, r.X, r.Y) {
+			miteExposureAt(s, r.X, r.Y) > 0 {
 			s.recordRobotDeath(r)
 			delete(s.Robots, id)
 			s.dropRobotWreck(r)
@@ -86,6 +84,7 @@ func stepSim(s *State) {
 		}
 		s.Robots[id] = r
 	}
+	stepMiteWear(s)
 }
 
 func sortedRobotIDs(s *State) []int64 {
@@ -187,7 +186,8 @@ func stepRobot(s *State, r *Robot) {
 }
 
 func stepStationaryWear(s *State, r *Robot, moved bool) {
-	if !r.tanked() || moved || inSafeZone(s, r.X, r.Y) {
+	exposure := miteExposureAt(s, r.X, r.Y)
+	if !r.tanked() || moved || exposure <= 0 {
 		r.StillTicks = 0
 		return
 	}
@@ -195,9 +195,8 @@ func stepStationaryWear(s *State, r *Robot, moved bool) {
 	if r.StillTicks <= fogStillGraceTicks {
 		return
 	}
-	exposure := fogExposureAt(s, r.X, r.Y)
 	fuelWear := fogStillBurnPerSecond * exposure / 60
-	hullDamage := fogStillDamagePerSecond * exposure / 60
+	hullDamage := miteDamagePerSecond * exposure * miteSwellFactor(s) / 60
 	r.Tank = math.Max(0, r.Tank-fuelWear)
 	r.Health = math.Max(0, r.Health-hullDamage)
 }

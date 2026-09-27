@@ -22,7 +22,7 @@ const (
 	fogCycleTicks = 1800 // ticks a cycle lasts: 30 s
 
 	fogHazeExposure       = 0.5 // the clear haze's share of the fog's full wear
-	fogStillGraceTicks    = 120 // ticks a unit may stand before the fog wears it
+	fogStillGraceTicks    = 120 // ticks a unit may stand before mites hurt it
 	fogStillBurnPerSecond = 1.0 // L/s at full exposure, while standing still
 
 	fogSwellPeriod    = 18.0 // cycles of calm before the first swell

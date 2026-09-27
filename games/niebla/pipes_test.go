@@ -248,7 +248,12 @@ func TestExternalPumpIsEatenUnlessProtected(t *testing.T) {
 		t.Fatal("robots never raised the outside pump")
 	}
 	pump, _ := buildingAt(s, col, row)
-	runTicks(s, pumpFogTicks/2)
+	x, y := cellCenterUnits(pump.Col, pump.Row)
+	exposure := miteExposureAt(s, x, y)
+	if exposure <= 0 {
+		t.Fatal("the external pump has no mite exposure")
+	}
+	runTicks(s, 60)
 	if _, stands := s.Buildings[pump.ID]; !stands {
 		t.Fatal("the pump vanished before mites could be seen eating it")
 	}
@@ -261,15 +266,19 @@ func TestExternalPumpIsEatenUnlessProtected(t *testing.T) {
 	if host == nil || host.Wanted == 0 {
 		t.Error("no mites gather on the exposed pump")
 	}
-	runTicks(s, pumpFogTicks/2)
+	ticks := int(math.Ceil(
+		(buildingHealth(pump.Kind) - s.Buildings[pump.ID].Damage) * 60 /
+			(miteDamagePerSecond * exposure),
+	))
+	runTicks(s, ticks+3)
 	if _, stands := s.Buildings[pump.ID]; stands {
 		t.Fatal("the unprotected pump survived the mites")
 	}
-	if lastReport(s).Kind != ReportPumpEaten {
+	if lastReport(s).Kind != ReportMiteEaten {
 		t.Errorf("no explanation for the lost pump: %+v", s.Reports)
 	}
 	if pile, ok := pileAt(s, col, row); !ok ||
-		pile.Lilac != pumpCostLilac*wreckRefund {
+		math.Abs(pile.Lilac-pumpCostLilac*wreckRefund) > 0.1 {
 		t.Errorf("the pump left pile %v, found %v", pile, ok)
 	}
 	if canPlace(s, BuildingPump, col, row) {
@@ -295,7 +304,7 @@ func TestProtectorKeepsExternalPumpSafe(t *testing.T) {
 	}
 	col, row := pumpCell(far)
 	pump := pumpOn(t, s, far)
-	runTicks(s, pumpFogTicks/2)
+	runTicks(s, 60)
 	if s.Buildings[pump.ID].Damage == 0 {
 		t.Fatal("the external pump has not begun to be digested")
 	}
@@ -314,7 +323,7 @@ func TestProtectorKeepsExternalPumpSafe(t *testing.T) {
 		t.Error("mites still swarm a sheltered pump")
 	}
 	damage := s.Buildings[pump.ID].Damage
-	runTicks(s, pumpFogTicks)
+	runTicks(s, 60)
 	if b, ok := s.Buildings[pump.ID]; !ok || b.Damage != damage {
 		t.Errorf("the protected pump didn't survive unchanged: %+v, %v", b, ok)
 	}

@@ -336,40 +336,39 @@ func TestAGuardPostShootsForOilAndTheWrecksDropWhatTheyStole(t *testing.T) {
 	}
 }
 
-func TestRaidersWithoutTheirCrawlerAreDigested(t *testing.T) {
+func TestAStationaryRivalTakesMiteDamageAfterGrace(t *testing.T) {
 	s := newGame()
-	s.Raids.Visits = 1
-	visitNow(s)
-	partyID := sortedPartyIDs(s)[0]
-	var crawler int64
-	for _, e := range s.Enemies {
-		if e.Kind == EnemyCrawler {
-			crawler = e.ID
-		}
+	noRivals(s)
+	e := Enemy{
+		ID: 900, Kind: EnemyRaider, X: 500, Y: 500,
+		Health: 100, StillTicks: fogStillGraceTicks,
 	}
-	partyID = s.Enemies[crawler].Party
-	runTicks(s, 60*30) // far enough in that running back out takes longer than the fog
-	for _, e := range s.Enemies {
-		if e.Fogged != 0 {
-			t.Fatalf("a %s under its crawler's bubble wears the fog", e.Kind)
-		}
+	s.Enemies[e.ID] = e
+	positions := map[int64]PipePoint{
+		e.ID: {X: e.X, Y: e.Y},
 	}
-	s.killEnemy(crawler)
-	runTicks(s, enemyFogTicks-1)
-	if got := len(partyMembers(s, partyID)); got != raidFirstRaiders {
-		t.Fatalf("%d raiders stand before the fog's time, want %d",
-			got, raidFirstRaiders)
+	stepExposure(s, positions)
+
+	got := s.Enemies[e.ID]
+	wantDamage := miteDamagePerSecond * miteExposureAt(s, e.X, e.Y) / 60
+	if math.Abs((e.Health-got.Health)-wantDamage) > 1e-9 {
+		t.Fatalf("a stationary raider lost %v health, want %v",
+			e.Health-got.Health, wantDamage)
 	}
-	runTicks(s, 2)
-	if len(partyMembers(s, partyID)) != 0 || len(s.Parties) != 0 {
-		t.Errorf("%d vehicles and %d parties after the fog's time, want none",
-			len(partyMembers(s, partyID)), len(s.Parties))
+	if got.StillTicks != fogStillGraceTicks+1 {
+		t.Errorf("the raider has %d still ticks, want %d",
+			got.StillTicks, fogStillGraceTicks+1)
 	}
-	if lastReport(s).Kind != ReportDestroyed {
-		t.Errorf("the last report is %q, want destroyed", lastReport(s).Kind)
+
+	got.Health = 0.01
+	got.StillTicks = fogStillGraceTicks + 1
+	s.Enemies[e.ID] = got
+	stepExposure(s, positions)
+	if _, alive := s.Enemies[e.ID]; alive {
+		t.Fatal("mites did not digest a rival whose hull ran out")
 	}
 	if len(s.Piles) == 0 {
-		t.Errorf("the wrecks left nothing on the ground")
+		t.Fatal("the digested raider left no wreck")
 	}
 }
 

@@ -55,7 +55,7 @@ func TestMitesGatherByVolumeAndOnlyInExposedAir(t *testing.T) {
 
 	robot := f.hosts[robotMiteKey(id)]
 	volume := robotBodyAcross * robotBodyAcross * robotBodyHeight
-	want := int(math.Floor(volume * mitesPerCubicUnit))
+	want := int(math.Floor(volume * mitesPerCubicUnit * 2))
 	if robot == nil || len(robot.Mites) != want {
 		t.Fatalf("the fogged robot has %v mites, want %d", robot, want)
 	}
@@ -83,7 +83,7 @@ func TestMitesAlsoShowInTheClearHazeAtHalfStrength(t *testing.T) {
 	f := newMiteField()
 	runMites(f, s, 3)
 	want := int(math.Floor(robotBodyAcross * robotBodyAcross *
-		robotBodyHeight * mitesPerCubicUnit * fogHazeExposure))
+		robotBodyHeight * mitesPerCubicUnit * fogHazeExposure * 2))
 	if got := len(f.hosts[robotMiteKey(id)].Mites); got != want {
 		t.Fatalf("the hazy robot has %d mites, want %d", got, want)
 	}
@@ -115,6 +115,31 @@ func TestMitesCloseInOnWhatStandsStillAndTrailAWalker(t *testing.T) {
 	if offX > -robotBodyAcross/2 {
 		t.Errorf("the swarm's middle is %v u off the walker along its way, "+
 			"want it trailing behind the body", offX)
+	}
+}
+
+func TestStationaryMitesDoubleAndDoubleAgainInASwell(t *testing.T) {
+	s, _ := foggedRobot(t)
+	h := miteHost{
+		X: 500, Y: 500, Across: robotBodyAcross,
+		Height: robotBodyHeight,
+	}
+	h.want(s)
+	moving := h.Wanted
+	h.Grip = 1
+	h.want(s)
+	still := h.Wanted
+	s.Fog.Pressure = 1
+	h.want(s)
+	swell := h.Wanted
+
+	if still != moving*2 {
+		t.Fatalf("a still host has %d mites, want twice the moving %d",
+			still, moving)
+	}
+	if swell != still*2 {
+		t.Errorf("a still host in a swell has %d mites, want twice %d",
+			swell, still)
 	}
 }
 

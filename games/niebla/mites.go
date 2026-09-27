@@ -8,20 +8,15 @@ import (
 	"golib"
 )
 
-// The fog's wear, made visible: mites of darkness orbit whatever stands
-// in the mist - robots, building sites, piles - a few per cubic unit of
-// its body. They chase their orbit with a lag, so a walker leaves them
-// trailing behind, never quite caught; what stands still they close in
-// on. They are view, never state: nothing in the simulation reads them,
-// and their randomness is golib's, for looks only.
+// The fog's wear, made visible: mites of darkness orbit exposed units,
+// buildings, sites, piles and pipes. Their random movement is view-only;
+// deterministic damage and decay live in sim_mites.go.
 
 // Tuning: the mites, with units in the name.
 const (
 	mitesPerCubicUnit = 0.04 // mites per u3 of body, in full fog
 	mitesMaxPerHost   = 400
 	mitesBornPerTick  = 3 // how fast a swarm gathers around a newcomer
-	pumpMitesMin      = 15
-	pumpMitesMax      = 100
 
 	miteLagSeconds   = 0.6  // how late a mite follows its orbit
 	miteGripSeconds  = 2.0  // standing still this long, the swarm has closed in
@@ -39,7 +34,12 @@ const (
 
 	robotBodyAcross = 6.0 // u, the robot's body for the mites' count
 	robotBodyHeight = 5.0
+	pipeMiteAcross  = 8.0
+	pipeMiteHeight  = 4.0
+	pipeMiteDepth   = 2.0
 )
+
+const cityMiteParticleFactor = 0.6 // animated mites around rival city entities
 
 // miteFalloff returns a mite's darkness from its center out, one entry
 // per ring a heart's side wide: a spark turned inside out, black only at
@@ -69,7 +69,9 @@ type mite struct {
 type miteHost struct {
 	X, Y           float32 // where it stood at the last update
 	Across, Height float32 // its body, in units
+	Volume         float64 // overrides the body volume for a pipe section
 	Robot          bool    // drawn under the robots' icon law, not the buildings'
+	RivalCity      bool    // uses the city's reduced visual particle count
 	Grip           float32 // 0 walking, 1 stood still long enough
 	Wanted         int     // mites its body and the fog around it call for
 	Mites          []mite
@@ -91,6 +93,18 @@ func siteMiteKey(col, row int) string {
 	return fmt.Sprintf("site:%d,%d", col, row)
 }
 
+func enemyMiteKey(id int64) string {
+	return fmt.Sprintf("enemy:%d", id)
+}
+
+func pipeMiteKey(id, section int64) string {
+	return fmt.Sprintf("pipe:%d:%d", id, section)
+}
+
+func citySiteMiteKey(id int64) string {
+	return fmt.Sprintf("citysite:%d", id)
+}
+
 // update moves the mites one step. It reads the state and never changes
 // it. It draws random numbers, so it belongs in Update, never in Draw.
 func (f *miteField) update(s *State, dt float32) {
@@ -101,33 +115,83 @@ func (f *miteField) update(s *State, dt float32) {
 		r := s.Robots[id]
 		h := f.host(robotMiteKey(id), r.X, r.Y, dt)
 		h.Across, h.Height, h.Robot = robotBodyAcross, robotBodyHeight, true
+		h.Volume = 0
 		h.want(s)
 	}
 	for _, job := range s.Jobs {
 		x, y := cellCenterUnits(job.Col, job.Row)
 		h := f.host(siteMiteKey(job.Col, job.Row), x, y, dt)
 		h.Across, h.Height = buildingSize(job.Kind)
+		h.Volume = 0
 		h.want(s)
 	}
 	for _, id := range sortedBuildingIDs(s) {
 		b := s.Buildings[id]
-		if b.Kind != BuildingPump {
+		if b.Kind == BuildingProtector && b.Oil > 0 {
 			continue
 		}
 		x, y := cellCenterUnits(b.Col, b.Row)
 		h := f.host(fmt.Sprintf("building:%d", id), x, y, dt)
 		h.Across, h.Height = buildingSize(b.Kind)
+		h.Volume = 0
 		h.want(s)
-		if !inSafeZone(s, x, y) {
-			h.Wanted = pumpMitesMin + int(float64(pumpMitesMax-pumpMitesMin)*
-				b.Damage/buildingHealth(b.Kind))
-		}
 	}
 	for _, id := range sortedPileIDs(s) {
 		p := s.Piles[id]
 		x, y := cellCenterUnits(p.Col, p.Row)
 		h := f.host(fmt.Sprintf("pile:%d", id), x, y, dt)
-		h.Across, h.Height = 14, 6
+		scale := pileMiteScale(p)
+		h.Across, h.Height = 14*scale, 6*scale
+		h.Volume = 0
+		h.want(s)
+	}
+	for _, id := range sortedPipeIDs(s) {
+		p := s.Pipes[id]
+		path, ok := pipeSpine(s, p)
+		if !ok {
+			continue
+		}
+		length := pathLength(path)
+		for section := int64(0); section < p.Sections; section++ {
+			if sectionLeft(p, section) > 0 {
+				continue
+			}
+			start := float64(section) * pipeSectionMeters
+			part := math.Min(pipeSectionMeters, length-start)
+			if part <= 0 {
+				continue
+			}
+			point := pathPointAt(path, start+part/2)
+			h := f.host(pipeMiteKey(id, section), point.X, point.Y, dt)
+			h.Across, h.Height = pipeMiteAcross, pipeMiteHeight
+			h.Volume = part * pipeWidthUnits * pipeMiteDepth
+			h.want(s)
+		}
+	}
+	for _, id := range sortedEnemyIDs(s) {
+		e := s.Enemies[id]
+		if e.Kind == EnemyCityRepulsor {
+			continue
+		}
+		across, height, unit := enemyMiteBody(e)
+		h := f.host(enemyMiteKey(id), e.X, e.Y, dt)
+		h.Across, h.Height, h.Robot = across, height, unit
+		h.RivalCity = e.City != 0
+		h.Volume = 0
+		h.want(s)
+	}
+	for _, id := range sortedCityIDs(s) {
+		city := s.Cities[id]
+		if city.Stage >= len(cityBuildOrder) {
+			continue
+		}
+		x, y := cityBuildingPosition(city, city.Stage)
+		spec := cityBuildingSpec(cityBuildOrder[city.Stage])
+		across, height, _ := enemyMiteBody(Enemy{Kind: spec.kind})
+		h := f.host(citySiteMiteKey(id), x, y, dt)
+		h.Across, h.Height = across, height
+		h.RivalCity = true
+		h.Volume = 0
 		h.want(s)
 	}
 	keys := make([]string, 0, len(f.hosts))
@@ -166,11 +230,34 @@ func (f *miteField) host(key string, x, y float64, dt float32) *miteHost {
 // want counts the mites a host calls for: its body's volume, thinned by
 // how much fog stands on it. Under a bubble it calls for none.
 func (h *miteHost) want(s *State) {
-	fog := fogExposureAt(s, float64(h.X), float64(h.Y))
-	volume := float64(h.Across * h.Across * h.Height)
-	h.Wanted = int(volume * mitesPerCubicUnit * fog)
+	exposure := miteExposureAt(s, float64(h.X), float64(h.Y))
+	volume := h.Volume
+	if volume <= 0 {
+		volume = float64(h.Across * h.Across * h.Height)
+	}
+	still := 1 + float64(h.Grip)
+	swell := miteSwellFactor(s)
+	density := mitesPerCubicUnit
+	if h.RivalCity {
+		density *= cityMiteParticleFactor
+	}
+	h.Wanted = int(volume * density * exposure * still * swell)
 	if h.Wanted > mitesMaxPerHost {
 		h.Wanted = mitesMaxPerHost
+	}
+}
+
+func pileMiteScale(p Pile) float32 {
+	remaining := 1 - p.MiteTicks/float64(mitePileLifetimeTicks)
+	return float32(math.Max(0.2, math.Min(1, remaining)))
+}
+
+func enemyMiteBody(e Enemy) (across, height float32, unit bool) {
+	switch e.Kind {
+	case EnemyScout, EnemyCrawler, EnemyRaider, EnemyArtillery:
+		return 10, 8, true
+	default:
+		return 24, 18, false
 	}
 }
 
@@ -247,13 +334,24 @@ func miteLayers(falloff []float32) []float32 {
 	return layers
 }
 
+func miteHaloColor(grip float32) golib.Color {
+	grip = golib.Clamp(grip, 0, 1)
+	return golib.Color{R: uint8(180 * grip), A: 255}
+}
+
 // draw paints the mites over the fog. Black under normal blending takes
 // light away from what is under it, and taking away commutes, so the
 // mites need no order.
 func (f *miteField) draw(screen *golib.Screen, zoom float32) {
 	layers := miteLayers(miteFalloff())
 	side := dotRadius(miteSizeUnits/2, zoom, 0.5) * 2
-	for _, h := range f.hosts {
+	keys := make([]string, 0, len(f.hosts))
+	for key := range f.hosts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		h := f.hosts[key]
 		k := h.lift(zoom)
 		hx, hy := project(h.X, h.Y)
 		// A lifted icon has room for fewer mites than the body it
@@ -263,9 +361,10 @@ func (f *miteField) draw(screen *golib.Screen, zoom float32) {
 			mx, my := project(m.X, m.Y)
 			x := hx + (mx-hx)*k
 			y := hy + (my-hy)*k - m.Z*unitH*k
+			halo := miteHaloColor(h.Grip)
 			for ring := len(layers) - 1; ring > 0; ring-- {
 				screen.DrawCircle(x, y, side*(float32(ring)+0.5),
-					golib.WithOpacity(golib.Black, layers[ring]*m.Life))
+					golib.WithOpacity(halo, layers[ring]*m.Life))
 			}
 			// The heart stays a square: a disc half a pixel wide can fall
 			// between pixel centers and draw nothing.

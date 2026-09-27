@@ -682,7 +682,7 @@ func TestOldGuardUnlocksMigrateWithoutNewBadges(t *testing.T) {
 			t.Run(fmt.Sprintf("ledger=%v/%s", hasLedger, trigger),
 				func(t *testing.T) {
 					s := newGame()
-					s.Version = stateVersion - 2
+					s.Version = stateVersion - 3
 					s.Ticks = 2
 					if hasLedger {
 						s.Tech = map[string]bool{techIndustryID: true}
@@ -715,7 +715,7 @@ func TestOldGuardUnlocksMigrateWithoutNewBadges(t *testing.T) {
 
 func TestOldPendingGuardBadgeStaysPendingAfterMigration(t *testing.T) {
 	s := newGame()
-	s.Version = stateVersion - 2
+	s.Version = stateVersion - 3
 	s.Tech = map[string]bool{
 		techIndustryID: true,
 		techGuardID:    false,

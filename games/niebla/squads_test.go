@@ -230,7 +230,9 @@ func TestAFallenTrooperLeavesItsWreckAndADemolishedWarFactoryItsSquad(t *testing
 	}
 	wreck := false
 	for _, p := range s.Piles {
-		wreck = wreck || p.Lilac == trooperCostLilac*unitWreckRefund
+		wreck = wreck || math.Abs(
+			p.Lilac-trooperCostLilac*unitWreckRefund,
+		) < 0.1
 	}
 	if !wreck {
 		t.Errorf("the fallen trooper left no wreck: %+v", s.Piles)

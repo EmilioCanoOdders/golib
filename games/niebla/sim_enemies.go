@@ -11,9 +11,8 @@ import (
 // crawlers arrive to establish cities, which build extractors and a war
 // factory that sends forces from the city (sim_cities.go).
 //
-// A repulsor repels the fog and nothing else, so a party drives into a
-// bubble as it pleases. The fog is as hard on them as on the colony: a
-// vehicle with no repulsor of its party over it is digested.
+// Mites wear exposed vehicles and city structures. Moving keeps a unit
+// safe from hull damage; one that stands still loses hull after a grace.
 
 // Tuning: the rivals' numbers, with units in the name.
 const (
@@ -34,8 +33,6 @@ const (
 	siphonLitersPerSecond = 3.0     // L/s each vehicle draws
 	raidSiphonTicks       = 60 * 60 // ticks a party siphons at the most: a minute
 	smallArmsRangeUnits   = 130.0   // u; every light weapon's reach
-
-	enemyFogTicks = 300 // ticks a vehicle lasts in the fog with no repulsor: 5 s
 
 	reportsKept = 12 // reports the state remembers
 
@@ -101,17 +98,17 @@ func enemySpecOf(kind EnemyKind) enemySpec {
 // Enemy is one rival vehicle. Like a robot it carries no plan: its party's
 // stage says what it is doing.
 type Enemy struct {
-	ID     int64
-	Kind   EnemyKind
-	Party  int64
-	X, Y   float64 // units
-	Facing uint8   // screen-facing octant; zero points right
-	Health float64
-	Oil    float64 // liters it stole
-	Fogged int64   // ticks it has stood in the fog with no repulsor over it
-	Reload int64   // ticks until its gun's next shot (sim_squads.go)
-	Aim    int64   // the trooper its last shot went to
-	City   int64   // owning city for its static structures
+	ID         int64
+	Kind       EnemyKind
+	Party      int64
+	X, Y       float64 // units
+	Facing     uint8   // screen-facing octant; zero points right
+	Health     float64
+	Oil        float64 // liters it stole
+	StillTicks int64   // ticks spent standing in mite exposure
+	Reload     int64   // ticks until its gun's next shot (sim_squads.go)
+	Aim        int64   // the trooper its last shot went to
+	City       int64   // owning city for its static structures
 }
 
 // PartyStage is where a visit has got to.
@@ -179,6 +176,7 @@ const (
 	ReportBaseDown     ReportKind = "basedown" // a base fell
 	ReportRazed        ReportKind = "razed"    // a shell brought a building down
 	ReportPumpEaten    ReportKind = "pumpeaten"
+	ReportMiteEaten    ReportKind = "miteeaten"
 	ReportSortie       ReportKind = "sortie"
 	ReportCityIncoming ReportKind = "cityincoming"
 	ReportCityBuilding ReportKind = "citybuilding"
@@ -266,12 +264,17 @@ func partyMembers(s *State, party int64) []Enemy {
 // stepEnemies moves the rivals one tick forward: the clock that sends
 // them, each party's stage, and the fog's due.
 func stepEnemies(s *State) {
+	positions := make(map[int64]PipePoint, len(s.Enemies))
+	for _, id := range sortedEnemyIDs(s) {
+		e := s.Enemies[id]
+		positions[id] = PipePoint{X: e.X, Y: e.Y}
+	}
 	stepCities(s)
 	stepRaids(s)
 	for _, id := range sortedPartyIDs(s) {
 		stepParty(s, s.Parties[id])
 	}
-	stepExposure(s)
+	stepExposure(s, positions)
 	stepEnemyGuns(s)
 }
 
@@ -713,43 +716,31 @@ func (s *State) paintMark(scout Enemy) {
 	s.report(ReportScout, scout.Oil, scout.X, scout.Y)
 }
 
-// repulsed reports whether a vehicle stands under a repulsor of its own
-// party.
-func repulsed(s *State, e Enemy) bool {
-	for _, id := range sortedEnemyIDs(s) {
-		other := s.Enemies[id]
-		reach := enemySpecOf(other.Kind).bubble
-		if other.Party == e.Party && reach > 0 &&
-			math.Hypot(other.X-e.X, other.Y-e.Y) <= reach {
-			return true
-		}
-	}
-	if e.City != 0 {
-		city, ok := s.Cities[e.City]
-		if ok && cityHasRepulsor(s, city) &&
-			math.Hypot(city.X-e.X, city.Y-e.Y) <= 170 {
-			return true
-		}
-	}
-	return false
-}
-
-// stepExposure is the fog's due: a mobile rival in the mist without a
-// nearby repulsor lasts enemyFogTicks, and then is digested.
-func stepExposure(s *State) {
+func stepExposure(s *State, previous map[int64]PipePoint) {
 	for _, id := range sortedEnemyIDs(s) {
 		e := s.Enemies[id]
-		if e.City != 0 && (e.Party == 0 || e.Kind == EnemyBase) {
-			continue
-		}
-		if fogAt(s, e.X, e.Y) <= 0 || repulsed(s, e) {
-			e.Fogged = 0
+		if e.Kind == EnemyCityRepulsor {
+			e.StillTicks = 0
 			s.Enemies[id] = e
 			continue
 		}
-		e.Fogged++
+		old, existed := previous[id]
+		moved := existed && math.Hypot(e.X-old.X, e.Y-old.Y) > 1e-4
+		exposure := miteExposureAt(s, e.X, e.Y)
+		if exposure <= 0 || moved {
+			e.StillTicks = 0
+			s.Enemies[id] = e
+			continue
+		}
+		e.StillTicks++
+		if e.StillTicks <= fogStillGraceTicks {
+			s.Enemies[id] = e
+			continue
+		}
+		e.Health = math.Max(0, e.Health-
+			miteDamagePerSecond*exposure*miteSwellFactor(s)/60)
 		s.Enemies[id] = e
-		if e.Fogged >= enemyFogTicks {
+		if e.Health <= 0 {
 			s.killEnemy(id)
 		}
 	}

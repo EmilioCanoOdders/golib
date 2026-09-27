@@ -187,7 +187,7 @@ func TestTheFogWearsAStationaryRobotAfterItsGrace(t *testing.T) {
 	}{
 		{name: "haze", distance: 5, fuelLoss: 1, hullLoss: 2},
 		{name: "deep fog", deep: true, fuelLoss: 2, hullLoss: 4},
-		{name: "swell", distance: 11, swell: true, fuelLoss: 2, hullLoss: 4},
+		{name: "swell", distance: 11, swell: true, fuelLoss: 2, hullLoss: 8},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var s *State

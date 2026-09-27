@@ -171,7 +171,7 @@ func TestTickReportsFogDeathsButNotDepartingRivals(t *testing.T) {
 		s.Enemies[id] = Enemy{
 			ID: id, Kind: EnemyRaider,
 			X: robot.X + 30, Y: robot.Y,
-			Health: 1, Fogged: enemyFogTicks - 1,
+			Health: 0.01, StillTicks: fogStillGraceTicks,
 		}
 		Apply(s, Tick{})
 

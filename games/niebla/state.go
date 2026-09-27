@@ -67,7 +67,7 @@ func (s *State) recordEnemyDeath(e Enemy) {
 	})
 }
 
-const stateVersion = 7
+const stateVersion = 8
 
 // Fog is the region's weather, where the fog's breath has got to. The
 // swell rises at a cycle's end and drains tick by tick; NextIn counts
@@ -178,6 +178,7 @@ type Job struct {
 	Kind     BuildingKind
 	Col, Row int // the cell it stands on
 	Left     int64
+	Damage   float64 // damage from mites
 }
 
 // Pile is what a demolished building leaves on its cell: a container
@@ -185,10 +186,11 @@ type Job struct {
 // health and no capacity, and it leaves the state with its last item
 // (sim_piles.go holds the law).
 type Pile struct {
-	ID       int64
-	Col, Row int     // the cell it lies on
-	Oil      float64 // liters
-	Lilac    float64 // kilograms
+	ID        int64
+	Col, Row  int     // the cell it lies on
+	Oil       float64 // liters
+	Lilac     float64 // kilograms
+	MiteTicks float64 // exposure-weighted ticks before the pile is consumed
 }
 
 // hasPost reports whether the robot was sent to a deposit tile.

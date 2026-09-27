@@ -30,11 +30,49 @@ An indestructible repelling core, deployed at the start of a region. It is the l
 Every protector has a dedicated oil tank, separate from the colony's spendable stores. Its initial charge is included in its blueprint cost. The protector burns oil continuously; a pipe or a robot hauling oil can replenish it. Its bubble holds full size above the adjustable low-fuel threshold, then shrinks linearly to zero as the remaining charge runs out. An empty protector stays built but shelters nothing. Existing saves receive the initial charge once when they migrate to this rule.
 
 ## The fog
-The fog is law outside the colony's bubbles. The clear haze carries half exposure; thicker fog rises to full exposure. A tanked unit that stands still outside the core or a colony protector for two seconds starts losing oil and hull: up to 1 L/s and 2 hull points/s in full fog, half those rates in the haze. Moving resets that stillness clock. Carrying a load still burns oil as before, and an empty tank or empty hull outside a colony bubble means digestion. The fog never damages a bubble directly: the core's repulsion is absolute, while a protector's shrinking radius reflects only its own oil supply.
+The fog is law outside active repulsors. The clear haze carries half exposure;
+thicker fog rises to full exposure. Every unit - colony robot or rival vehicle -
+that stands still in exposed air for two seconds starts losing the same 2 hull
+points per second at full exposure, half that in the haze. A full swell doubles
+that damage, easing in and out with `Fog.Pressure`. Moving resets the stillness
+clock and draws only a small swarm. The same mites wear buildings and sites;
+empty protectors, laid pipes and loose piles are not exempt. A charged pylon is
+immune, and its bubble shelters everything inside it. Piles lose their material
+and vanish after three minutes at full exposure. Carrying a load still burns
+robot oil as before. The core remains outside this system: the fog never
+reaches it.
 
-The fog does not creep toward the core, and the colony never maintains a wall of repulsors: conflict is temporal, not positional. The low, steady threat is the haze outside every colony bubble. Any oil pool under that haze is covered and cannot be worked or pumped; its oil stays in the ground until a protector clears the pool. Builders assigned there wait back at the core, and a pump stops without losing oil. An unprotected pump is still eaten in ten seconds, so an outpost must be sheltered in time. The fog **breathes**: every `fogSwellPeriod` cycles a **swell** rises - the line presses in `fogSwellReach` tiles for `fogSwellTicks`, then recedes. A swell is telegraphed a cycle ahead (`swell in N cycles` in the HUD), so against the fog the game is deciding *when* to go out, never where to stack turrets (the people in it are another matter: see [The rivals](#the-rivals)): the answer to a swell is timing - come home, or sit it out in an outpost's bubble, which makes protectors and chargers storm shelters rather than guns. Inside a swell the mist is meaner: the drag deepens (`fogSpeedFactor` 0.5 to 0.25 in the pushed band), loaded tanks burn up to 1.5x, and stationary hull damage and fuel wear follow the deeper exposure. Difficulty scales with the swells - reach, length, how often they come (`fogSwellGrowth` per cycle) - never in ground lost for good, and the first hour of real time can pass with hardly a swell. The weather is state, not scenery: the fog's cycle counter and swell live in `State`, so a save reproduces its mists.
+The fog does not creep toward the core, and the colony never maintains a wall
+of repulsors: conflict is temporal, not positional. The low, steady threat is
+the haze outside every colony bubble. Any oil pool under that haze is covered
+and cannot be worked or pumped; its oil stays in the ground until a protector
+clears the pool. Builders assigned there wait back at the core, and a pump
+stops without losing oil. Any exposed building, including a pump, now wears
+the same mite damage instead of a separate ten-second pump timer. The fog
+**breathes**: every `fogSwellPeriod` cycles a **swell** rises - the line presses
+in `fogSwellReach` tiles for `fogSwellTicks`, then recedes. A swell is
+telegraphed a cycle ahead (`swell in N cycles` in the HUD), so against the fog
+the game is deciding *when* to go out, never where to stack turrets (the people
+in it are another matter: see [The rivals](#the-rivals)): the answer to a swell
+is timing - come home, or sit it out in an outpost's bubble, which makes
+protectors and chargers storm shelters rather than guns. Inside a swell the
+mist is meaner: the drag deepens (`fogSpeedFactor` 0.5 to 0.25 in the pushed
+band), loaded tanks burn up to 1.5x, and mite damage doubles at full pressure.
+Difficulty scales with the swells - reach, length, how often they come
+(`fogSwellGrowth` per cycle) - never in ground lost for good, and the first
+hour of real time can pass with hardly a swell. The weather is state, not
+scenery: the fog's cycle counter and swell live in `State`, so a save
+reproduces its mists.
 
-**Clear air shows as clear air.** Inside an active repulsor's circle - the core's, a protector's, a rival crawler's - the ground shows as it is, with no tint or mist, wherever the circle stands, deep fog and swells included: a protector out in the mist is a round window onto its ground, shrinking as its oil runs low. Outside every circle a haze hangs over the clear ground (`mistHaze` 0.3). It carries half exposure and half-strength mites and static, so the eye reads the danger before it reads any ring; past the fog's line the haze thickens and its exposure rises. The swell's waves and static stop at the circles too.
+**Clear air shows as clear air.** Inside an active repulsor's circle - the
+core's, a protector's, a rival crawler's - the ground shows as it is, with no
+tint or mist, wherever the circle stands, deep fog and swells included: a
+protector out in the mist is a round window onto its ground, shrinking as its
+oil runs low. Mites follow the same exposed-air boundary. Outside every circle
+a haze hangs over the clear ground (`mistHaze` 0.3). It carries half exposure
+and half-strength mites and static, so the eye reads the danger before it
+reads any ring; past the fog's line the haze thickens and its exposure rises.
+The swell's waves and static stop at the circles too.
 
 Where the core's and protectors' circles overlap, their clear ground joins: the outline shows only the outside edge of the combined area, with every inner arc hidden.
 
@@ -42,7 +80,39 @@ Where the core's and protectors' circles overlap, their clear ground joins: the 
 
 **A swell shows** (`swell.go`), as strongly as it presses: waves of shade are born far out in the mist (`swellWaveRim` 17 tiles), roll in at `swellWaveSpeed` 0.6 tiles a second, darken on the way and break on the line - `swellWaves` 7 crests, each wobbling and broken into arcs its own way, like wind combing snow - and the air crawls with static, up to `swellStaticSpecks` 900 one-pixel specks on the screen that jump every `swellStaticTicks` 3 updates. They show at half strength in the clear haze and grow darker with exposure. Both the static and the crests are black, the mites' own ink. They are drawn from the state's tick and nothing else: no randomness, nothing kept between frames.
 
-**The wear shows.** Whatever stands in exposed air - a robot, a building site, a pile - wears mites of darkness: a few per cubic meter of its body (`mitesPerCubicUnit`, thinned by exposure), each a spark turned inside out: black only at the heart (opacity 1), then a round halo that starts at `miteHaloOpacity` 0.2 beside it and eases down ring by ring to nothing at the rim (`miteFalloff`: 1, 0.2, 0.13, 0.07, 0.03, 0.01, then clear), painted over the fog in plain black so it takes light away instead of adding it. They orbit their host and chase that orbit late (`miteLagSeconds`), so a walker drags its swarm behind it, never quite caught, and the moment it stops - to load, to build, to wait - the orbit tightens onto the body (`miteGripSeconds`). The simulation separately counts stillness and spends tank oil and hull after two seconds; the mites only show that danger. When the host is gone, digested or hauled away, its swarm closes on the empty spot and fades. **Mites** is the official name, the one a manual would print. The people who live with them call them something that can't be printed - the working candidate is *ballbusters* - which means the game owes itself people: not colonists to feed, but voices, the way Oxygen Not Included tells of duplicants who came before; how they show up (logs, wrecks, a radio) is open. The mites are view, not state (`mites.go`): nothing in the simulation reads them, their randomness is golib's, and a save knows nothing of them.
+**The wear shows.** Every exposed element - robots, rival vehicles, buildings,
+colony and rival construction sites, laid pipe sections and piles - wears
+mites of darkness, except a charged pylon. A moving unit draws a few; its
+swarm doubles as it stands still and doubles again in a full swell. Counts
+scale by body volume
+(`mitesPerCubicUnit`) and exposure. The same black heart and fading halo remain:
+the heart is opaque, and the round rings ease from `miteHaloOpacity` 0.2 to
+nothing at the rim (`miteFalloff`). A stopped host's halo turns red while its
+square heart stays black. Mites orbit their host and chase that orbit late
+(`miteLagSeconds`), so a walker drags its swarm behind it, never quite caught;
+when it stops - to load, build or wait - the orbit tightens onto the body
+(`miteGripSeconds`). When a host is gone, its swarm closes on the empty spot
+and fades.
+
+The simulation shares one damage rate across all units: after two stationary
+seconds, hull falls at 2 points/s at full exposure, half that in the haze,
+and twice that in a full swell. Buildings and sites take the same health
+damage without a stillness grace. A colony site is canceled into salvage; a
+rival city site repeats its current 45-second building step if consumed. Piles
+lose oil and lilac over three minutes
+at full exposure; the clock slows with exposure and speeds up with swell
+pressure. Laid pipe sections contribute to their pipe's damage only where
+exposed; an exhausted pipe disappears. Active repulsor bubbles stop mites.
+The core has no mite host and is never changed by this system.
+
+**Mites** is the official name, the one a manual would print. The people who
+live with them call them something that can't be printed - the working
+candidate is *ballbusters* - which means the game owes itself people: not
+colonists to feed, but voices, the way Oxygen Not Included tells of duplicants
+who came before; how they show up (logs, wrecks, a radio) is open. The swarm's
+movement and randomness stay view-only in `mites.go`; health, structural damage
+and pile decay are deterministic saved state in `sim_mites.go` and the
+simulation reducers.
 
 The fog is also the frontier, and going out into it is the robot's adventure (a pillar for later): beyond routine hauling, a robot can be sent *into* the mist on an expedition - deeper fog, richer finds, things a commuter never meets. The fog digests the careless; adventure is the reward for daring it well.
 
@@ -86,9 +156,29 @@ What is built can be unbuilt, and nothing is lost but the walking. (What a rival
 2. Every task it had under way is cancelled: a factory's half-built robot never rolls out, a site's progress is gone. Robots carry no plan, so nobody has to be told: a builder finds no job the next tick, a robot refueling at a charger that is gone walks to the next nearest post.
 3. Everything the building was made of or held falls to the ground where it stood, as one **pile**: its whole blueprint cost (`demolishRefund` 1.0, a dial), plus the cost of the robot a factory was building, plus whatever the stores no longer have a roof for - the stores are one stock under many roofs, so a silo or a warehouse "contains" the part of the stock that stops fitting when its roof goes, and that overflow leaves `State.Stock` and joins the pile. Nothing goes straight back to the stores: a refund is a haul.
 
-**A protector is the one exception to the button**: it is dimmed while any other building or site stands under that protector's bubble alone, so the fog's law (nothing but a protector outside a bubble) can never be broken by taking one away. The law holds through the work too: a protector already ordered down stops working the moment its bubble is the only one over another building, and picks the work up again when that is no longer so. Demolish the outpost first, the protector last. Robots under it take their chances.
+**A protector is the one exception to the button**: it is dimmed while any
+other building or site stands under that protector's bubble alone, so taking
+it away cannot expose the outpost's infrastructure to fog and mites. The law
+holds through the work too: a protector already ordered down stops working
+the moment its bubble is the only one over another building, and picks the
+work up again when that is no longer so. Demolish the outpost first, the
+protector last. Robots under it take their chances.
 
-**The pile**, not a scatter. Loose items are one entity per demolished cell, a container drawn on the cell's middle that stands for everything lying there: a small heap of crates and drums, lilac or amber by what it holds, never under the dot size when far out, with a card of its own (`loose items`, its liters and kilograms, open by itself like any primary thing). It has no mass, no health and no capacity: it is bookkeeping with a picture, and the moment a robot takes the last of it, it is gone from the state. Scattering the items over the footprint was the other option and lost: a cell is 25 m across, so at any zoom but the closest a scatter reads as noise or as nothing, it multiplies entities and cards for no decision the player can take, and one pile keeps the state a small table (`State.Piles`, by ID: cell, oil, lilac). Until it is emptied a pile holds its cell - nothing can be marked there - and robots walk through it as they walk through everything. The fog leaves piles alone for now; whether it should nibble at what is left outside a bubble is an open dial, not a rule.
+**The pile**, not a scatter. Loose items are one entity per demolished cell, a
+container drawn on the cell's middle that stands for everything lying there:
+a small heap of crates and drums, lilac or amber by what it holds, never under
+the dot size when far out, with a card of its own (`loose items`, its liters
+and kilograms, open by itself like any primary thing). It has no mass, no
+health and no capacity: it is bookkeeping with a picture, and the moment a
+robot takes the last of it, it is gone from the state. Scattering the items
+over the footprint was the other option and lost: a cell is 25 m across, so
+at any zoom but the closest a scatter reads as noise or as nothing, it
+multiplies entities and cards for no decision the player can take, and one
+pile keeps the state a small table (`State.Piles`, by ID: cell, oil, lilac).
+Until it is emptied a pile holds its cell - nothing can be marked there - and
+robots walk through it as they walk through everything. Mites consume its
+contents over three minutes at full exposure, slower in the haze and faster
+in a swell.
 
 **Picking up.** Clearing piles is a line in the robot's day, after raising build jobs and before working its own post: what already lies on the ground comes home before anything new is dug. Any builder, or a worker without a deposit assignment, can walk to the nearest pile that holds something the stores have room for; an assigned worker sticks to its post instead. A builder carries only a third of a worker's load. Loading follows the deposit rule (`robotLoadTicks`, one kind per trip, lilac first, up to `robotCarryLilac` / `robotCarryOil`) before the robot hauls it in. A pile the stores have no room for just waits - which is what happens to the overflow of a full silo torn down - so robots never stand around with their arms full because of it.
 
@@ -105,7 +195,7 @@ This is what makes pipes infrastructure rather than a shortcut: a silo beside a 
 ## Pumps and pipes
 The game has no belts and never will, but oil flows through pipes, so it stops riding in robots' arms where a pipe runs.
 
-**The pump comes first.** A pump is a building that stands on an oil pool instead of on ground: the pool's card carries a `build pump` button (its cost beside it) while the stores can pay and its schematics have arrived, and the pump rises on the pool's middle like any site. A pool takes one pump, a dry pool none. A far pool can take an unprotected pump, but mites gather on the finished pump and digest it in 10 seconds without a protector's active bubble; a news plate explains the loss and half its cost falls as a pile. A protector raised in time halts the damage. A pump with no pipe does nothing, and a pool keeps its robot post, pump or not.
+**The pump comes first.** A pump is a building that stands on an oil pool instead of on ground: the pool's card carries a `build pump` button (its cost beside it) while the stores can pay and its schematics have arrived, and the pump rises on the pool's middle like any site. A pool takes one pump, a dry pool none. A far pool can take an unprotected pump, but mites damage it like any other building until a charged repulsor shelters it. Its health bar shows the damage; when it is consumed, a report explains the loss and half its cost falls as a pile. A pump with no pipe does nothing, and a pool keeps its robot post, pump or not.
 
 **A network, by ports.** A pipe carries oil one way, from a pump or a tank
 into a tank: pool to silo, silo to another silo, silo to a charger or
@@ -150,7 +240,8 @@ Pipes may cross anything, the fog too, and are drawn over it like the sites.
 
 **Taking it up.** The card of either end lists its pipes, each with where it goes or comes from, its length, what it is doing, and a `remove` button; demolishing a building takes its pipes with it. Either way a pipe's whole cost falls as a pile - by the building it started at, or on the demolished cell - and comes home as a haul.
 
-Open: whether mites wear a pipe in the mist, junction buildings (a splitter with no tank) if ports prove short, priorities between a source's pipes, and whether a pipe needs upkeep.
+Open: junction buildings (a splitter with no tank) if ports prove short,
+priorities between a source's pipes, and whether a pipe needs upkeep.
 
 ## The rivals
 The scout is the first contact: one minute in it steals up to 25 L, paints
@@ -645,9 +736,13 @@ has `mechanicHealth` 60 health and repairs at `repairPerSecond` 6
 damage/s for `repairOilPerPoint` 0.2 L per damage (`sim_squads.go`,
 `sim_shots.go`).
 
-An unprotected finished pump loses its full health over `pumpFogTicks`
-600 ticks (10 s) in `sim_buildings.go`; `pumpMitesMin` 15 to
-`pumpMitesMax` 100 in `mites.go` grows its visible swarm as it fails.
+Mites use `miteDamagePerSecond` for units and structures. Piles track
+exposure-weighted time against `mitePileLifetimeTicks` (three minutes at full
+exposure). Pipe integrity uses the ordinary building health limit; only laid
+sections in exposed air add to its damage. Visual counts, orbit, fade and the
+red stationary halo are tuned in `mites.go`. Rival city hosts draw
+`cityMiteParticleFactor` (60%) of the normal animated mite count; their
+simulation damage is unchanged.
 
 Pinned as code lands, all at the top of the sim files with units in the name: `fogCycleTicks`, `protectorOilPerSecond`, `robotChargeSeconds`, `robotMoveSpeed` (units/s), `oilPerPoolUnit`, `lilacPerVeinUnit`, blueprint costs. Pinned so far, in `region.go`: `regionCols`/`regionRows` (25x25 tiles), `tileW`/`tileH` (48x24 px at 2K/2), `unitsPerTile` 200 (the world's unit is a meter: a tile is 200 m across, the region 5 km; a robot is 6 u across, the core's monolith 16 u, a future building 40 u, a deposit patch of four tiles is 400 m aside), `coreBubbleRadius` 4 tiles, `fogLineRadius` 10.5 tiles, `fogFadeTiles` 2.4 tiles. In `play.go`: `zoomOut`/`zoomIn`, the wheel's stops, each twice the last: 1, 2, 4, 8, 16, 32 (stop 0 shows the whole region as icons, stop 5 about 80 m of ground; at 32 a robot's 6 u is about 46 screen px), `zoomGlide` 0.1 s (the zoom glides from stop to stop instead of jumping, keeping the point under the cursor under it; only at rest is the zoom a whole power of two), `panSpeed` 480 screen px/s, constant on the screen at every zoom; the right button drags the view, grab style. The camera is view, not state: it lives in the play scene and never serializes. In `draw.go`: `propZoom` 4, the zoom from which the rocks and bushes are drawn; they are world-sized (6 u across), so zooming in grows them from pebbles to boulders. Robots draw at their world size but never under about 3 screen px (`dotRadius`): far out, everything alive is a point, R.U.S.E.-style. The core draws as a dark monolith on its tile's middle (`drawCore`), broad face to the right, a seam of light down it and a top in the core's warm white, the part the glow filter picks; it obeys the buildings' icon law and sorts by depth among them, and its pad, the whole tile, lies on the ground under the robots. Deposits draw as one continuous body per patch - a pool as one sheet of oil, a vein as one shelf with crystal clusters over its tiles - shrinking as the patch drains, one big scar when dry. The fog's shape and speed are the feel of the game: their section is [The fog](#the-fog), and their dials are pinned, in `sim_fog.go`: `fogCycleTicks` 1800 (30 s a cycle), `fogSwellPeriod` 18 cycles (the first swell at 9 min), `fogSwellQuickener` 0.90 (each swell shortens the next calm; `fogSwellMinPeriod` 4 cycles), `fogSwellTicks` 900 (15 s) growing `fogSwellTicksGrowth` 180 apiece to `fogSwellTicksMax` 3600 (a minute), `fogSwellReach` 2.0 tiles growing `fogSwellGrowth` 0.35 apiece, capped by `fogSwellMargin` 0.75 tiles the line never takes off the bubble, `fogSwellSpeedFactor` 0.25 in the pushed band (fog that was already there keeps `fogSpeedFactor` 0.5) and `fogSwellBurn` 1.5x outside the bubbles.
 
@@ -837,6 +932,20 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-27: rival city hosts now animate 60% of their former mite count,
+  including city construction sites and city-produced vehicles. This is a
+  view-only density factor; exposure and simulation damage are unchanged.
+  Pinned by `TestRivalCitySwarmKeepsSixtyPercentParticles`.
+- 2026-09-27: mite wear now applies to exposed rival vehicles, all uncharged
+  colony buildings, colony and rival construction sites, piles and laid pipe
+  sections. All unit roles share
+  one 2 hull-points/s damage rate after two stationary seconds; a full swell
+  doubles the rate and the visual swarm, while movement draws only the small
+  orbiting swarm. Charged repulsors and their bubbles stay clear; the core has
+  no mite host. Piles lose their contents over three minutes at full exposure,
+  and stationary halos turn red around a still-black heart. Version 8 saves
+  the new wear fields. Pinned by `mites_test.go`, `sim_mites_test.go`, and the
+  updated fog, enemy and pipe tests.
 - 2026-09-27: hovering robots and mobile rivals now outlines their opaque
   sprite bounds instead of the ground cell. Clicking opens that exact unit's
   card, which follows it and closes when it disappears. Squad orders target

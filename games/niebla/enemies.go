@@ -354,6 +354,9 @@ func reportWords(r Report) string {
 		return fmt.Sprintf("[danger]A shell brought a building down, %s.[/] Half of it lies there as a pile.", where)
 	case ReportPumpEaten:
 		return "[danger]mites ate the pump![/] Build a protector over the pool first."
+	case ReportMiteEaten:
+		return fmt.Sprintf("[danger]The mites consumed a structure to the %s.[/]",
+			where)
 	}
 	return ""
 }
