@@ -332,10 +332,15 @@ all its workers.
 
 When the latest rival report is still on its plate but its location is
 outside the view, a small red arrow at the screen edge points toward it.
-The city-founding report and arrow disappear after one minute.
+The first scout also gets a red arrow while alive and outside the view,
+before its theft report exists. That report reuses the red guide instead
+of drawing a second one while both locations overlap; after they separate,
+each can have a guide. The city-founding report and arrow disappear after
+one minute.
 Unopened schematics do the same for the core, in the drop's color, until
 the badge is opened. Both guides disappear as soon as their target is on
-screen; they never move the camera or take input.
+screen; they never move the camera or take input. A separate scout and
+report may each have a guide at once, with all guides kept apart.
 
 - **Pause:** the frozen region under a message. The fog does not advance while paused.
 - **Colony lost** (later): when the core is somehow unreachable, or the player quits the region.
@@ -825,6 +830,11 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-27: the first scout now gets a screen-edge guide while it is
+  alive and offscreen. Its theft report takes precedence while both point
+  to the same spot; after they separate, each can have a guide. Pending
+  schematics keep their own. Pinned by `guides_test.go` and the optional
+  scout-guide shot.
 - 2026-09-27: destroyed robots and mobile rivals now leave a view-only
   explosion: per-kind sparks, embers, ground light and smoke, with mobile
   artillery the largest. One-tick death receipts are excluded from saves

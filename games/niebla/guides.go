@@ -55,30 +55,72 @@ func edgeGuideAt(
 }
 
 func edgeGuides(s *playScene, width, height float32) []edgeGuide {
-	guides := make([]edgeGuide, 0, 2)
-	if report, ok := currentReport(s.state); ok {
+	guides := make([]edgeGuide, 0, 3)
+	report, hasReport := currentReport(s.state)
+	var reportTarget golib.Vector2
+	reportHasGuide := false
+	if hasReport {
 		x, y := project(float32(report.X), float32(report.Y))
+		reportTarget = s.camera.ToScreen(golib.Vector2{X: x, Y: y})
+		if guide, visible := edgeGuideForTarget(
+			reportTarget, dangerColor, "!", width, height,
+		); visible {
+			guides = append(guides, guide)
+			reportHasGuide = true
+		}
+	}
+	if scout, ok := firstIntruder(s.state); ok {
+		x, y := project(float32(scout.X), float32(scout.Y))
 		at := s.camera.ToScreen(golib.Vector2{X: x, Y: y})
-		if position, direction, visible := edgeGuideAt(at, width, height); visible {
-			guides = append(guides, edgeGuide{
-				position: position, direction: direction,
-				color: dangerColor, mark: "!",
-			})
+		reportTracksScout := reportHasGuide && report.Kind == ReportScout &&
+			at.Distance(reportTarget) < 2*guideRadius+4
+		if !reportTracksScout {
+			if guide, visible := edgeGuideForTarget(
+				at, dangerColor, "!", width, height,
+			); visible {
+				guides = append(guides, guide)
+			}
 		}
 	}
 	if id := techPending(s.state); id != "" {
 		x, y := techBadgeAt(s)
-		if position, direction, visible := edgeGuideAt(
-			golib.Vector2{X: x, Y: y}, width, height,
+		if guide, visible := edgeGuideForTarget(
+			golib.Vector2{X: x, Y: y}, techInk(id), "S", width, height,
 		); visible {
-			guides = append(guides, edgeGuide{
-				position: position, direction: direction,
-				color: techInk(id), mark: "S",
-			})
+			guides = append(guides, guide)
 		}
 	}
 	separateEdgeGuides(guides, width, height)
 	return guides
+}
+
+func firstIntruder(s *State) (Enemy, bool) {
+	if s.Raids.Visits != 0 {
+		return Enemy{}, false
+	}
+	for _, id := range sortedEnemyIDs(s) {
+		enemy := s.Enemies[id]
+		if enemy.Kind == EnemyScout {
+			return enemy, true
+		}
+	}
+	return Enemy{}, false
+}
+
+func edgeGuideForTarget(
+	target golib.Vector2,
+	color golib.Color,
+	mark string,
+	width, height float32,
+) (edgeGuide, bool) {
+	position, direction, visible := edgeGuideAt(target, width, height)
+	if !visible {
+		return edgeGuide{}, false
+	}
+	return edgeGuide{
+		position: position, direction: direction,
+		color: color, mark: mark,
+	}, true
 }
 
 func separateEdgeGuides(guides []edgeGuide, width, height float32) {

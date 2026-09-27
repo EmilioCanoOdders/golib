@@ -106,6 +106,100 @@ func TestOffscreenGuidesFollowReportsAndPendingSchematics(t *testing.T) {
 	}
 }
 
+func TestFirstIntruderGetsAnOffscreenGuideOnlyWhileOutOfView(t *testing.T) {
+	s, scout := firstScoutGuideScene(t)
+	x, y := project(float32(scout.X), float32(scout.Y))
+	target := golib.Vector2{X: x, Y: y}
+	s.camera.Target = golib.Vector2{X: x - 300, Y: y}
+	s.camera.Snap()
+	screenTarget := s.camera.ToScreen(target)
+
+	guides := edgeGuides(s, screenWidth, screenHeight)
+	if len(guides) != 1 || guides[0].mark != "!" {
+		t.Fatalf("got intruder guides %+v, want one red guide", guides)
+	}
+	if guides[0].direction.Dot(screenTarget.Sub(guides[0].position)) <= 0 {
+		t.Errorf("guide at %v points away from the first scout at %v",
+			guides[0].position, screenTarget)
+	}
+
+	s.camera.Target = target
+	s.camera.Snap()
+	if guides := edgeGuides(s, screenWidth, screenHeight); len(guides) != 0 {
+		t.Errorf("the visible scout still has an edge guide: %+v", guides)
+	}
+}
+
+func TestFirstIntruderGuideDisappearsWhenTheScoutIsDestroyed(t *testing.T) {
+	s, scout := firstScoutGuideScene(t)
+	x, y := project(float32(scout.X), float32(scout.Y))
+	s.camera.Target = golib.Vector2{X: x - 300, Y: y}
+	s.camera.Snap()
+	delete(s.state.Enemies, scout.ID)
+
+	if guides := edgeGuides(s, screenWidth, screenHeight); len(guides) != 0 {
+		t.Errorf("destroyed scout still has an edge guide: %+v", guides)
+	}
+}
+
+func TestFirstIntruderGuideSharesItsReportAndCoexistsWithOtherGuides(
+	t *testing.T,
+) {
+	s, scout := firstScoutGuideScene(t)
+	s.state.Deliveries = 1
+	s.state.Tech = map[string]bool{
+		techIndustryID: true,
+		techInfraID:    false,
+	}
+	s.state.Reports = []Report{{
+		Tick: s.state.Ticks, Kind: ReportScout, X: scout.X, Y: scout.Y,
+	}}
+	x, y := project(float32(scout.X), float32(scout.Y))
+	s.camera.Target = golib.Vector2{X: x - 300, Y: y}
+	s.camera.Snap()
+
+	guides := edgeGuides(s, screenWidth, screenHeight)
+	if len(guides) != 2 || guides[0].mark != "!" || guides[1].mark != "S" {
+		t.Fatalf("scout report and schematics got guides %+v, want one each",
+			guides)
+	}
+
+	report := s.state.Reports[0]
+	report.X += 1200
+	report.Y += 1200
+	s.state.Reports[0] = report
+	guides = edgeGuides(s, screenWidth, screenHeight)
+	if len(guides) != 3 {
+		t.Fatalf(
+			"separated scout report, scout and schematics got %d guides, want 3: %+v",
+			len(guides), guides,
+		)
+	}
+
+	report.Kind = ReportRazed
+	s.state.Reports[0] = report
+	guides = edgeGuides(s, screenWidth, screenHeight)
+	if len(guides) != 3 {
+		t.Fatalf("report, scout and schematics got %d guides, want 3: %+v",
+			len(guides), guides)
+	}
+	redGuides := 0
+	for i, guide := range guides {
+		if guide.mark == "!" {
+			redGuides++
+		}
+		for _, other := range guides[i+1:] {
+			if guide.position.Distance(other.position) < 2*guideRadius+4 {
+				t.Errorf("guides overlap at %v and %v",
+					guide.position, other.position)
+			}
+		}
+	}
+	if redGuides != 2 {
+		t.Errorf("got %d red guides, want the report and scout", redGuides)
+	}
+}
+
 func TestOffscreenCityGuideExpiresAfterOneMinute(t *testing.T) {
 	s := newPlayScene(newGame())
 	s.state.Tech[techIndustryID] = true
@@ -152,4 +246,35 @@ func TestWriteGuideShotState(t *testing.T) {
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("writing %s: %v", path, err)
 	}
+}
+
+func TestWriteFirstScoutGuideShotState(t *testing.T) {
+	path := os.Getenv("NIEBLA_SCOUT_GUIDE_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_SCOUT_GUIDE_SHOT_STATE to write the scout shot state")
+	}
+	s := newGame()
+	s.spawnVisit()
+	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+	if err != nil {
+		t.Fatalf("the state doesn't marshal: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
+	}
+}
+
+func firstScoutGuideScene(t *testing.T) (*playScene, Enemy) {
+	t.Helper()
+	state := newGame()
+	state.spawnVisit()
+	state.Tech = map[string]bool{techIndustryID: true}
+	scout, ok := firstIntruder(state)
+	if !ok {
+		t.Fatal("the first visit did not spawn its scout")
+	}
+	s := newPlayScene(state)
+	s.camera.Bounds = golib.Rectangle{}
+	s.camera.Zoom = 4
+	return s, scout
 }

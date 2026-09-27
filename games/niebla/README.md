@@ -72,6 +72,16 @@ NIEBLA_GUIDE_SHOT_STATE=../../build/niebla/guides.json \
   --input "Enter@1 Mouse@2:640,360 MouseWheel@3:4 D@10-240"
 ```
 
+To inspect the first scout's live offscreen guide:
+
+```text
+NIEBLA_SCOUT_GUIDE_SHOT_STATE=../../build/niebla/scout-guide.json \
+  ./golib go -C games/niebla test \
+  -run TestWriteFirstScoutGuideShotState
+./golib shot niebla 40 80 --save build/niebla/scout-guide.json \
+  --input "Enter@1 Mouse@2:640,360 MouseWheel@3:4"
+```
+
 To inspect the schematics callout and its squares of what a drop brings:
 
 ```text
@@ -294,7 +304,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, orange bands sized by offered flow and animated by liters moved) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
 | `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset/replay the world, next arrival, create city, finish one city building, finish/send a battalion, fast-forward and next schematics —; view only, acting through `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
 | `tech.go` | The schematics on the screen: the badge over the core - breathing halos around the drop's mark - while an unopened drop waits, the callout its click opens (`techWords`, `techWrap`) with a clickable square per building and informational squares for pipes and the mechanic (`techBrings`, `drawTechSquares`); only building squares arm placement, and an informational-only callout stays open until dismissed; view, never state |
-| `guides.go` | Screen-edge arrows for an offscreen rival report or pending schematics, with layout kept clear of the HUD and the two guides separated when they point the same way; view, never state |
+| `guides.go` | Screen-edge arrows for the first live scout, an offscreen rival report or pending schematics, with the scout's theft report sharing its guide; view, never state |
 | `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and amplitude-modulated crystal pings, gunfire and shell impacts, low interface clicks, a site-marking thump and a low fanfare for new rival reports. Ordinary world emitters fade steeply with distance and become quiet beyond the view; cannon reports keep their longer, gentler range. Individual shell whistles track their own positions through the descending half of flight. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |
 | `tools/soundgen/` | The maker of the wind, oil and mineral sounds and `assets/sounds/alert.wav`: stdlib Go renders the noise beds as WAV for conversion to OGG, the mineral ring as a seamless WAV with irregular pitch drift of at most one semitone, the crystal ping with amplitude modulation, and the low alert fanfare with `--alert`; run it only when a sound changes |
 | `draw.go` | The region painter: the core's monolith, buildings with their damage bars, the bubbles' outside edges, build-site wireframes and the gray schematic-placement ghost, the marking cursor, the stores' fill bars (`drawFillBar`) and the idle count by the core |
@@ -305,7 +315,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `sources/models/artillery.py`, `other_units.py`, `*.blend` | Geometry for the eight distinct mobile chassis and their editable Blender sources; not shipped with the game |
 | `assets/sprites/*.png`, `assets/sprites/shadows/*.png` | Eight transparent eight-frame model sheets and their matching Blender-rendered shadow masks; loaded on desktop (the PNGs are web-compatible, but Niebla's SQLite driver does not build for web) |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
-| `guides_test.go` | Offscreen arrow placement and direction, hiding for visible targets, current-report timing, pending schematics and spacing; can write the optional visual fixture with `NIEBLA_GUIDE_SHOT_STATE` |
+| `guides_test.go` | Offscreen arrow placement and direction, the first scout while alive, report sharing, visible-target hiding, report timing, pending schematics and spacing; can write visual fixtures with `NIEBLA_GUIDE_SHOT_STATE` and `NIEBLA_SCOUT_GUIDE_SHOT_STATE` |
 | `markup_test.go` | Markup parser, tooltip layout/button, portrait hit-testing, remote robot card and page-layout tests |
 | `robots_panel_test.go` | Roster grouping, paging, row bounds, button placement and selected-unit details |
 | `shots_test.go` | Small-arms reach limits, the first raid against one guard post over three seeds, bullet and shell impacts, building damage, mechanic repair rate and oil, death receipts and explosion scaling/merging, defender damage and wrecks, and old war-factory saves |
@@ -735,6 +745,12 @@ news plate and offscreen arrow use the same deadline unless newer news
 replaces them. Other reports and their arrows use the 15-second
 `reportShowTicks` lifetime. Old saves without an announcement deadline do
 not announce settled cities again.
+
+The first scout gets a live screen-edge arrow while it is outside the view.
+When its theft report appears, the report's red arrow takes precedence
+while its location overlaps the live scout, avoiding a duplicate. Once
+they separate, each can have a guide. Other current reports and the live
+scout can each have a guide, alongside the pending-schematics guide.
 
 The fog is the same law for them: `stepExposure` counts the ticks a
 vehicle stands in fog (`fogAt`, so the colony's bubbles and the clear
