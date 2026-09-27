@@ -177,6 +177,7 @@ func (d *devTools) resetWorld(s *playScene, seed int64) {
 	d.placing = false
 	s.picked, s.pickedThing, s.armed = false, "", ""
 	s.pickedRobot, s.robotPage = 0, 0
+	s.clearPickedUnit()
 	s.closeRadial()
 	s.laying = pipeLaying{}
 	s.ordering = 0

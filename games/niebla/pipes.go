@@ -173,6 +173,7 @@ func (s *playScene) startLaying(from int64) {
 	s.picked = false
 	s.pickedThing = ""
 	s.pickedRobot = 0
+	s.clearPickedUnit()
 	s.robotPage = 0
 	s.closeRadial()
 }

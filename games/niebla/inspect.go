@@ -729,6 +729,7 @@ func (s *playScene) pickPumpAt(x, y float32) bool {
 		s.pickedCol, s.pickedRow = b.Col, b.Row
 		s.pickedThing = buildingThing(b).ID
 		s.pickedRobot = 0
+		s.clearPickedUnit()
 		s.robotPage = 0
 		s.armed = ""
 		s.closeRadial()
@@ -745,6 +746,7 @@ func (s *playScene) pickPumpAt(x, y float32) bool {
 		s.pickedCol, s.pickedRow = job.Col, job.Row
 		s.pickedThing = siteThing(job).ID
 		s.pickedRobot = 0
+		s.clearPickedUnit()
 		s.robotPage = 0
 		s.armed = ""
 		s.closeRadial()

@@ -281,6 +281,12 @@ static data generated from `State.Seed`, never state. `play.go` and
     any cell of its pad. Cards start open by themselves: the cell's
     primary thing (deposits, buildings, the core) and any thing alone
     on its cell.
+  - Hovering a robot or mobile rival draws a rectangle around the opaque
+    bounds of its current sprite. Clicking it opens that unit alone: robots
+    show their task, hull, tank and cargo; rivals show health and repulsor
+    details. The card and selected outline follow the unit, and close if it
+    disappears. A small screen-pixel margin makes the sprite easy to hit
+    when zoomed out.
   - **A store shows how full it is** on its body, in a vertical bar
     filling from the bottom: a silo and charger in oil, a warehouse in
     lilac against all its roofs, and the core in both oil and lilac.
@@ -308,7 +314,8 @@ static data generated from `State.Seed`, never state. `play.go` and
     west, level 2`). A news plate under the HUD, for `reportShowTicks`
     15 s (one minute for a city founding), reports their theft, camp, raid,
     return, new base, razed
-    building or fallen base. Rival vehicles and bases have cards too.
+    building or fallen base. Rival vehicles and bases have cards too;
+    vehicles can be clicked on their body for an individual health card.
     A war factory's card builds troopers and, after the repair protocol
     arrives, offers one mechanic and gives the squad orders; damaged things
     show their remaining health and say mechanics can repair them; picked
@@ -354,12 +361,12 @@ report may each have a guide at once, with all guides kept apart.
 | Mouse left, on a free cell of ground | Open the build menu on that cell; picking a blueprint builds it there. Until the first schematics arrive, the click inspects the cell instead |
 | Mouse left, on a building square in the schematics callout | Enter placement mode for that blueprint; a gray wireframe follows the pointer, snapped to the cell grid. Left-click valid ground to mark it; right-click cancels |
 | Mouse left, on the schematics badge over the core | Open the drop: the badge goes and the callout says what arrived. Each building square is usable once, then dims and disables; using the last building closes the callout. A click outside closes it and still acts on the region |
-| Mouse left | Select / inspect the cell under the pointer: expand a card, press its buttons, send another robot from a deposit, or click a unit portrait to open its card and recall it individually |
+| Mouse left | Select / inspect a cell, or click a robot or rival vehicle's body to open its individual card; expand cards, press buttons, send robots from deposits, or use portraits to open and recall an assigned robot |
 | Mouse left, on the robot roster button | Open or close the colony robot panel; its X closes it too |
 | Mouse left, on a robot in the roster | Select it; `assign deposit` arms an individual order, then click an oil pool or lilac vein to assign that robot |
 | Mouse right, after `assign deposit` | Cancel the individual assignment |
 | Mouse left, after a pump's `lay pipe` | On the ground: a bend of the pipe. On a ringed tank (silo, charger, core): the pipe's end, which marks it. On the pipe's last node: its menu (`connect` to the nearest store, `undo`, `cancel`). Right click: the menu away, the last bend back, or out of the mode |
-| Mouse left, after a war factory's `give order` | On a rival vehicle: the squad attacks its party, that vehicle first. On the ground: the squad guards that spot. Right click: the order away |
+| Mouse left, after a war factory's `give order` | On a rival vehicle's body: the squad attacks its party, that vehicle first. On the ground: the squad guards that spot. Right click: the order away |
 | 1-9 | Call a squad: 1 is the first war factory raised, 2 the next. The key arms the order the same way `give order` does (one click orders, right click puts it away); the same key again takes it back. A squad's box at the top right - tank icon, unit count, the key below - calls it too |
 | Mouse left, on a squad's pennant or ring | Call that squad, where it stands |
 | Mouse left, on a card's trash can | First press arms it (`demolish?`), the second orders the building taken down - a builder goes and works it - or cancels a site; a click anywhere else disarms |
@@ -830,6 +837,11 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-27: hovering robots and mobile rivals now outlines their opaque
+  sprite bounds instead of the ground cell. Clicking opens that exact unit's
+  card, which follows it and closes when it disappears. Squad orders target
+  the same vehicle bounds; overlap picking follows the draw order. Pinned by
+  `unit_picking_test.go` and the sprite bounds of every model and facing.
 - 2026-09-27: the first scout now gets a screen-edge guide while it is
   alive and offscreen. Its theft report takes precedence while both point
   to the same spot; after they separate, each can have a guide. Pending

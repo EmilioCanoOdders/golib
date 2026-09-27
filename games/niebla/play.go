@@ -61,6 +61,7 @@ type playScene struct {
 	pickedRow      int
 	pickedThing    string          // a visible body's card picked on that cell
 	pickedRobot    int64           // a worker opened from a deposit portrait
+	pickedUnit     unitSelection   // a world unit selected directly
 	robotPage      int             // which page of the selected deposit's portraits
 	expanded       map[string]bool // which cards stand open, by thing ID
 	armed          string          // the card whose trash can was pressed once, by thing ID
@@ -171,6 +172,7 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 			s.pickedRobot = 0
 		}
 	}
+	s.syncPickedUnit()
 	s.clampRobotPage()
 	s.clampRobotPanel()
 	s.mites.update(s.state, dt)
@@ -252,6 +254,7 @@ func (s *playScene) updateTech(input *golib.Input) bool {
 		s.picked = false
 		s.pickedThing = ""
 		s.pickedRobot = 0
+		s.clearPickedUnit()
 		s.armed = ""
 		s.ordering = 0
 		s.laying = pipeLaying{}
@@ -459,6 +462,7 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 		s.picked = false
 		s.pickedThing = ""
 		s.pickedRobot = 0
+		s.clearPickedUnit()
 		s.robotPage = 0
 		s.armed = ""
 		s.backRadial()
@@ -494,6 +498,7 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 				if robot, ok := panel.robotAt(mx, my); ok {
 					s.pickedRobot = robot.ID
 					s.pickedThing = ""
+					s.clearPickedUnit()
 					s.expanded[robotThing(s.state, robot).ID] = true
 					s.au.ui(1)
 					return
@@ -521,6 +526,10 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 			s.closeRadial()
 			return
 		}
+		if hit, ok := s.hoveredUnit(); ok {
+			s.selectUnit(hit)
+			return
+		}
 		if s.radial {
 			s.pickRadial(mx, my)
 		} else if techAnyArrived(s.state) &&
@@ -528,15 +537,23 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 			s.openRadial(s.hoverCellCol, s.hoverCellRow)
 			s.picked = false
 			s.pickedThing = ""
+			s.clearPickedUnit()
 		} else {
 			s.picked = s.hoverCell
 			s.pickedCol, s.pickedRow = s.hoverCellCol, s.hoverCellRow
 			s.pickedThing = ""
+			s.clearPickedUnit()
 		}
 	}
 }
 
 func (s *playScene) inspectionPanel() tooltip {
+	if thing, col, row, ok := s.selectedUnitThing(); ok {
+		return tooltipLayoutForThings(
+			s.state, s.camera, col, row, s.expanded,
+			[]Thing{thing}, false, false, 0,
+		)
+	}
 	if s.pickedRobot != 0 {
 		if _, alive := s.state.Robots[s.pickedRobot]; alive {
 			return tooltipLayoutForRobot(
@@ -552,7 +569,7 @@ func (s *playScene) inspectionPanel() tooltip {
 }
 
 func (s *playScene) clampRobotPage() {
-	if !s.picked || s.pickedRobot != 0 {
+	if !s.picked || s.pickedRobot != 0 || s.pickedUnit.id != 0 {
 		return
 	}
 	tcol, trow := cellTile(s.pickedCol, s.pickedRow)
@@ -705,33 +722,42 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	})
 	s.mites.draw(screen, s.zoom)
 	s.fx.draw(s.state, screen, s.zoom)
-	// The cursor is the cell under the pointer, the grid's last
-	// subdivision, about four robots across. Far out it lifts to a
-	// readable size on the screen.
+	// The cursor is a unit's body when the pointer lands on one, otherwise
+	// the cell under it. The cell lifts to a readable size far out.
 	if s.techPlacing != "" {
 		drawTechPlacementGhost(s, screen)
+	} else if hit, over := s.hoveredUnit(); over {
+		drawUnitOutline(screen, s.camera, hit.visible, hoveredTileColor)
 	} else if s.hoverCell {
 		cursor, gx, gy := cellDiamond(s.hoverCellCol, s.hoverCellRow, s.zoom)
 		screen.DrawPolygonOutline(cursor, 2/s.zoom, hoveredTileColor)
 		screen.DrawCircle(gx, gy, 2.5/s.zoom, hoveredTileColor)
 	}
 	if s.picked {
-		outline, _, _ := cellDiamond(s.pickedCol, s.pickedRow, s.zoom)
-		screen.DrawPolygonOutline(outline, 2/s.zoom, pickedTileColor)
-		// A picked guard post shows its reach.
-		if b, ok := buildingAt(s.state, s.pickedCol, s.pickedRow); ok && b.Kind == BuildingGuard {
-			gx, gy := projectBuilding(b)
-			ellipseOutline(screen, gx, gy,
-				smallArmsRangeUnits/unitsPerTile,
-				1.5/s.zoom, golib.WithOpacity(guardColor, 0.8))
+		if s.pickedUnit.id != 0 {
+			if outline, ok := s.unitBounds(s.pickedUnit); ok {
+				drawUnitOutline(screen, s.camera, outline, pickedTileColor)
+			}
+		} else {
+			outline, _, _ := cellDiamond(s.pickedCol, s.pickedRow, s.zoom)
+			screen.DrawPolygonOutline(outline, 2/s.zoom, pickedTileColor)
 		}
-		// And a picked artillery piece its two: the reach, and the ring it
-		// can't fire inside.
-		if b, ok := buildingAt(s.state, s.pickedCol, s.pickedRow); ok && b.Kind == BuildingArtillery {
-			gx, gy := projectBuilding(b)
-			for _, reach := range []float32{artilleryRangeUnits, artilleryMinUnits} {
-				ellipseOutline(screen, gx, gy, reach/unitsPerTile,
+		// A picked guard post shows its reach.
+		if s.pickedUnit.id == 0 {
+			if b, ok := buildingAt(s.state, s.pickedCol, s.pickedRow); ok && b.Kind == BuildingGuard {
+				gx, gy := projectBuilding(b)
+				ellipseOutline(screen, gx, gy,
+					smallArmsRangeUnits/unitsPerTile,
 					1.5/s.zoom, golib.WithOpacity(guardColor, 0.8))
+			}
+			// And a picked artillery piece its two: the reach, and the ring it
+			// can't fire inside.
+			if b, ok := buildingAt(s.state, s.pickedCol, s.pickedRow); ok && b.Kind == BuildingArtillery {
+				gx, gy := projectBuilding(b)
+				for _, reach := range []float32{artilleryRangeUnits, artilleryMinUnits} {
+					ellipseOutline(screen, gx, gy, reach/unitsPerTile,
+						1.5/s.zoom, golib.WithOpacity(guardColor, 0.8))
+				}
 			}
 		}
 	}
@@ -748,7 +774,9 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	drawTechCallout(s, screen)
 	drawSquadStrip(s, screen)
 	s.dev.draw(s, screen)
-	help := "click empty ground for the build menu, wheel zooms, WASD or arrows or right-drag pans, left-click inspects a cell, 1-9 call a squad, Esc saves and returns to the menu, F11 fullscreen, F2 filter"
+	help := "click ground to build, click cells or units to inspect, " +
+		"wheel zooms, WASD / right-drag pans, 1-9 squads, Esc menu, " +
+		"F11 fullscreen, F2 filter"
 	if s.techCallout != "" && s.techPlacing == "" {
 		help = "schematics received: click outside or right-click to close"
 		if techBuildingsRemain(s.techCallout, s.techUsed) {

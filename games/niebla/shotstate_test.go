@@ -52,17 +52,26 @@ func TestWriteShotUnitState(t *testing.T) {
 	s := newGame()
 	noRivals(s)
 	x, y := parkCenter()
-	s.spawnRobot(RobotWorker, x+20, y+12)
-	s.spawnRobot(RobotCombat, x+40, y+24)
+	workerID := s.spawnRobot(RobotWorker, x-200, y)
+	s.spawnRobot(RobotCombat, x, y)
 	col, row := groundNearCore()
 	home := raised(t, s, BuildingWarFactory, col, row)
 	silo := raised(t, s, BuildingSilo, col+2, row)
 	s.hurtBuilding(silo.ID, 120)
-	mechanicID := s.spawnRobot(RobotRepair, x+60, y+36)
+	mechanicID := s.spawnRobot(RobotRepair, x+200, y)
 	mechanic := s.Robots[mechanicID]
 	mechanic.Factory = home.ID
 	mechanic.Health = mechanicHealth * 0.6
 	s.Robots[mechanicID] = mechanic
+	scene := newPlayScene(s)
+	worker := s.Robots[workerID]
+	gx, gy := project(float32(worker.X), float32(worker.Y))
+	if bounds, ok := robotModel(worker.Kind).screenBounds(
+		scene.camera, golib.Vector2{X: gx, Y: gy}, worker.Facing, scene.zoom,
+	); ok {
+		center := bounds.Center()
+		t.Logf("worker sprite center: %.0f,%.0f", center.X, center.Y)
+	}
 	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
 	if err != nil {
 		t.Fatal(err)

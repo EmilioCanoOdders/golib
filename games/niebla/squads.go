@@ -37,13 +37,19 @@ func squadSlots(s *State) []int64 {
 	return slots
 }
 
-// enemyUnder returns the rival vehicle under the pointer, the nearest on
-// the screen within orderPickPx.
+// enemyUnder returns the rival vehicle whose sprite is under the pointer.
+// Stationary city buildings keep the older small target around their foot.
 func (s *playScene) enemyUnder(mx, my float32) (Enemy, bool) {
+	if hit, ok := s.unitAtScreen(mx, my, true); ok {
+		return s.state.Enemies[hit.selection.id], true
+	}
 	var best Enemy
 	found, bestGap := false, float64(orderPickPx)
 	for _, id := range sortedEnemyIDs(s.state) {
 		e := s.state.Enemies[id]
+		if selectableEnemyVehicle(e.Kind) {
+			continue
+		}
 		gx, gy := project(float32(e.X), float32(e.Y))
 		at := s.camera.ToScreen(golib.Vector2{X: gx, Y: gy})
 		if gap := math.Hypot(float64(at.X-mx), float64(at.Y-my)); gap <= bestGap {

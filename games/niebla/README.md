@@ -270,7 +270,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `menu.go` | The title screen: the game's name, the player's number, Play and Quit; the `menuButton` hit-testing both scenes' menus use |
 | `identity.go` | Who is playing: the machine's ID (registry value, platform UUID or `/etc/machine-id`), hashed with the game's salt into `player`, the number the menu shows and a later server hands tokens out by |
 | `store.go` | The local database (SQLite): players, saves and the machine table; `saveBase`/`resumeState`, the scenes' door into it; the DB path, `:memory:` under `golib shot` |
-| `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); camera, selection, open cards, robot roster, individual assignment and pointer modes live here, never serialized; the schematics callout and one-use building placement mode, rivals' HUD, reach overlays and autosave are view state too |
+| `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); camera, selection, open cards, robot roster, individual assignment and pointer modes live here, never serialized; unit cards follow a directly selected robot or rival vehicle; the schematics callout and one-use building placement mode, rivals' HUD, reach overlays and autosave are view state too |
 | `radial.go` | The build menu: the two rings a click on empty ground opens - the build groups (industry, military, logistics), then the group's blueprints - laid out around the cell every frame, and `backRadial`/`closeRadial`/`openRadial` for the scene |
 | `glyphs.go` | The marks the build menu wears: a group's own glyph, a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both - and the pipe's mark, the tube the region lifts on posts |
 | `state.go` | The simulation's state and save-schema version: builders, workers, troopers and mechanics with saved hull, facing and fog-stillness ticks, buildings with their tanks, production type, reloads and damage, stock, deposits, jobs, piles, pipes, weather and rival tables, plus the schematics ledger; one-tick unit-death receipts feed view effects without being saved; `newGame` gives the colony one fueled builder |
@@ -310,6 +310,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `draw.go` | The region painter: the core's monolith, buildings with their damage bars, the bubbles' outside edges, build-site wireframes and the gray schematic-placement ghost, the marking cursor, the stores' fill bars (`drawFillBar`) and the idle count by the core |
 | `units.go` | The colony's four unit models on the ground, with Blender-rendered shadows, cargo, charge feedback, combat-unit health bars and workers' oil-tank bars below their feet |
 | `worldsprites.go` | The eight eight-direction model and shadow sheets in the world and the scaled model icons; converts the world ground point to a screen pixel before drawing so moving sprites do not jump by the camera's zoom |
+| `unit_picking.go` | Unit picking and inspection: each model's opaque PNG bounds become a screen-space body rectangle at its current facing and zoom; a small screen-pixel margin makes it clickable, frontmost overlapping units win, and selected unit cards follow their entity |
 | `orientation.go` | The screen-space eight-way facing derived from an isometric movement vector, and the ground-plane yaw used for world details |
 | `sources/models/studio.py` | One shared Blender authoring toolkit: geometry primitives, materials, 2:1 camera, light, world-yaw conversion, eight-view model sheets and isolated shadow masks |
 | `sources/models/artillery.py`, `other_units.py`, `*.blend` | Geometry for the eight distinct mobile chassis and their editable Blender sources; not shipped with the game |
@@ -318,6 +319,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `guides_test.go` | Offscreen arrow placement and direction, the first scout while alive, report sharing, visible-target hiding, report timing, pending schematics and spacing; can write visual fixtures with `NIEBLA_GUIDE_SHOT_STATE` and `NIEBLA_SCOUT_GUIDE_SHOT_STATE` |
 | `markup_test.go` | Markup parser, tooltip layout/button, portrait hit-testing, remote robot card and page-layout tests |
 | `robots_panel_test.go` | Roster grouping, paging, row bounds, button placement and selected-unit details |
+| `unit_picking_test.go` | Opaque bounds for every model and facing, frontmost sprite targeting, direct unit cards following movement, rival health details and closing cards for units that disappear |
 | `shots_test.go` | Small-arms reach limits, the first raid against one guard post over three seeds, bullet and shell impacts, building damage, mechanic repair rate and oil, death receipts and explosion scaling/merging, defender damage and wrecks, and old war-factory saves |
 | `repair_tech_test.go` | Repair-protocol triggers and lull boundaries, rival-fire markers that survive building destruction, rejected locked mechanic orders, and legacy-save compatibility |
 | `squads_test.go` | Trooper production and squad behavior, mechanic limits, target selection, health and wrecks; squads can attack the first incoming crawler without a camp delay |
@@ -859,8 +861,15 @@ top right.
 On the screen (`enemies.go`) the marks lie on the ground under
 everything, and the vehicles are drawn after the fog, so a party reads
 from far out as a pocket moving through the mist. `compassWord` names a
-bearing as the screen shows it, north up. A cell with a vehicle on it is
-picked instead of offered the build menu, and each vehicle has a card.
+bearing as the screen shows it, north up. `unit_picking.go` derives each
+robot's and mobile rival's screen rectangle from the opaque pixels in its
+current sprite frame, origin, scale and facing. Hover and clicks use the
+same body hitboxes, with a small screen-space margin; overlapping units
+resolve to the one drawn in front. Clicking a robot or mobile rival opens
+only that unit's card, which follows its position and closes if it dies.
+Squad attack orders use the same vehicle hitboxes, so the target ring and
+the attack click agree. City buildings keep cell inspection and the
+existing small target around their foot.
 
 ### The lifecycle, identity and the local database
 
@@ -1190,13 +1199,18 @@ NIEBLA_SHOT_STATE=../../build/niebla/squads.json ./golib go -C games/niebla test
 ```
 
 `TestWriteShotUnitState` puts one of each colony chassis by the core
-for visual checks at close zoom (and writes only when requested):
+for visual checks and prints the worker's screen position (it writes only
+when requested). The first shot shows its hover rectangle; the second
+clicks it, then zooms in to inspect the individual card and its outline:
 
 ```text
 NIEBLA_UNIT_SHOT_STATE=../../build/niebla/units.json \
-  ./golib go -C games/niebla test -run TestWriteShotUnitState
+  ./golib go -C games/niebla test \
+  -run TestWriteShotUnitState -v
+./golib shot niebla 2 --save build/niebla/units.json \
+  --input "Enter@1 Mouse@2:618,347"
 ./golib shot niebla 60 --save build/niebla/units.json \
-  --input "Enter@1 Mouse@2:640,357 MouseWheel@3:5"
+  --input "Enter@1 Mouse@2:618,347 MouseLeft@3 MouseWheel@4:5"
 ```
 
 `TestWriteShotVehicleState` places the rival vehicle types, including

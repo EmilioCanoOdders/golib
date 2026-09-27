@@ -20,7 +20,10 @@ func drawRobots(
 		x, y := project(float32(r.X), float32(r.Y))
 		spots = append(spots, spot{id, golib.Vector2{X: x, Y: y}})
 	}
-	sort.Slice(spots, func(i, j int) bool { return spots[i].p.Y < spots[j].p.Y })
+	sort.SliceStable(
+		spots,
+		func(i, j int) bool { return spots[i].p.Y < spots[j].p.Y },
+	)
 	for _, sp := range spots {
 		r := s.Robots[sp.id]
 		model := robotModel(r.Kind)

@@ -309,6 +309,7 @@ func (s *playScene) selectTechBuilding(kind BuildingKind) bool {
 		s.picked = false
 		s.pickedThing = ""
 		s.pickedRobot = 0
+		s.clearPickedUnit()
 		s.robotPage = 0
 		s.armed = ""
 		s.ordering = 0
