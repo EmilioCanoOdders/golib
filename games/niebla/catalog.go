@@ -287,7 +287,11 @@ var catalog = map[ThingType]ThingInfo{
 					{"mechanic pace", "one per " + si(mechanicBuildTicks/60, "s")},
 					{"mechanic", fmt.Sprintf("%.0f hull, repairs %.0f damage/s",
 						mechanicHealth, repairPerSecond)},
-					{"repair fuel", fmt.Sprintf("[oil]%s[/] per damage repaired",
+					{"repair price", fmt.Sprintf(
+						"%.0f%% of blueprint cost from colony stores",
+						repairCostShare*100,
+					)},
+					{"mechanic fuel", fmt.Sprintf("[oil]%s[/] per damage, from its tank",
 						si(repairOilPerPoint, "L"))},
 					{"mechanics", fmt.Sprintf("%d / %d",
 						mechanicCount(s, thing.Ref), mechanicPerFactory)},

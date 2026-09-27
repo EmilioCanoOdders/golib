@@ -151,10 +151,17 @@ What is built can be unbuilt, and nothing is lost but the walking. (What a rival
 
 **The trash button.** The card of a building, and of a site still being raised, carries a small button with a trash can, at the right of the card's header. The core has none: it is indestructible both ways. The button asks twice: the first press arms it (the can turns red, the card says `demolish?`), the second orders the building taken down - or cancels the site at once, which is bookkeeping and needs no one - and a click anywhere else disarms it. Arming is view, not state; only the second press sends the action (`Demolish` for a building, `CancelJob` for a site). A building already ordered down wears no can: its headline counts the work down (`demolishing, 4 s`).
 
-**Taking it down is work, like raising it.** The order stands on the building (`Building.Demolish`, the ticks of work left) and a builder walks over and stands by it, working it down for `demolishWorkTicks` 300 - 5 s, half of raising's 10. The order joins the builders' line after the sites and before the pipes, so it waits its turn like a marking, and several builders stack on one takedown as they do on one site. The building works on until it falls: a factory whose robot is nearly done may well roll it out before the builder arrives. The fall itself is what cancels its tasks and leaves the ground:
+**Taking it down is work, like raising it.** The order stands on the building (`Building.Demolish`, the ticks of work left) and a builder walks over and stands by it, working it down for `demolishWorkTicks` 300 - 5 s, half of raising's 10. The order joins the builders' line after the sites and before the pipes, so it waits its turn like a marking, and several builders stack on one takedown as they do on one site. The building works on until it falls: a factory whose robot is nearly done may well roll it out before the builder arrives. The fall itself is a view-only event: metal fragments, sparks and dust fly from its footprint, and its tasks are canceled as it leaves the ground:
 1. The building leaves the state - no ruin left behind. A site leaves the job queue at the button, no work asked.
 2. Every task it had under way is cancelled: a factory's half-built robot never rolls out, a site's progress is gone. Robots carry no plan, so nobody has to be told: a builder finds no job the next tick, a robot refueling at a charger that is gone walks to the next nearest post.
 3. Everything the building was made of or held falls to the ground where it stood, as one **pile**: its whole blueprint cost (`demolishRefund` 1.0, a dial), plus the cost of the robot a factory was building, plus whatever the stores no longer have a roof for - the stores are one stock under many roofs, so a silo or a warehouse "contains" the part of the stock that stops fitting when its roof goes, and that overflow leaves `State.Stock` and joins the pile. Nothing goes straight back to the stores: a refund is a haul.
+
+Weapons and mites make a louder fall than an ordered dismantling. The audio
+uses the CC0 recording `building-collapse.wav`, a mechanical blast with
+clattering metal, attenuated from the building's position; a projectile
+impact and the fall share one flash instead of doubling it. These effects
+cover colony and settled rival-city buildings, use transient `BuildingDeath`
+receipts, and are excluded from saves.
 
 **A protector is the one exception to the button**: it is dimmed while any
 other building or site stands under that protector's bubble alone, so taking
@@ -582,7 +589,11 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - Lose buildings: rival mobile artillery brings buildings down into a
   pile of half their cost, the core excepted. After the repair protocol
   arrives, only a mechanic repairs damage: 6 points a second, spending
-  0.2 L per point from its own tank.
+  0.2 L per point from its own tank, plus a proportional share of the
+  building's construction price from colony stores. A full repair costs
+  50% of that price in lilac and oil, paid as integrity returns; this
+  charge does not top up the building's own oil tank, which follows its
+  ordinary store and logistics rules.
   Mechanics have 60 hull; an isolated one cannot out-repair continuous
   artillery fire. They must be built, fueled and kept alive.
 - The safe zone feeds you: an oil pool and a lilac vein, the region's smallest, sit whole inside the bubble, off the core, so at least one resource of each type is minable in comfort whatever the fog does outside.
@@ -646,6 +657,14 @@ only for editing and rendering the art, never for building or playing the
 game.
 
 ## Sounds
+When a building falls, the region plays `building-collapse.wav`, a CC0
+recording of a mechanical explosion with clattering metal (Spring Spring,
+OpenGameArt). It is heard from the building's ground position and follows
+ordinary world-distance attenuation; ordered dismantling plays it more
+quietly than a building lost to weapons or mites. The cosmetic collapse
+throws metal fragments, sparks and dust; a nearby projectile impact shares
+the fall's flash.
+
 Mix adjustment (2026-09-25): the oil drops keep to the ground. Their
 bloops - the drip and its thicker cousin - play at half volume, and a
 zoom gate (`dropHushZoom` 28, `dropHushSpan` 4) stills them as soon as
@@ -725,6 +744,10 @@ drops are `dripVolume` 0.3 and `gurgleVolume` 0.275, and keep to the
 closest stops: `dropHushZoom` 28 stills them and `dropHushSpan` 4 fades
 them up to whole voice - provisional, to tune by ear. `uiClickPitch`
 0.72, `placeVolume` 0.7 and `alertVolume` 0.65 set the interface mix.
+Building falls use `buildingCrashVolume` 0.85, reduced by
+`demolitionVolume` 0.6 for ordered dismantling. In `shots.go`, the collapse
+scales fragments, sparks, dust and its short flash to each building's size;
+projectile impacts reduce the added debris and own the shared flash.
 
 Lost colony units leave `unitWreckRefund` 0.25 of each resource: build
 cost, cargo and remaining tank. The wreck is a pile on their cell
@@ -733,7 +756,11 @@ same rule. After the repair protocol arrives, a mechanic costs
 `mechanicCostLilac` 100 kg and
 `mechanicCostOil` 50 L, takes `mechanicBuildTicks` 900 ticks to build,
 has `mechanicHealth` 60 health and repairs at `repairPerSecond` 6
-damage/s for `repairOilPerPoint` 0.2 L per damage (`sim_squads.go`,
+damage/s. Each point repaired costs `repairOilPerPoint` 0.2 L from the
+mechanic's tank, plus its proportional share of `repairCostShare` 50% of
+the building's construction cost from colony stores. The repair charge is
+paid as damage is removed; it does not top up the building's own oil tank,
+which follows its ordinary store and logistics rules (`sim_squads.go`,
 `sim_shots.go`).
 
 Mites use `miteDamagePerSecond` for units and structures. Piles track
@@ -932,6 +959,18 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-27: colony and settled rival-city buildings now throw metal
+  fragments, sparks and dust as they fall. A CC0 mechanical explosion with
+  clattering metal plays from the building's position; ordered dismantling
+  is quieter, and projectile impacts share the fall's flash. The one-tick
+  receipts stay out of saves.
+  Pinned by `shots_test.go` and `audio_test.go`; `shotstate_test.go` writes
+  a building-collapse capture.
+- 2026-09-27: mechanics now pay 50% of a building's construction cost
+  across a full repair, proportionally in colony lilac and oil as its
+  integrity returns. The mechanic still spends its own 0.2 L per point;
+  either repair resource can pause the work. Building cards show the cost
+  left. Pinned by `shots_test.go`, `markup_test.go` and the repair-cost shot.
 - 2026-09-27: rival city hosts now animate 60% of their former mite count,
   including city construction sites and city-produced vehicles. This is a
   view-only density factor; exposure and simulation damage are unchanged.

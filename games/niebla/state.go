@@ -38,7 +38,8 @@ type State struct {
 	Shots      map[int64]Shot     // bullets and shells in the air, by ID (sim_shots.go)
 	Tech       map[string]bool    // the schematics that arrived: drop ID -> opened (sim_tech.go)
 	// The latest tick's death events, for view effects; never saved.
-	Deaths []UnitDeath `json:"-"`
+	Deaths         []UnitDeath     `json:"-"`
+	BuildingDeaths []BuildingDeath `json:"-"`
 }
 
 // UnitDeath is a one-tick simulation event for the view. It is not saved:
@@ -47,6 +48,21 @@ type UnitDeath struct {
 	ID        int64
 	RobotKind RobotKind
 	EnemyKind EnemyKind
+	X, Y      float64
+}
+
+type BuildingDeathCause string
+
+const (
+	BuildingDemolished BuildingDeathCause = "demolished"
+	BuildingDestroyed  BuildingDeathCause = "destroyed"
+)
+
+type BuildingDeath struct {
+	ID        int64
+	Kind      BuildingKind
+	RivalKind EnemyKind
+	Cause     BuildingDeathCause
 	X, Y      float64
 }
 
@@ -64,6 +80,23 @@ func (s *State) recordEnemyDeath(e Enemy) {
 	}
 	s.Deaths = append(s.Deaths, UnitDeath{
 		ID: e.ID, EnemyKind: e.Kind, X: e.X, Y: e.Y,
+	})
+}
+
+func (s *State) recordBuildingDeath(
+	b Building,
+	cause BuildingDeathCause,
+) {
+	x, y := cellCenterUnits(b.Col, b.Row)
+	s.BuildingDeaths = append(s.BuildingDeaths, BuildingDeath{
+		ID: b.ID, Kind: b.Kind, Cause: cause, X: x, Y: y,
+	})
+}
+
+func (s *State) recordRivalBuildingDeath(e Enemy) {
+	s.BuildingDeaths = append(s.BuildingDeaths, BuildingDeath{
+		ID: e.ID, RivalKind: e.Kind, Cause: BuildingDestroyed,
+		X: e.X, Y: e.Y,
 	})
 }
 

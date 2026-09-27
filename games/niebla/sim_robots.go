@@ -58,6 +58,7 @@ func robotMaxHealth(kind RobotKind) float64 {
 // a quarter of its cost and onboard resources in a wreck.
 func stepSim(s *State) {
 	s.Deaths = nil
+	s.BuildingDeaths = nil
 	stepTech(s)
 	stepFog(s)
 	stepFactories(s)

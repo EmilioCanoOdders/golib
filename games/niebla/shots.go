@@ -18,6 +18,7 @@ import (
 const (
 	fxGravity    = 320.0 // u/s2 on a spark
 	fxMaxSparks  = 1600
+	fxMaxShards  = 900
 	fxMaxFlashes = 256
 	fxLightRings = 14 // ellipses a pool of light is stacked from
 	fxSparkRings = 3  // and a spark's own little pool
@@ -38,6 +39,13 @@ var (
 	shellLight  = golib.Color{R: 255, G: 170, B: 80, A: 255}
 	bulletLight = golib.Color{R: 255, G: 236, B: 170, A: 255}
 	rivalLight  = golib.Color{R: 255, G: 120, B: 90, A: 255}
+	metalFlash  = golib.Color{R: 202, G: 214, B: 222, A: 255}
+	dustColor   = golib.Color{R: 122, G: 122, B: 116, A: 255}
+	shardColors = []golib.Color{
+		{R: 162, G: 174, B: 184, A: 255},
+		{R: 104, G: 116, B: 130, A: 255},
+		{R: 190, G: 146, B: 90, A: 255},
+	}
 )
 
 // spark is one particle: a point over the ground, in units, with its
@@ -49,8 +57,20 @@ type spark struct {
 	age, life  float32
 	size       float32 // u
 	opacity    float32
+	light      float32
 	color      golib.Color
 	smoke      bool
+	dust       bool
+}
+
+type shard struct {
+	x, y, z     float64
+	vx, vy, vz  float64
+	age, life   float32
+	length      float32
+	width       float32
+	angle, spin float32
+	color       golib.Color
 }
 
 // flash is a pool of light that fades where it was lit, and a ring that
@@ -59,6 +79,7 @@ type flash struct {
 	x, y      float64
 	reach     float64 // u
 	age, life float32
+	intensity float32
 	color     golib.Color
 	ring      bool
 }
@@ -145,6 +166,7 @@ type fxField struct {
 	known         map[int64]Shot
 	smokeDistance map[int64]float64
 	sparks        []spark
+	shards        []shard
 	flashes       []flash
 }
 
@@ -218,7 +240,12 @@ func (f *fxField) shellSmoke(x, y, z float64) {
 
 // update learns of shots and unit deaths, makes their effects, then moves
 // every particle a frame.
-func (f *fxField) update(s *State, dt float32, deaths []UnitDeath) {
+func (f *fxField) update(
+	s *State,
+	dt float32,
+	deaths []UnitDeath,
+	buildingDeaths []BuildingDeath,
+) {
 	for id, shot := range s.Shots {
 		if _, old := f.known[id]; old {
 			continue
@@ -263,6 +290,9 @@ func (f *fxField) update(s *State, dt float32, deaths []UnitDeath) {
 	for _, death := range deaths {
 		f.spawnUnitExplosion(death, landed)
 	}
+	for _, death := range buildingDeaths {
+		f.spawnBuildingCollapse(death, landed)
+	}
 	f.known = make(map[int64]Shot, len(s.Shots))
 	for id, shot := range s.Shots {
 		f.known[id] = shot
@@ -280,6 +310,8 @@ func (f *fxField) update(s *State, dt float32, deaths []UnitDeath) {
 		p.z += p.vz * d
 		if p.smoke {
 			p.size += 5 * dt
+		} else if p.dust {
+			p.size += 4 * dt
 		} else {
 			p.vz -= fxGravity * d
 			// An ember that comes down stays where it fell, glowing out.
@@ -290,6 +322,25 @@ func (f *fxField) update(s *State, dt float32, deaths []UnitDeath) {
 		sparks = append(sparks, p)
 	}
 	f.sparks = sparks
+	shards := f.shards[:0]
+	for _, p := range f.shards {
+		p.age += dt
+		if p.age >= p.life {
+			continue
+		}
+		p.x += p.vx * d
+		p.y += p.vy * d
+		p.vz -= fxGravity * d * 0.45
+		p.z += p.vz * d
+		p.angle += p.spin * dt
+		if p.z <= 0 {
+			p.z, p.vz = 0, 0
+			p.vx *= 0.72
+			p.vy *= 0.72
+		}
+		shards = append(shards, p)
+	}
+	f.shards = shards
 	flashes := f.flashes[:0]
 	for _, fl := range f.flashes {
 		if fl.age += dt; fl.age < fl.life {
@@ -297,6 +348,136 @@ func (f *fxField) update(s *State, dt float32, deaths []UnitDeath) {
 		}
 	}
 	f.flashes = flashes
+}
+
+func (f *fxField) spawnBuildingCollapse(
+	death BuildingDeath,
+	landed []Shot,
+) {
+	across, height := buildingCollapseSize(death)
+	scale := golib.Clamp((across+height)/38, 0.65, 1.2)
+	strength := float32(1)
+	flashLife := float32(0.25)
+	if death.Cause == BuildingDemolished {
+		strength = 0.55
+		flashLife = 0.15
+	}
+	merged := false
+	for _, shot := range landed {
+		if shotCoversDeath(shot, UnitDeath{X: death.X, Y: death.Y}) {
+			merged = true
+			break
+		}
+	}
+	if merged {
+		strength *= 0.55
+	}
+	if !merged && len(f.flashes) < fxMaxFlashes {
+		f.flashes = append(f.flashes, flash{
+			x: death.X, y: death.Y,
+			reach:     float64(across * scale * 1.5),
+			life:      flashLife,
+			intensity: 0.22 * strength,
+			color:     metalFlash,
+			ring:      true,
+		})
+	}
+	sparkCount := int(28 * scale * strength)
+	if merged {
+		sparkCount = max(6, sparkCount/2)
+	}
+	sparkStart := len(f.sparks)
+	f.burst(
+		death.X, death.Y, float64(height)*0.18,
+		sparkCount, 48*float64(scale), 70*float64(scale),
+		0.75, 0.9,
+	)
+	for i := sparkStart; i < len(f.sparks); i++ {
+		f.sparks[i].light = 0.025
+	}
+	shardCount := int(20 * scale * strength)
+	if merged {
+		shardCount = max(5, shardCount/2)
+	}
+	f.throwShards(death, height, shardCount, scale)
+	dustCount := int(15 * scale * strength)
+	if merged {
+		dustCount = max(4, dustCount/2)
+	}
+	f.dust(
+		death.X, death.Y, 0, dustCount,
+		float64(across)*0.45, scale,
+	)
+}
+
+func buildingCollapseSize(death BuildingDeath) (across, height float32) {
+	if death.RivalKind == "" {
+		return buildingSize(death.Kind)
+	}
+	switch death.RivalKind {
+	case EnemyBase:
+		return 30, 29
+	case EnemyCityCrawler:
+		return 16, 20
+	case EnemyCityRepulsor:
+		return 10, 28
+	case EnemyCityOilworks:
+		return 20, 30
+	case EnemyCityMine:
+		return 23, 15
+	case EnemyCityFactory:
+		return 26, 32
+	}
+	return 20, 10
+}
+
+func (f *fxField) throwShards(
+	death BuildingDeath,
+	height float32,
+	count int,
+	scale float32,
+) {
+	for i := 0; i < count && len(f.shards) < fxMaxShards; i++ {
+		angle := spread(0, 2*math.Pi)
+		speed := spread(12, 38) * float64(scale)
+		f.shards = append(f.shards, shard{
+			x:      death.X + spread(-7, 7),
+			y:      death.Y + spread(-7, 7),
+			z:      float64(height) * 0.15,
+			vx:     math.Cos(angle) * speed,
+			vy:     math.Sin(angle) * speed,
+			vz:     spread(26, 58) * float64(scale),
+			life:   float32(spread(0.65, 1.2)),
+			length: float32(spread(2.5, 6)) * scale,
+			width:  float32(spread(0.6, 1.4)) * scale,
+			angle:  float32(spread(0, 2*math.Pi)),
+			spin:   float32(spread(-10, 10)),
+			color:  shardColors[golib.RandomInt(0, len(shardColors)-1)],
+		})
+	}
+}
+
+func (f *fxField) dust(
+	x, y, z float64,
+	count int,
+	reach float64,
+	scale float32,
+) {
+	for i := 0; i < count && len(f.sparks) < fxMaxSparks; i++ {
+		f.sparks = append(f.sparks, spark{
+			x:       x + spread(-reach, reach),
+			y:       y + spread(-reach, reach),
+			z:       z,
+			vx:      spread(-8, 8),
+			vy:      spread(-8, 8),
+			vz:      spread(3, 12),
+			life:    float32(spread(0.8, 1.5)),
+			size:    float32(spread(5, 10)) * scale,
+			opacity: 0.34,
+			color:   dustColor,
+			dust:    true,
+		})
+	}
 }
 
 func (f *fxField) updateShellSmoke(s *State) {
@@ -457,7 +638,7 @@ func (f *fxField) draw(s *State, screen *golib.Screen, zoom float32) {
 		}
 	}
 	for _, p := range f.sparks {
-		if !p.smoke {
+		if !p.smoke && !p.dust {
 			continue
 		}
 		px, py := project(float32(p.x), float32(p.y))
@@ -465,12 +646,34 @@ func (f *fxField) draw(s *State, screen *golib.Screen, zoom float32) {
 		screen.DrawCircle(px, py-float32(p.z)*unitH, dotRadius(p.size, zoom, 1.5),
 			golib.WithOpacity(p.color, p.opacity*fade))
 	}
+	for _, piece := range f.shards {
+		px, py := project(float32(piece.x), float32(piece.y))
+		fade := 1 - piece.age/piece.life
+		screen.DrawCircle(
+			px, py, dotRadius(piece.width, zoom, 0.7),
+			golib.WithOpacity(golib.Black, 0.22*fade),
+		)
+		centerY := py - float32(piece.z)*unitH
+		screen.DrawPolygon(
+			shardPoints(
+				px, centerY,
+				dotRadius(piece.length, zoom, 1),
+				dotRadius(piece.width, zoom, 0.6),
+				piece.angle,
+			),
+			golib.WithOpacity(piece.color, fade),
+		)
+	}
 
 	screen.SetBlendMode(golib.BlendAdd)
 	for _, fl := range f.flashes {
 		fade := 1 - fl.age/fl.life
+		intensity := fl.intensity
+		if intensity <= 0 {
+			intensity = 1
+		}
 		lightPool(screen, fl.x, fl.y, fl.reach*(0.6+0.4*float64(1-fade)), fl.color,
-			0.9*fade*fade, fxLightRings)
+			intensity*fade*fade, fxLightRings)
 		if fl.ring {
 			cx, cy := project(float32(fl.x), float32(fl.y))
 			screen.DrawPolygonOutline(
@@ -514,7 +717,7 @@ func (f *fxField) draw(s *State, screen *golib.Screen, zoom float32) {
 		screen.DrawCircle(px, py-h, dotRadius(1.6, zoom, 1), sparkWhite)
 	}
 	for _, p := range f.sparks {
-		if p.smoke {
+		if p.smoke || p.dust {
 			continue
 		}
 		px, py := project(float32(p.x), float32(p.y))
@@ -531,8 +734,26 @@ func (f *fxField) draw(s *State, screen *golib.Screen, zoom float32) {
 			golib.WithOpacity(color, fade))
 		// A spark near the ground lights it a little.
 		if p.z < 12 {
-			lightPool(screen, p.x, p.y, 10, p.color, 0.12*fade, fxSparkRings)
+			light := p.light
+			if light <= 0 {
+				light = 0.12
+			}
+			lightPool(screen, p.x, p.y, 10, p.color, light*fade, fxSparkRings)
 		}
 	}
 	screen.SetBlendMode(golib.BlendNormal)
+}
+
+func shardPoints(
+	x, y, length, width, angle float32,
+) []golib.Vector2 {
+	center := golib.Vector2{X: x, Y: y}
+	direction := golib.Vector2FromAngle(angle)
+	across := golib.Vector2{X: -direction.Y, Y: direction.X}
+	return []golib.Vector2{
+		center.Add(direction.Scale(length / 2)),
+		center.Add(across.Scale(width / 2)),
+		center.Sub(direction.Scale(length / 2)),
+		center.Sub(across.Scale(width / 2)),
+	}
 }

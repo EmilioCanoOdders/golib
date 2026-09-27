@@ -158,6 +158,16 @@ NIEBLA_REPAIR_UNLOCKED_SHOT_STATE=../../build/niebla/repair-unlocked.json \
   --input "Enter@1 Mouse@2:664,362 MouseLeft@3"
 ```
 
+To inspect the remaining repair cost on a damaged guard post:
+
+```text
+NIEBLA_REPAIR_COST_SHOT_STATE=../../build/niebla/repair-cost.json \
+  ./golib go -C games/niebla test \
+  -run TestWriteRepairCostShotState -v
+./golib shot niebla 60 --save build/niebla/repair-cost.json \
+  --input "Enter@1 Mouse@2:664,362 MouseLeft@3"
+```
+
 To inspect a pump being eaten outside every bubble, write its state and
 take shots before and after the mites finish it:
 
@@ -273,6 +283,17 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
   --input "Enter@1 Mouse@3:880,492 MouseWheel@4:3"
 ```
 
+To capture a building falling to a final bullet hit:
+
+```text
+NIEBLA_BUILDING_COLLAPSE_SHOT_STATE=../../build/niebla/collapse.json \
+  ./golib go -C games/niebla test \
+  -run TestWriteBuildingCollapseShotState
+./golib shot niebla 4 8 20 60 \
+  --save build/niebla/collapse.json \
+  --input "Enter@1 Mouse@2:664,374 MouseWheel@2:5"
+```
+
 ## Files
 
 | File | Holds |
@@ -284,7 +305,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); camera, selection, open cards, robot roster, individual assignment and pointer modes live here, never serialized; unit cards follow a directly selected robot or rival vehicle; the schematics callout and one-use building placement mode, rivals' HUD, reach overlays and autosave are view state too |
 | `radial.go` | The build menu: the two rings a click on empty ground opens - the build groups (industry, military, logistics), then the group's blueprints - laid out around the cell every frame, and `backRadial`/`closeRadial`/`openRadial` for the scene |
 | `glyphs.go` | The marks the build menu wears: a group's own glyph, a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both - and the pipe's mark, the tube the region lifts on posts |
-| `state.go` | The simulation's state and save-schema version 8: builders, workers, troopers, mechanics and rivals with saved hull, facing and stillness ticks; buildings, jobs, piles and pipes with mite wear; stock, deposits, weather and rival tables; one-tick unit-death receipts feed view effects without being saved; `newGame` gives the colony one fueled builder |
+| `state.go` | The simulation's state and save-schema version 8: builders, workers, troopers, mechanics and rivals with saved hull, facing and stillness ticks; buildings, jobs, piles and pipes with mite wear; stock, deposits, weather and rival tables; one-tick unit and building death receipts feed view effects without being saved; `newGame` gives the colony one fueled builder |
 | `actions.go` | The actions (`Tick`, `SendRobot`, ID-specific `AssignRobot` and `RecallRobot`, `MarkBuilding`, typed `QueueRobot`, `QueueMechanic`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
 | `sim_robots.go` | The robots' rules and tuning: `robotDay`, common priorities, builders alone claiming construction and pipe work, workers mining posts, builders and unassigned workers collecting piles, oil-pool waits under fog, stationary hull damage and tank wear, `postRobots` and worker-only `pickRobot`, movement, pipe-section claims and idle ranks |
 | `sim_piles.go` | Demolition, unit wrecks and loose items: `canDemolish`, the 25% unit recovery (`dropRobotWreck`), the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
@@ -297,8 +318,8 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `sim_tech.go` | The schematics: the robot factory is the opening drop, first delivery unlocks infrastructure, the guard post follows the first scout's return past the core bubble, then the frontier clock and first-city founding trigger their drops; artillery follows three ended normal attacks (old saves keep the rival-factory trigger); the repair protocol waits for rival building damage and a city-force lull (minute 12 if no first force is produced); `stepTech`, `kindUnlocked`, `dropArrived` and `techPending` derive arrivals and `State.Tech` keeps which drops were opened |
 | `sim_squads.go` | The military units' law and tuning: troopers (`RobotCombat`) and mechanics (`RobotRepair`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), the shared 130 m small-arms reach, the war factory's capacity (`squadRoom`, `mechanicRoom`), and rivals targeting defenders (`stepEnemyGuns`) |
 | `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right with a trooper icon, unit count and key (`drawSquadStrip`, `drawTrooperIcon`, `squadBoxRect`, `squadBoxAt`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the marks that pick a squad where it stands (`squadMarkAt`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
-| `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), vulnerable colony units, rival-shot building damage markers, building health and oil-paid mechanic repairs, what the colony sees (`seen`) and its artillery (`stepArtillery`) |
-| `shots.go` | Shots on the screen and their light, for looks only: bullets as streaks, shells on their arc over a shadow, pools of light added over the ground and what stands on it (`lightPool`), guns' flashes, and bursts of sparks that cool from yellow to red, embers and smoke; per-unit death profiles scale explosions, and impacts merge with nearby deaths; the field (`fxField`) learns of fired and landed shots by comparing the state's with the ones it saw last; view, never state |
+| `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), vulnerable colony units, rival-shot building damage markers, building health, proportional repair charges and mechanic fuel, what the colony sees (`seen`) and its artillery (`stepArtillery`) |
+| `shots.go` | Shots and building collapses on the screen, for looks only: bullets as streaks, shells on their arc over a shadow, pools of light added over the ground and what stands on it (`lightPool`), guns' flashes, and bursts of sparks, embers, smoke and metal shards; unit and building death effects scale to their kind, and projectile impacts merge with nearby falls; `fxField` learns from transient events and shots; view, never state |
 | `enemies.go` | The rivals on the screen: the scouts' marks on the ground, shadows and eight-view PNG models for all four moving rival chassis, damage bars and the words the player is told (`threatWords` for the HUD, `reportWords` and `drawReport` for the news) |
 | `mist.go` | The fog on the screen: a haze outside every repulsor's circle and `mistLayers` layers that thicken it past the line, each the region minus the clear circles (`clearDiscs`: the core's, the protectors', the rivals'), cut in strips whose gaps join into quads (`drawMist`, `mistGaps`), so the circles are round at every zoom and the air inside them is clear |
 | `bubble_edges.go` | The core's and protectors' joined clear ground: circle intersections divide each boundary into arcs, and only the arcs outside every other bubble are drawn, leaving one exterior outline |
@@ -317,7 +338,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset/replay the world, next arrival, create city, finish one city building, finish/send a battalion, fast-forward and next schematics —; view only, acting through `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
 | `tech.go` | The schematics on the screen: the badge over the core - breathing halos around the drop's mark - while an unopened drop waits, the callout its click opens (`techWords`, `techWrap`) with a clickable square per building and informational squares for pipes and the mechanic (`techBrings`, `drawTechSquares`); only building squares arm placement, and an informational-only callout stays open until dismissed; view, never state |
 | `guides.go` | Screen-edge arrows for the first live scout, an offscreen rival report or pending schematics, with the scout's theft report sharing its guide; view, never state |
-| `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and amplitude-modulated crystal pings, gunfire and shell impacts, low interface clicks, a site-marking thump and a low fanfare for new rival reports. Ordinary world emitters fade steeply with distance and become quiet beyond the view; cannon reports keep their longer, gentler range. Individual shell whistles track their own positions through the descending half of flight. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |
+| `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and crystal pings, gunfire and shell impacts, the CC0 metallic building-collapse recording, low interface clicks, a site-marking thump and a fanfare for rival reports. Ordinary world emitters fade with distance; cannon reports keep their longer range. Shell whistles follow their positions through descent. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |
 | `tools/soundgen/` | The maker of the wind, oil and mineral sounds and `assets/sounds/alert.wav`: stdlib Go renders the noise beds as WAV for conversion to OGG, the mineral ring as a seamless WAV with irregular pitch drift of at most one semitone, the crystal ping with amplitude modulation, and the low alert fanfare with `--alert`; run it only when a sound changes |
 | `draw.go` | The region painter: the core's monolith, buildings with their damage bars, the bubbles' outside edges, build-site wireframes and the gray schematic-placement ghost, the marking cursor, the stores' fill bars (`drawFillBar`) and the idle count by the core |
 | `units.go` | The colony's four unit models on the ground, with Blender-rendered shadows, cargo, charge feedback, combat-unit health bars and workers' oil-tank bars below their feet |
@@ -327,12 +348,13 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `sources/models/studio.py` | One shared Blender authoring toolkit: geometry primitives, materials, 2:1 camera, light, world-yaw conversion, eight-view model sheets and isolated shadow masks |
 | `sources/models/artillery.py`, `other_units.py`, `*.blend` | Geometry for the eight distinct mobile chassis and their editable Blender sources; not shipped with the game |
 | `assets/sprites/*.png`, `assets/sprites/shadows/*.png` | Eight transparent eight-frame model sheets and their matching Blender-rendered shadow masks; loaded on desktop (the PNGs are web-compatible, but Niebla's SQLite driver does not build for web) |
+| `assets/sounds/building-collapse.wav` | CC0 mechanical explosion with clattering metal; its source and license are in `assets/ATTRIBUTION.md` |
 | `region_test.go` | Layout, projection, things, SI formatting, catalog tests |
 | `guides_test.go` | Offscreen arrow placement and direction, the first scout while alive, report sharing, visible-target hiding, report timing, pending schematics and spacing; can write visual fixtures with `NIEBLA_GUIDE_SHOT_STATE` and `NIEBLA_SCOUT_GUIDE_SHOT_STATE` |
-| `markup_test.go` | Markup parser, tooltip layout/button, portrait hit-testing, remote robot card and page-layout tests |
+| `markup_test.go` | Markup parser, tooltip layout/button, portrait hit-testing, remote robot card and page-layout tests; can write a damaged-building repair-cost fixture with `NIEBLA_REPAIR_COST_SHOT_STATE` |
 | `robots_panel_test.go` | Roster grouping, paging, row bounds, button placement and selected-unit details |
 | `unit_picking_test.go` | Opaque bounds for every model and facing, frontmost sprite targeting, direct unit cards following movement, rival health details and closing cards for units that disappear |
-| `shots_test.go` | Small-arms reach limits, the first raid against one guard post over three seeds, bullet and shell impacts, building damage, mechanic repair rate and oil, death receipts and explosion scaling/merging, defender damage and wrecks, and old war-factory saves |
+| `shots_test.go` | Small-arms reach limits, the first raid against one guard post over three seeds, bullet and shell impacts, building damage and collapse effects, proportional repair costs and mechanic fuel, transient death receipts, explosion scaling/merging, defender damage and wrecks, and old war-factory saves |
 | `repair_tech_test.go` | Repair-protocol triggers and lull boundaries, rival-fire markers that survive building destruction, rejected locked mechanic orders, and legacy-save compatibility |
 | `squads_test.go` | Trooper production and squad behavior, mechanic limits, target selection, health and wrecks; squads can attack the first incoming crawler without a camp delay |
 | `world_test.go` | The simulation driven directly: the starting builder, explicit individual assignment, worker-only auto-assignment, role-specific carrying, loot and construction priorities, migration, dry deposits, determinism and JSON round trip |
@@ -684,11 +706,17 @@ rival shot has damaged a colony building, and the first pressure-city force
 has reached a lull. If that city produces no first force, the timing falls
 back to minute 12, still requiring rival building damage. A mechanic costs
 100 kg and 50 L, takes 15 seconds to build, has 60 health, and repairs at
-6 damage/s for 0.2 L per point. It chooses the oldest damaged building on
-its own, repairs only while it has oil and can be hit by the same rival
-bullets and shells as a trooper. Its repair task replaces harvesting,
-construction, pipe and pile work; when there is nothing damaged it waits
-by its factory. Old saves that already had mechanic production keep it.
+6 damage/s. Each repaired point also costs 0.2 L from the mechanic's own
+tank and a proportional part of the building's construction cost: a full
+repair costs 50% of the blueprint's lilac and oil prices, deducted from
+colony stores as the mechanic works. Repair does not top up the building's
+own oil tank, which follows its ordinary store and logistics rules. The
+mechanic chooses the oldest damaged building, and stops when it lacks fuel
+or either repair resource; it can be hit by the same rival bullets and
+shells as a trooper. Its repair task
+replaces harvesting, construction, pipe and pile work; when there is nothing
+damaged it waits by its factory. Old saves that already had mechanic
+production keep it.
 
 The stores have a roof: `oilCap`/`lilacCap` is the core's own room plus
 every silo and warehouse. A robot hauling into a full store stands at
@@ -821,7 +849,9 @@ the rivals' guns fire bullets. A building counts what it has taken in
 door `Demolish` uses too, with `wreckRefund` of its cost, and
 `ReportRazed` says so. Only a war-factory mechanic mends the oldest
 damaged building (`damagedBuilding`, `mend`), at `repairPerSecond` 6
-damage/s and `repairOilPerPoint` 0.2 L per point. Ordinary workers never
+damage/s. Each point costs `repairOilPerPoint` 0.2 L from its own tank and
+a proportional share of the building's construction cost from colony
+stores; a full repair costs 50% in lilac and oil. Ordinary workers never
 repair; the core is no building and takes nothing.
 
 The arriving crawler keeps its ID as the city's construction rig. The
@@ -1197,6 +1227,11 @@ before it hurts; ordinary workers never mend buildings; a mechanic repairs
 at a cost in oil but cannot out-repair continuing artillery fire; rival
 bullets and shells can damage and kill it, leaving a wreck; and a war
 factory in an old save still finishes its pending trooper. It also pins
+that colony and rival structures emit transient collapse events, debris
+merges with nearby projectile impacts, and manual demolition is quieter.
+`audio_test.go` pins the collapse sound's distance and dismantling levels.
+`shotstate_test.go` can write `NIEBLA_BUILDING_COLLAPSE_SHOT_STATE` for a
+visual capture. The combat tests also pin
 that a settled Nexus has no passive gun, the colony's artillery holds its
 fire at a Nexus nobody sees, fires once a spotter stands within sight,
 pays its shells, brings the Nexus down after shell flight and sends the

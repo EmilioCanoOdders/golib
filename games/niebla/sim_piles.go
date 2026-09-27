@@ -153,7 +153,7 @@ func (s *State) workDemolish(id int64) {
 		s.Buildings[id] = b
 		return
 	}
-	s.takeDown(b, demolishRefund)
+	s.takeDown(b, demolishRefund, BuildingDemolished)
 }
 
 // spillOverflow moves the lilac the stores no longer have a roof for

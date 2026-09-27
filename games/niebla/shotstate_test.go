@@ -305,3 +305,29 @@ func TestWriteShotRadialState(t *testing.T) {
 		write(full, Stock{Oil: 600, Lilac: 1200})
 	}
 }
+
+func TestWriteBuildingCollapseShotState(t *testing.T) {
+	path := os.Getenv("NIEBLA_BUILDING_COLLAPSE_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_BUILDING_COLLAPSE_SHOT_STATE to write a collapse shot state")
+	}
+	s := newGame()
+	noRivals(s)
+	col, row := groundNearCore()
+	building := raised(t, s, BuildingFactory, col, row)
+	building.Damage = buildingHealth(building.Kind) - 1
+	s.Buildings[building.ID] = building
+	x, y := cellCenterUnits(col, row)
+	s.fire(Shot{
+		Kind: ShotBullet, FromX: x - 9, FromY: y,
+		ToX: x, ToY: y, Building: building.ID,
+		Damage: 2, Rival: true,
+	})
+	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}

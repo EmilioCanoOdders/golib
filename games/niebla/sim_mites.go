@@ -64,7 +64,7 @@ func (s *State) hurtBuildingWithMites(id int64, damage float64) {
 		return
 	}
 	x, y := cellCenterUnits(b.Col, b.Row)
-	s.takeDown(b, wreckRefund)
+	s.takeDown(b, wreckRefund, BuildingDestroyed)
 	s.report(ReportMiteEaten, 0, x, y)
 }
 

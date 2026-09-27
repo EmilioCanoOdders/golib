@@ -55,10 +55,16 @@ const (
 	audioFloor     = 0.02      // quieter than this and a sound doesn't start
 )
 
+const (
+	buildingCrashVolume = 0.85 // a building coming apart
+	demolitionVolume    = 0.6  // manual dismantling is less violent
+)
+
 type audioField struct {
 	click    *golib.Sound
 	place    *golib.Sound
 	alert    *golib.Sound
+	collapse *golib.Sound
 	shell    *golib.Sound
 	shellFar *golib.Sound
 	burst    *golib.Sound
@@ -90,6 +96,7 @@ func newAudioField() *audioField {
 			Volume: 0.6,
 		}),
 		alert:    golib.NewSoundFile("sounds/alert.wav"),
+		collapse: golib.NewSoundFile("sounds/building-collapse.wav"),
 		shell:    golib.NewSoundFile("sounds/artillery-fire.ogg"),
 		shellFar: golib.NewSoundFile("sounds/artillery-fire-distant.ogg"),
 		burst: golib.NewSound(golib.SoundSpec{
@@ -134,6 +141,23 @@ func (a *audioField) placed() {
 
 func (a *audioField) warning() {
 	a.alert.PlayWith(alertVolume, 1)
+}
+
+func (a *audioField) buildingCollapsed(s *playScene, death BuildingDeath) {
+	if volume := a.buildingCollapseVolume(s, death); volume >= audioFloor {
+		a.collapse.PlayWith(volume, golib.RandomFloat(0.94, 1.06))
+	}
+}
+
+func (a *audioField) buildingCollapseVolume(
+	s *playScene,
+	death BuildingDeath,
+) float32 {
+	base := buildingCrashVolume
+	if death.Cause == BuildingDemolished {
+		base *= demolitionVolume
+	}
+	return a.audible(s, death.X, death.Y, float64(base))
 }
 
 // nearness says how close the view stands to the ground: the weight
@@ -220,6 +244,9 @@ func (a *audioField) audibleWithFalloff(
 func (a *audioField) update(s *playScene, ticks int) {
 	a.wind.SetVolume(windFarVolume + (windNearVolume-windFarVolume)*nearness(s.zoom))
 	a.wind.Loop()
+	for _, death := range s.state.BuildingDeaths {
+		a.buildingCollapsed(s, death)
+	}
 
 	if _, _, heard, _ := a.nearestDeposit(s, kindOil); heard > 0 {
 		a.oilBed.SetVolume(float32(math.Sqrt(float64(heard))) * poolBedVolume)

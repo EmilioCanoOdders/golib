@@ -228,7 +228,12 @@ func (a Demolish) apply(s *State) {
 // given part of what it and its pipes cost, the robot it was building,
 // the oil it held and what the stores lose the roof for fall on its cell
 // as one pile.
-func (s *State) takeDown(b Building, refund float64) {
+func (s *State) takeDown(
+	b Building,
+	refund float64,
+	cause BuildingDeathCause,
+) {
+	s.recordBuildingDeath(b, cause)
 	delete(s.Buildings, b.ID)
 	lilac, oil := buildingCost(b.Kind)
 	lilac *= refund

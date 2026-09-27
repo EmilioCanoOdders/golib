@@ -220,3 +220,24 @@ func TestAnUnseenShellLandingStillSoundsAtItsDestination(t *testing.T) {
 		t.Fatal("landed shell is still tracked as flying")
 	}
 }
+
+func TestBuildingCollapseAudioFollowsDistanceAndCause(t *testing.T) {
+	s := newPlayScene(nil)
+	cameraOver(s, 1000, 1000, 8)
+	destroyed := BuildingDeath{
+		Kind: BuildingFactory, Cause: BuildingDestroyed,
+		X: 1000, Y: 1000,
+	}
+	destroyedVolume := s.au.buildingCollapseVolume(s, destroyed)
+	destroyed.Cause = BuildingDemolished
+	demolishedVolume := s.au.buildingCollapseVolume(s, destroyed)
+	if demolishedVolume >= destroyedVolume || demolishedVolume <= 0 {
+		t.Fatalf("manual demolition volume %g, violent destruction %g",
+			demolishedVolume, destroyedVolume)
+	}
+	destroyed.X, destroyed.Y = 50000, 50000
+	destroyed.Cause = BuildingDestroyed
+	if got := s.au.buildingCollapseVolume(s, destroyed); got != 0 {
+		t.Fatalf("a distant collapse has volume %g, want silence", got)
+	}
+}

@@ -239,8 +239,11 @@ func tooltipLayoutForThings(
 		if b, ok := s.Buildings[thing.Ref]; ok && b.Damage > 0 &&
 			buildingType(b.Kind) == thing.Type {
 			left := 100 * (1 - b.Damage/buildingHealth(b.Kind))
+			repairLilac, repairOil := buildingRepairCost(b.Kind, b.Damage)
 			t.rows = append(t.rows, tooltipRow{thing: thing, detail: Detail{
 				"integrity", fmt.Sprintf("[danger]%.0f%%[/], mechanics can repair it", left),
+			}}, tooltipRow{thing: thing, detail: Detail{
+				"repair cost left", costWords(repairLilac, repairOil),
 			}})
 		}
 		if thing.Type == TypeFactory {

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
 
 	"golib"
@@ -275,6 +277,14 @@ func TestWarFactoryCardWaitsForRepairProtocolBeforeOfferingMechanic(t *testing.T
 		}
 		return false
 	}
+	hasRepairPrice := func(panel tooltip) bool {
+		for _, row := range panel.rows {
+			if row.detail.Label == "repair price" {
+				return true
+			}
+		}
+		return false
+	}
 	panel := tooltipLayout(s, camera, col, row, map[string]bool{})
 	if panel.findButton(buttonMechanic) != nil || hasMechanicDetails(panel) {
 		t.Fatal("the war factory reveals a mechanic before its schematics arrive")
@@ -290,8 +300,8 @@ func TestWarFactoryCardWaitsForRepairProtocolBeforeOfferingMechanic(t *testing.T
 	if panel.findButton(buttonMechanic) == nil {
 		t.Fatal("the repair protocol did not offer an affordable mechanic")
 	}
-	if !hasMechanicDetails(panel) {
-		t.Fatal("the war factory did not show the unlocked mechanic details")
+	if !hasMechanicDetails(panel) || !hasRepairPrice(panel) {
+		t.Fatal("the war factory did not show the repair cost details")
 	}
 	s.Stock.Lilac = mechanicCostLilac - 1
 	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
@@ -308,5 +318,56 @@ func TestWarFactoryCardWaitsForRepairProtocolBeforeOfferingMechanic(t *testing.T
 	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
 	if panel.findButton(buttonMechanic) != nil {
 		t.Fatal("the war factory offers a second mechanic after filling its slot")
+	}
+}
+
+func TestDamagedBuildingCardShowsItsRemainingRepairCost(t *testing.T) {
+	s := newGame()
+	col, row := groundNearCore()
+	building := raised(t, s, BuildingGuard, col, row)
+	building.Damage = buildingHealthPoints / 2
+	s.Buildings[building.ID] = building
+
+	camera := golib.NewCamera(screenWidth, screenHeight)
+	panel := tooltipLayout(s, camera, col, row, map[string]bool{})
+	wantLilac, wantOil := buildingRepairCost(
+		building.Kind, building.Damage,
+	)
+	want := costWords(wantLilac, wantOil)
+	for _, row := range panel.rows {
+		if row.detail.Label != "repair cost left" {
+			continue
+		}
+		if row.detail.Value != want {
+			t.Fatalf("the repair cost is %q, want %q", row.detail.Value, want)
+		}
+		return
+	}
+	t.Fatal("the damaged building card did not show its remaining repair cost")
+}
+
+func TestWriteRepairCostShotState(t *testing.T) {
+	path := os.Getenv("NIEBLA_REPAIR_COST_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_REPAIR_COST_SHOT_STATE to write a fixture")
+	}
+	s := newGame()
+	s.Tech[techRepairID] = true
+	s.Stock = Stock{Oil: 500, Lilac: 1000}
+	col, row := groundNearCore()
+	building := raised(t, s, BuildingGuard, col, row)
+	building.Damage = buildingHealthPoints / 2
+	s.Buildings[building.ID] = building
+
+	scene := newPlayScene(s)
+	gx, gy := projectBuilding(building)
+	click := scene.camera.ToScreen(golib.Vector2{X: gx, Y: gy})
+	t.Logf("damaged guard card click: %.0f,%.0f", click.X, click.Y)
+	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+	if err != nil {
+		t.Fatalf("the repair cost state does not marshal: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
 	}
 }

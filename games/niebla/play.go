@@ -157,9 +157,13 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 	// while the dev tools fast forward.
 	ticks := s.dev.ticksPerUpdate()
 	var deaths []UnitDeath
+	var buildingDeaths []BuildingDeath
 	for i := 0; i < ticks; i++ {
 		Apply(s.state, Tick{})
 		deaths = append(deaths, s.state.Deaths...)
+		buildingDeaths = append(
+			buildingDeaths, s.state.BuildingDeaths...,
+		)
 		s.au.update(s, 1)
 		if report, ok := latestReport(s.state); ok &&
 			(!hadReport || report != previousReport) {
@@ -176,7 +180,7 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 	s.clampRobotPage()
 	s.clampRobotPanel()
 	s.mites.update(s.state, dt)
-	s.fx.update(s.state, dt, deaths)
+	s.fx.update(s.state, dt, deaths, buildingDeaths)
 	s.savedTicks += int64(ticks)
 	if s.savedTicks >= autosaveTicks {
 		s.saveNow()

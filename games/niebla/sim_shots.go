@@ -14,7 +14,8 @@ import (
 //
 // Rival fire can hurt buildings and defenders: a building falls into a
 // wreck's pile when its damage reaches its health, and only mechanics
-// repair one, spending oil from their tanks. The core takes nothing.
+// repair one, spending oil from their tanks and the building's proportional
+// repair cost from colony stores. The core takes nothing.
 
 // Tuning: the shots' numbers, with units in the name.
 const (
@@ -41,6 +42,7 @@ const (
 	protectorHealthPoints = 300.0
 	repairPerSecond       = 6.0 // damage a mechanic repairs
 	repairOilPerPoint     = 0.2 // L a mechanic spends per point repaired
+	repairCostShare       = 0.5 // share of construction cost for a full repair
 	wreckRefund           = 0.5 // the part of its cost a destroyed building leaves
 )
 
@@ -215,6 +217,17 @@ func buildingHealth(kind BuildingKind) float64 {
 	return buildingHealthPoints
 }
 
+func buildingRepairCost(kind BuildingKind, damage float64) (lilac, oil float64) {
+	health := buildingHealth(kind)
+	if damage <= 0 || health <= 0 {
+		return 0, 0
+	}
+
+	fraction := math.Min(damage/health, 1) * repairCostShare
+	lilac, oil = buildingCost(kind)
+	return lilac * fraction, oil * fraction
+}
+
 // hurtBuilding adds to the damage a building has taken; one that has
 // taken all it stands falls, and the colony is told.
 func (s *State) hurtBuilding(id int64, damage float64) {
@@ -228,7 +241,7 @@ func (s *State) hurtBuilding(id int64, damage float64) {
 		return
 	}
 	x, y := cellCenterUnits(b.Col, b.Row)
-	s.takeDown(b, wreckRefund)
+	s.takeDown(b, wreckRefund, BuildingDestroyed)
 	s.report(ReportRazed, 0, x, y)
 }
 
@@ -242,17 +255,31 @@ func damagedBuilding(s *State) (Building, bool) {
 	return Building{}, false
 }
 
-// mend repairs a building for one mechanic tick, spending its tank's oil.
+// mend repairs a building for one mechanic tick, spending colony resources
+// and the mechanic's tank in proportion to the damage it removes.
 func (s *State) mend(id int64, mechanic *Robot) {
 	if b, ok := s.Buildings[id]; ok {
 		repair := math.Min(repairPerSecond/60, b.Damage)
 		repair = math.Min(repair, mechanic.Tank/repairOilPerPoint)
+		constructionLilac, constructionOil := buildingCost(b.Kind)
+		health := buildingHealth(b.Kind)
+		lilacPerPoint := constructionLilac * repairCostShare / health
+		oilPerPoint := constructionOil * repairCostShare / health
+		if lilacPerPoint > 0 {
+			repair = math.Min(repair, s.Stock.Lilac/lilacPerPoint)
+		}
+		if oilPerPoint > 0 {
+			repair = math.Min(repair, oilTotal(s)/oilPerPoint)
+		}
 		if repair <= 0 {
 			return
 		}
+		lilac, oil := buildingRepairCost(b.Kind, repair)
 		b.Damage = math.Max(0, b.Damage-repair)
 		mechanic.Tank = math.Max(0,
 			mechanic.Tank-repair*repairOilPerPoint)
+		s.Stock.Lilac = math.Max(0, s.Stock.Lilac-lilac)
+		s.payOil(oil)
 		s.Buildings[id] = b
 	}
 }

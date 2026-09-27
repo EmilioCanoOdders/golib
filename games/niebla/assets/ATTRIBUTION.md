@@ -60,3 +60,12 @@ troopers' and the rivals'.
 | Source | "Bubbling Acid" by spookymodem, OpenGameArt, <https://opengameart.org/content/bubbling-acid> |
 | License | Creative Commons CC-BY 3.0, <https://creativecommons.org/licenses/by/3.0/> |
 | Author | spookymodem |
+
+**`sounds/building-collapse.wav`**: the metallic clatter when a building
+comes apart.
+
+| Field | Value |
+| --- | --- |
+| Source | "Mechanical Explosion" by Spring Spring, OpenGameArt, <https://opengameart.org/content/mechanical-explosion> |
+| License | Creative Commons CC0 1.0, <https://creativecommons.org/publicdomain/zero/1.0/> |
+| Author | Spring Spring |

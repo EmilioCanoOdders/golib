@@ -54,11 +54,11 @@ func TestShellLeavesSubtleSmokeAlongItsFlight(t *testing.T) {
 	}
 	shot.X, shot.Y = shot.FromX, shot.FromY
 	s := &State{Shots: map[int64]Shot{shot.ID: shot}}
-	f.update(s, 1.0/60, nil)
+	f.update(s, 1.0/60, nil, nil)
 	shot.X = shot.FromX + shellSmokeStepUnits*2 + shellSmokeStepUnits/2
 	shot.Y = shot.FromY
 	s.Shots[shot.ID] = shot
-	f.update(s, 1.0/60, nil)
+	f.update(s, 1.0/60, nil, nil)
 
 	trailPuffs := 0
 	for _, particle := range f.sparks {
@@ -220,6 +220,112 @@ func TestTickReportsFogDeathsButNotDepartingRivals(t *testing.T) {
 	})
 }
 
+func TestBuildingDeathsAreTransientAndNameTheirCause(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	col, row := groundNearCore()
+	destroyed := raised(t, s, BuildingGuard, col, row)
+	demolished := raised(t, s, BuildingFactory, col+2, row)
+
+	s.hurtBuilding(destroyed.ID, buildingHealth(destroyed.Kind))
+	demolished.Demolish = 1
+	s.Buildings[demolished.ID] = demolished
+	s.workDemolish(demolished.ID)
+
+	if len(s.BuildingDeaths) != 2 {
+		t.Fatalf("the takedowns reported %d building deaths, want 2: %+v",
+			len(s.BuildingDeaths), s.BuildingDeaths)
+	}
+	got := map[int64]BuildingDeath{}
+	for _, death := range s.BuildingDeaths {
+		got[death.ID] = death
+	}
+	if death := got[destroyed.ID]; death.Cause != BuildingDestroyed ||
+		death.Kind != destroyed.Kind {
+		t.Errorf("the destroyed building receipt is %+v", death)
+	}
+	if death := got[demolished.ID]; death.Cause != BuildingDemolished ||
+		death.Kind != demolished.Kind {
+		t.Errorf("the demolished building receipt is %+v", death)
+	}
+
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var loaded State
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.BuildingDeaths) != 0 {
+		t.Fatalf("building death receipts survived a save: %+v",
+			loaded.BuildingDeaths)
+	}
+	Apply(s, Tick{})
+	if len(s.BuildingDeaths) != 0 {
+		t.Fatalf("building death receipts outlived their tick: %+v",
+			s.BuildingDeaths)
+	}
+}
+
+func TestDestroyedCityStructureEmitsABuildingDeath(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	cityID := s.foundCity(3300, 3000, 0.4)
+	rigID := s.Cities[cityID].BuildingIDs[0]
+	s.killEnemy(rigID)
+	if len(s.BuildingDeaths) != 1 {
+		t.Fatalf("the destroyed city rig produced %d collapse events: %+v",
+			len(s.BuildingDeaths), s.BuildingDeaths)
+	}
+	death := s.BuildingDeaths[0]
+	if death.RivalKind != EnemyCityCrawler ||
+		death.Cause != BuildingDestroyed {
+		t.Fatalf("the city rig's collapse event is %+v", death)
+	}
+}
+
+func TestCityCoreCollapseRecordsItsWholeCity(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	cityID := s.foundCity(3300, 3000, 0.4)
+	city := s.Cities[cityID]
+	repulsorID := s.NextID
+	s.NextID++
+	baseID := s.NextID
+	s.NextID++
+	s.Enemies[repulsorID] = Enemy{
+		ID: repulsorID, Kind: EnemyCityRepulsor,
+		X: city.X + 30, Y: city.Y + 30,
+		Health: enemySpecOf(EnemyCityRepulsor).health, City: cityID,
+	}
+	s.Enemies[baseID] = Enemy{
+		ID: baseID, Kind: EnemyBase,
+		X: city.X, Y: city.Y,
+		Health: enemySpecOf(EnemyBase).health, City: cityID,
+	}
+	city.NexusID = baseID
+	city.BuildingIDs = append(city.BuildingIDs, repulsorID, baseID)
+	s.Cities[cityID] = city
+
+	s.killEnemy(baseID)
+	if len(s.BuildingDeaths) != 3 {
+		t.Fatalf("the falling city made %d collapse events: %+v",
+			len(s.BuildingDeaths), s.BuildingDeaths)
+	}
+	got := map[EnemyKind]bool{}
+	for _, death := range s.BuildingDeaths {
+		got[death.RivalKind] = true
+	}
+	for _, kind := range []EnemyKind{
+		EnemyBase, EnemyCityCrawler, EnemyCityRepulsor,
+	} {
+		if !got[kind] {
+			t.Errorf("the city's %s has no collapse event", kind)
+		}
+	}
+}
+
 func TestUnitExplosionProfilesGiveArtilleryTheLargestBlast(t *testing.T) {
 	if len(robotExplosions) != 4 {
 		t.Fatalf(
@@ -265,6 +371,40 @@ func TestUnitExplosionMergesWithItsImpact(t *testing.T) {
 	}
 	if len(f.sparks) >= fullSparks*2 {
 		t.Fatalf("the merged explosion duplicated its full particle burst: %d", len(f.sparks))
+	}
+}
+
+func TestBuildingCollapseThrowsMetalAndMergesWithItsImpact(t *testing.T) {
+	destroyed := BuildingDeath{
+		Kind: BuildingFactory, Cause: BuildingDestroyed,
+		X: 120, Y: 240,
+	}
+	f := newFxField()
+	f.spawnBuildingCollapse(destroyed, nil)
+	fullShards := len(f.shards)
+	fullSparks := len(f.sparks)
+	if fullShards == 0 || fullSparks == 0 || len(f.flashes) != 1 {
+		t.Fatalf("the collapse made %d shards, %d sparks and %d flashes",
+			fullShards, fullSparks, len(f.flashes))
+	}
+
+	demolished := newFxField()
+	destroyed.Cause = BuildingDemolished
+	demolished.spawnBuildingCollapse(destroyed, nil)
+	if len(demolished.shards) >= fullShards ||
+		len(demolished.sparks) >= fullSparks {
+		t.Fatalf("manual demolition was not quieter: %d shards, %d sparks",
+			len(demolished.shards), len(demolished.sparks))
+	}
+
+	merged := newFxField()
+	destroyed.Cause = BuildingDestroyed
+	impact := Shot{Kind: ShotShell, ToX: destroyed.X, ToY: destroyed.Y}
+	merged.spawnBuildingCollapse(destroyed, []Shot{impact})
+	if len(merged.flashes) != 0 || len(merged.shards) >= fullShards ||
+		len(merged.sparks) >= fullSparks {
+		t.Fatalf("the shell impact was doubled by the collapse: %d flashes, %d shards, %d sparks",
+			len(merged.flashes), len(merged.shards), len(merged.sparks))
 	}
 }
 
@@ -557,11 +697,137 @@ func TestOnlyAMechanicRepairsAndSpendsOil(t *testing.T) {
 		t.Fatalf("the mechanic left the silo at %v damage",
 			s.Buildings[silo.ID].Damage)
 	}
+	repairLilac, repairOil := buildingRepairCost(silo.Kind, 120)
+	if math.Abs(s.Stock.Lilac-(2500-mechanicCostLilac-repairLilac)) > 0.001 ||
+		math.Abs(s.Stock.Oil-(1000-mechanicCostOil-repairOil)) > 0.001 {
+		t.Errorf("the repair left stores at %+v, want its proportional cost paid",
+			s.Stock)
+	}
 	mechanic = s.Robots[mechanic.ID]
 	wantTank := robotTankLiters - 120*repairOilPerPoint
 	if math.Abs(mechanic.Tank-wantTank) > 0.001 {
 		t.Errorf("the mechanic has %v L left, want %v after repairs",
 			mechanic.Tank, wantTank)
+	}
+}
+
+func TestRepairCostIsHalfTheBuildingCostAtFullIntegrity(t *testing.T) {
+	cases := []struct {
+		kind   BuildingKind
+		health float64
+	}{
+		{kind: BuildingSilo, health: buildingHealthPoints},
+		{kind: BuildingGuard, health: buildingHealthPoints},
+		{kind: BuildingProtector, health: protectorHealthPoints},
+	}
+	for _, test := range cases {
+		constructionLilac, constructionOil := buildingCost(test.kind)
+		gotLilac, gotOil := buildingRepairCost(test.kind, test.health)
+		if gotLilac != constructionLilac*repairCostShare ||
+			gotOil != constructionOil*repairCostShare {
+			t.Errorf("a full %s repair costs %v kg and %v L; want %v kg and %v L",
+				test.kind, gotLilac, gotOil,
+				constructionLilac*repairCostShare,
+				constructionOil*repairCostShare)
+		}
+	}
+}
+
+func TestRepairKeepsBuildingOilSeparateFromItsTwoCosts(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	s.Stock = Stock{Oil: 500, Lilac: 1000}
+	col, row := groundNearCore()
+	protector := raised(t, s, BuildingProtector, col, row)
+	protector.Damage = protectorHealthPoints / 2
+	s.Buildings[protector.ID] = protector
+
+	x, y := cellCenterUnits(col, row)
+	mechanicID := s.spawnRobot(RobotRepair, x, y)
+	mechanic := s.Robots[mechanicID]
+	for i := 0; i < 60*60 && s.Buildings[protector.ID].Damage > 0; i++ {
+		s.mend(protector.ID, &mechanic)
+	}
+
+	repairLilac, repairOil := buildingRepairCost(
+		BuildingProtector, protectorHealthPoints/2,
+	)
+	if got := s.Buildings[protector.ID].Damage; got > 1e-9 {
+		t.Errorf("the protector still has %v damage after repair", got)
+	}
+	if math.Abs(s.Stock.Lilac-(1000-repairLilac)) > 0.001 ||
+		math.Abs(s.Stock.Oil-(500-repairOil)) > 0.001 {
+		t.Errorf("repair left stores at %+v, want its construction share paid",
+			s.Stock)
+	}
+	if got := s.Buildings[protector.ID].Oil; got != protectorCostOil {
+		t.Errorf("repair changed the protector's own tank to %v L", got)
+	}
+	wantMechanicTank := robotTankLiters -
+		protectorHealthPoints/2*repairOilPerPoint
+	if math.Abs(mechanic.Tank-wantMechanicTank) > 0.001 {
+		t.Errorf("the mechanic has %v L, want %v L after its own fuel use",
+			mechanic.Tank, wantMechanicTank)
+	}
+}
+
+func TestRepairWaitsForBothConstructionResources(t *testing.T) {
+	cases := []struct {
+		name          string
+		kind          BuildingKind
+		lilac, oil    float64
+		wantRepair    float64
+		wantLilacCost float64
+		wantOilCost   float64
+	}{
+		{
+			name:  "lilac",
+			kind:  BuildingSilo,
+			lilac: 0.01, oil: 500,
+			wantRepair: 0.04, wantLilacCost: 0.01,
+		},
+		{
+			name:  "oil",
+			kind:  BuildingGuard,
+			lilac: 500, oil: 0.005,
+			wantRepair: 0.005 /
+				(guardCostOil * repairCostShare / buildingHealthPoints),
+			wantLilacCost: 0.005 /
+				(guardCostOil * repairCostShare / buildingHealthPoints) *
+				(guardCostLilac * repairCostShare / buildingHealthPoints),
+			wantOilCost: 0.005,
+		},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			s := newGame()
+			noRivals(s)
+			s.Stock = Stock{Oil: test.oil, Lilac: test.lilac}
+			col, row := groundNearCore()
+			building := raised(t, s, test.kind, col, row)
+			building.Damage = 100
+			s.Buildings[building.ID] = building
+			x, y := cellCenterUnits(col, row)
+			mechanicID := s.spawnRobot(RobotRepair, x, y)
+			mechanic := s.Robots[mechanicID]
+
+			s.mend(building.ID, &mechanic)
+
+			gotRepair := 100 - s.Buildings[building.ID].Damage
+			if math.Abs(gotRepair-test.wantRepair) > 0.001 {
+				t.Errorf("the repair advanced %.6f points, want %.6f",
+					gotRepair, test.wantRepair)
+			}
+			if math.Abs(test.lilac-s.Stock.Lilac-test.wantLilacCost) > 0.001 ||
+				math.Abs(test.oil-s.Stock.Oil-test.wantOilCost) > 0.001 {
+				t.Errorf("repair spent %.6f kg and %.6f L, want %.6f kg and %.6f L",
+					test.lilac-s.Stock.Lilac, test.oil-s.Stock.Oil,
+					test.wantLilacCost, test.wantOilCost)
+			}
+			if s.Stock.Lilac < 0 || s.Stock.Oil < 0 {
+				t.Errorf("repair made colony stores negative: %+v", s.Stock)
+			}
+		})
 	}
 }
 
@@ -759,6 +1025,11 @@ func TestArtilleryShellsWhatTheColonySeesAndCityNexusFalls(t *testing.T) {
 	}
 	if _, stands := s.Enemies[core.ID]; stands {
 		t.Fatalf("the artillery never brought the Nexus down")
+	}
+	if len(s.BuildingDeaths) != 1 ||
+		s.BuildingDeaths[0].RivalKind != EnemyBase {
+		t.Errorf("the fallen Nexus has no building collapse event: %+v",
+			s.BuildingDeaths)
 	}
 	found := false
 	for _, r := range s.Reports {

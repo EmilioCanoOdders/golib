@@ -754,6 +754,9 @@ func (s *State) killEnemy(id int64) {
 		return
 	}
 	s.recordEnemyDeath(e)
+	if isRivalBuilding(e) {
+		s.recordRivalBuildingDeath(e)
+	}
 	delete(s.Enemies, id)
 	if e.City != 0 && (e.Party == 0 || e.Kind == EnemyBase) {
 		city, belongs := s.Cities[e.City]
@@ -762,6 +765,10 @@ func (s *State) killEnemy(id int64) {
 				(e.Kind == EnemyCityCrawler &&
 					!cityHasBuilding(s, city, EnemyBase)) {
 				for _, buildingID := range city.BuildingIDs {
+					if building, found := s.Enemies[buildingID]; found &&
+						isRivalBuilding(building) {
+						s.recordRivalBuildingDeath(building)
+					}
 					delete(s.Enemies, buildingID)
 				}
 				delete(s.Cities, city.ID)
@@ -787,6 +794,17 @@ func (s *State) killEnemy(id int64) {
 	col := int(clamp64(math.Floor(e.X/buildingCell), 0, regionCellCols-1))
 	row := int(clamp64(math.Floor(e.Y/buildingCell), 0, regionCellRows-1))
 	s.dropPile(col, row, spec.lootOil+e.Oil, spec.lootLilac)
+}
+
+func isRivalBuilding(e Enemy) bool {
+	switch e.Kind {
+	case EnemyBase, EnemyCityRepulsor, EnemyCityOilworks,
+		EnemyCityMine, EnemyCityFactory:
+		return true
+	case EnemyCityCrawler:
+		return e.City != 0 && e.Party == 0
+	}
+	return false
 }
 
 // Guard posts: the colony's first answer. A post shoots the nearest rival
