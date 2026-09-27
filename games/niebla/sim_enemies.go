@@ -303,7 +303,7 @@ func stepRaids(s *State) {
 		return
 	}
 	if city, ok := s.Cities[s.Raids.PressureCity]; ok &&
-		city.Stage < len(cityBuildOrder) {
+		!city.Ruined && cityNeedsConstruction(s, city) {
 		s.spawnVisit()
 		return
 	}
@@ -426,6 +426,11 @@ func stepParty(s *State, p Party) {
 		return
 	}
 	lead := members[0]
+	if city, ok := s.Cities[p.City]; p.City != 0 && ok &&
+		city.Ruined && !p.CityArrives {
+		p.Stage = StageLeave
+		p.EntryX, p.EntryY = city.X, city.Y
+	}
 	// With its repulsor gone a party has nothing left to do but run.
 	if enemySpecOf(lead.Kind).bubble <= 0 &&
 		(p.City == 0 ||
@@ -441,7 +446,7 @@ func stepParty(s *State, p Party) {
 			crawler := s.Enemies[lead.ID]
 			coreX, coreY := tileCenterUnits(coreCol, coreRow)
 			angle := math.Atan2(crawler.Y-coreY, crawler.X-coreX)
-			cityID := s.foundCityFromCrawler(crawler, angle)
+			cityID := s.foundCityFromCrawler(crawler, angle, p.City)
 			city := s.Cities[cityID]
 			crawler.Kind = EnemyCityCrawler
 			crawler.Party, crawler.City = 0, cityID
@@ -532,6 +537,14 @@ func stepParty(s *State, p Party) {
 			for _, e := range members {
 				stolen += e.Oil
 			}
+			if city, ok := s.Cities[p.City]; p.City != 0 &&
+				(!ok || city.Ruined) {
+				for _, e := range members {
+					delete(s.Enemies, e.ID)
+				}
+				s.endParty(p, ReportLeft, stolen, p.EntryX, p.EntryY)
+				return
+			}
 			if p.City != 0 && stolen > 0 {
 				city, ok := s.Cities[p.City]
 				if ok {
@@ -578,7 +591,13 @@ func (s *State) endParty(p Party, kind ReportKind, oil, x, y float64) {
 	}
 	if p.City != 0 {
 		if city, ok := s.Cities[p.City]; ok {
-			city.NextSortie = s.Ticks + cityRebuildTicks
+			if city.Ruined {
+				if p.CityArrives {
+					city.RefoundAt = s.Ticks + cityRefoundDelayTicks
+				}
+			} else {
+				city.NextSortie = s.Ticks + cityRebuildTicks
+			}
 			s.Cities[city.ID] = city
 		}
 		return
@@ -593,7 +612,7 @@ func (s *State) scheduleNextParty() {
 		s.Raids.NextAt = s.Ticks + raidFollowupTicks
 		return
 	}
-	if exists && city.Stage < len(cityBuildOrder) {
+	if exists && !city.Ruined && cityNeedsConstruction(s, city) {
 		s.Raids.NextAt = s.Ticks + raidFollowupTicks
 		return
 	}
@@ -756,36 +775,30 @@ func (s *State) killEnemy(id int64) {
 	if !ok {
 		return
 	}
+	city, belongs := s.Cities[e.City]
+	oldStage, hadWork := cityNextBuildingStage(s, city)
 	s.recordEnemyDeath(e)
 	if isRivalBuilding(e) {
 		s.recordRivalBuildingDeath(e)
 	}
 	delete(s.Enemies, id)
-	if e.City != 0 && (e.Party == 0 || e.Kind == EnemyBase) {
-		city, belongs := s.Cities[e.City]
-		if belongs {
-			if e.Kind == EnemyBase ||
-				(e.Kind == EnemyCityCrawler &&
-					!cityHasBuilding(s, city, EnemyBase)) {
-				for _, buildingID := range city.BuildingIDs {
-					if building, found := s.Enemies[buildingID]; found &&
-						isRivalBuilding(building) {
-						s.recordRivalBuildingDeath(building)
-					}
-					delete(s.Enemies, buildingID)
-				}
-				delete(s.Cities, city.ID)
-				s.report(ReportBaseDown, 0, e.X, e.Y)
-			} else {
-				for i, buildingID := range city.BuildingIDs {
-					if buildingID == id {
-						city.BuildingIDs = append(city.BuildingIDs[:i],
-							city.BuildingIDs[i+1:]...)
-						break
-					}
-				}
-				s.Cities[city.ID] = city
+	stage := cityStageForEnemy(e.Kind)
+	if e.City != 0 && belongs && (e.Party == 0 || stage >= 0) {
+		removeCityBuilding(&city, id)
+		if e.Kind == EnemyBase {
+			city.NexusID = 0
+		}
+		if stage >= 0 && city.Stage > 0 &&
+			!cityHasStructures(s, city) {
+			s.ruinCity(&city)
+			s.report(ReportBaseDown, 0, city.X, city.Y)
+		} else {
+			newStage, needsWork := cityNextBuildingStage(s, city)
+			if needsWork && (!hadWork || oldStage != newStage) {
+				city.Work = cityBuildTicks
+				city.MiteDamage = 0
 			}
+			s.Cities[city.ID] = city
 		}
 	}
 	if e.Kind == EnemyBase {
@@ -808,6 +821,36 @@ func isRivalBuilding(e Enemy) bool {
 		return e.City != 0 && e.Party == 0
 	}
 	return false
+}
+
+func (s *State) ruinCity(city *City) {
+	for _, id := range city.BuildingIDs {
+		if building, found := s.Enemies[id]; found &&
+			isRivalBuilding(building) {
+			s.recordRivalBuildingDeath(building)
+		}
+		delete(s.Enemies, id)
+	}
+	city.BuildingIDs = nil
+	city.Ruined = true
+	city.RefoundAt = s.Ticks + cityRefoundDelayTicks
+	city.Work = 0
+	city.MiteDamage = 0
+	city.Oil = 0
+	city.Lilac = 0
+	city.OilDeposit = 0
+	city.LilacDeposit = 0
+	for _, partyID := range sortedPartyIDs(s) {
+		party := s.Parties[partyID]
+		if party.City != city.ID || party.CityArrives {
+			continue
+		}
+		party.Stage = StageLeave
+		party.Wait = 0
+		party.EntryX, party.EntryY = city.X, city.Y
+		s.Parties[partyID] = party
+	}
+	s.Cities[city.ID] = *city
 }
 
 // Guard posts: the colony's first answer. A post shoots the nearest rival

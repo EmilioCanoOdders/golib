@@ -118,10 +118,11 @@ func drawEnemies(
 func drawCityConstruction(s *State, screen *golib.Screen, zoom float32) {
 	for _, id := range sortedCityIDs(s) {
 		city := s.Cities[id]
-		if city.Stage >= len(cityBuildOrder) {
+		stage, building := cityNextBuildingStage(s, city)
+		if !building {
 			continue
 		}
-		x, y := cityBuildingPosition(city, city.Stage)
+		x, y := cityBuildingPosition(city, stage)
 		gx, gy := project(float32(x), float32(y))
 		gray := golib.Color{R: 158, G: 169, B: 172, A: 255}
 		w := dotRadius(11, zoom, 5)
@@ -292,13 +293,22 @@ func threatWords(s *State) string {
 	}
 	for _, id := range sortedCityIDs(s) {
 		city := s.Cities[id]
-		if city.AnnounceUntil <= s.Ticks {
+		if city.Ruined {
 			continue
 		}
 		where := compassWord(city.X, city.Y)
-		if city.Stage < len(cityBuildOrder) {
+		stage, building := cityNextBuildingStage(s, city)
+		if city.Stage == len(cityBuildOrder) && building &&
+			cityHasStructures(s, city) {
+			return fmt.Sprintf("rival city %s, rebuilding %s",
+				where, cityBuildingName(cityBuildOrder[stage]))
+		}
+		if city.AnnounceUntil <= s.Ticks {
+			continue
+		}
+		if building {
 			return fmt.Sprintf("rival city %s, building %s",
-				where, cityBuildingName(cityBuildOrder[city.Stage]))
+				where, cityBuildingName(cityBuildOrder[stage]))
 		}
 		left := city.NextSortie - s.Ticks
 		if left < 0 {
@@ -337,7 +347,10 @@ func reportWords(r Report) string {
 	case ReportGun:
 		return fmt.Sprintf("A rival building to the %s is complete.", where)
 	case ReportBaseDown:
-		return fmt.Sprintf("The rival city to the %s has fallen.", where)
+		return fmt.Sprintf(
+			"The rival city to the %s was razed. A crawler will seek a new site.",
+			where,
+		)
 	case ReportSortie:
 		return fmt.Sprintf("[danger]A rival battalion is attacking from the %s.[/]",
 			where)

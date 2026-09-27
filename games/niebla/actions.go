@@ -416,7 +416,7 @@ type DevFinishCityBuilding struct{}
 func (DevFinishCityBuilding) apply(s *State) {
 	for _, id := range sortedCityIDs(s) {
 		city := s.Cities[id]
-		if city.Stage < len(cityBuildOrder) {
+		if cityNeedsConstruction(s, city) {
 			s.finishCityBuilding(&city)
 			s.Cities[id] = city
 			return

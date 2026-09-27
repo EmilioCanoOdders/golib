@@ -15,6 +15,7 @@ const (
 	cityOilReserve          = 900.0
 	cityLilacReserve        = 1800.0
 	cityRebuildTicks        = 60 * 60
+	cityRefoundDelayTicks   = 60 * 60
 	citySortieCooldownTicks = 90 * 60
 	cityUnloadPerSecond     = siphonLitersPerSecond
 )
@@ -25,8 +26,8 @@ type City struct {
 	X, Y          float64
 	Angle         float64
 	AnnounceUntil int64
-	Stage         int
-	Work          int64
+	Stage         int   // founding-order stages completed; never moves backward
+	Work          int64 // ticks left on the first missing building
 	MiteDamage    float64 // damage to the city building site
 	Oil           float64
 	Lilac         float64
@@ -35,6 +36,8 @@ type City struct {
 	NextSortie    int64 // earliest tick a new city force can launch
 	Sorties       int64 // complete city forces produced
 	BuildingIDs   []int64
+	Ruined        bool  // all city structures are gone; a crawler will return
+	RefoundAt     int64 // earliest tick a replacement crawler may launch
 }
 
 const (
@@ -183,26 +186,37 @@ func (s *State) nextCitySpot() (float64, float64, float64, bool) {
 	return 0, 0, 0, false
 }
 
-func (s *State) foundCityFromCrawler(crawler Enemy, angle float64) int64 {
+func (s *State) foundCityFromCrawler(
+	crawler Enemy, angle float64, cityID int64,
+) int64 {
 	if s.Cities == nil {
 		s.Cities = map[int64]City{}
 	}
-	id := s.NextID
-	s.NextID++
+	if city, ok := s.Cities[cityID]; !ok || !city.Ruined {
+		cityID = 0
+	}
+	if cityID == 0 {
+		cityID = s.NextID
+		s.NextID++
+	}
 	nexusID := s.NextID
 	s.NextID++
-	s.Cities[id] = City{
-		ID: id, NexusID: nexusID,
+	s.Cities[cityID] = City{
+		ID: cityID, NexusID: nexusID,
 		X: crawler.X, Y: crawler.Y, Angle: angle,
 		AnnounceUntil: s.Ticks + cityAnnouncementTicks,
 		Work:          cityBuildTicks,
 		OilDeposit:    cityOilReserve, LilacDeposit: cityLilacReserve,
 		BuildingIDs: []int64{crawler.ID},
 	}
-	return id
+	return cityID
 }
 
 func (s *State) spawnCityVisit() bool {
+	return s.spawnCityVisitFor(0)
+}
+
+func (s *State) spawnCityVisitFor(cityID int64) bool {
 	if s.Enemies == nil {
 		s.Enemies = map[int64]Enemy{}
 	}
@@ -224,7 +238,7 @@ func (s *State) spawnCityVisit() bool {
 	partyID := s.NextID
 	s.NextID++
 	party := Party{
-		ID: partyID, Stage: StageApproach,
+		ID: partyID, City: cityID, Stage: StageApproach,
 		EntryX: campX, EntryY: campY, CampX: campX, CampY: campY,
 		CityArrives: true,
 	}
@@ -248,7 +262,16 @@ func stepCities(s *State) {
 }
 
 func stepCity(s *State, city *City) {
-	if city.Stage < len(cityBuildOrder) {
+	if city.Ruined {
+		if s.Ticks < city.RefoundAt || movingParty(s) {
+			return
+		}
+		if !s.spawnCityVisitFor(city.ID) {
+			city.RefoundAt = s.Ticks + fogCycleTicks
+		}
+		return
+	}
+	if _, building := cityNextBuildingStage(s, *city); building {
 		city.Work--
 		if city.Work <= 0 {
 			s.finishCityBuilding(city)
@@ -367,35 +390,87 @@ func cityHasBuilding(s *State, city City, kind EnemyKind) bool {
 	return false
 }
 
-func (s *State) finishCityBuilding(city *City) {
-	if city.Stage >= len(cityBuildOrder) {
+func cityNextBuildingStage(s *State, city City) (int, bool) {
+	if city.Ruined {
+		return 0, false
+	}
+	for stage, kind := range cityBuildOrder {
+		if !cityHasBuilding(s, city, cityBuildingSpec(kind).kind) {
+			return stage, true
+		}
+	}
+	return 0, false
+}
+
+func cityNeedsConstruction(s *State, city City) bool {
+	_, building := cityNextBuildingStage(s, city)
+	return building
+}
+
+func cityHasStructures(s *State, city City) bool {
+	for _, kind := range cityBuildOrder {
+		if cityHasBuilding(s, city, cityBuildingSpec(kind).kind) {
+			return true
+		}
+	}
+	return false
+}
+
+func cityStageForEnemy(kind EnemyKind) int {
+	for stage, building := range cityBuildOrder {
+		if cityBuildingSpec(building).kind == kind {
+			return stage
+		}
+	}
+	return -1
+}
+
+func removeCityBuilding(city *City, id int64) {
+	for i, buildingID := range city.BuildingIDs {
+		if buildingID != id {
+			continue
+		}
+		city.BuildingIDs = append(city.BuildingIDs[:i],
+			city.BuildingIDs[i+1:]...)
 		return
 	}
-	stage := city.Stage
+}
+
+func (s *State) finishCityBuilding(city *City) {
+	stage, building := cityNextBuildingStage(s, *city)
+	if !building {
+		return
+	}
 	kind := cityBuildOrder[stage]
 	eid := int64(0)
-	if kind == CityCore && city.NexusID != 0 {
-		eid = city.NexusID
+	if kind == CityCore {
+		if city.NexusID != 0 {
+			eid = city.NexusID
+		} else {
+			eid = s.NextID
+			s.NextID++
+			city.NexusID = eid
+		}
 	} else {
 		eid = s.NextID
 		s.NextID++
-		if kind == CityCore {
-			city.NexusID = eid
-		}
 	}
 	spec := cityBuildingSpec(kind)
-	x, y := cityBuildingPosition(*city, city.Stage)
+	x, y := cityBuildingPosition(*city, stage)
 	s.Enemies[eid] = Enemy{
 		ID: eid, Kind: spec.kind, X: x, Y: y,
 		Health: spec.health, City: city.ID,
 	}
 	city.BuildingIDs = append(city.BuildingIDs, eid)
-	city.Stage++
+	if stage == city.Stage {
+		city.Stage++
+	}
 	city.Work = cityBuildTicks
 	city.MiteDamage = 0
 	s.report(ReportCityBuilding, 0, city.X, city.Y)
 	s.Reports[len(s.Reports)-1].Stage = int64(stage)
-	if city.Stage == len(cityBuildOrder) {
+	if city.Stage == len(cityBuildOrder) &&
+		!cityNeedsConstruction(s, *city) {
 		city.NextSortie = s.Ticks
 		if s.Raids.PressureCity == city.ID {
 			s.Raids.NextAt = s.Ticks +
@@ -405,7 +480,7 @@ func (s *State) finishCityBuilding(city *City) {
 }
 
 func (s *State) finishCitySortie(city *City) {
-	if movingParty(s) {
+	if city.Ruined || cityNeedsConstruction(s, *city) || movingParty(s) {
 		return
 	}
 	if !cityHasBuilding(s, *city, EnemyCityFactory) {
@@ -593,9 +668,11 @@ func cityBuildingCaption(s *State, e Enemy) string {
 	case EnemyCityFactory:
 		return "building the next force"
 	}
-	if city, ok := s.Cities[e.City]; ok && city.Stage < len(cityBuildOrder) {
-		return fmt.Sprintf("city construction: %s",
-			cityBuildingName(cityBuildOrder[city.Stage]))
+	if city, ok := s.Cities[e.City]; ok {
+		if stage, building := cityNextBuildingStage(s, city); building {
+			return fmt.Sprintf("city construction: %s",
+				cityBuildingName(cityBuildOrder[stage]))
+		}
 	}
 	return "city structure"
 }

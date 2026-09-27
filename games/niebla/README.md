@@ -294,6 +294,20 @@ NIEBLA_BUILDING_COLLAPSE_SHOT_STATE=../../build/niebla/collapse.json \
   --input "Enter@1 Mouse@2:664,374 MouseWheel@2:5"
 ```
 
+To inspect a rebuilding city and a replacement crawler approaching a new
+site:
+
+```text
+NIEBLA_CITY_REBUILD_SHOT_STATE=../../build/niebla/city-rebuild.json \
+  ./golib go -C games/niebla test -run TestWriteCityRebuildShotState
+./golib shot niebla 60 --save build/niebla/city-rebuild.json \
+  --input "Enter@1"
+NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
+  ./golib go -C games/niebla test -run TestWriteCityRefoundingShotState
+./golib shot niebla 60 --save build/niebla/city-refounding.json \
+  --input "Enter@1"
+```
+
 ## Files
 
 | File | Holds |
@@ -305,7 +319,7 @@ NIEBLA_BUILDING_COLLAPSE_SHOT_STATE=../../build/niebla/collapse.json \
 | `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); camera, selection, open cards, robot roster, individual assignment and pointer modes live here, never serialized; unit cards follow a directly selected robot or rival vehicle; the schematics callout and one-use building placement mode, rivals' HUD, reach overlays and autosave are view state too |
 | `radial.go` | The build menu: the two rings a click on empty ground opens - the build groups (industry, military, logistics), then the group's blueprints - laid out around the cell every frame, and `backRadial`/`closeRadial`/`openRadial` for the scene |
 | `glyphs.go` | The marks the build menu wears: a group's own glyph, a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both - and the pipe's mark, the tube the region lifts on posts |
-| `state.go` | The simulation's state and save-schema version 9: builders, workers, troopers, mechanics and rivals with saved hull, facing and stillness ticks; the first scout's saved core-bubble crossing tick; buildings, jobs, piles and pipes with mite wear; stock, deposits, weather and rival tables; one-tick unit and building death receipts feed view effects without being saved; `newGame` gives the colony one fueled builder |
+| `state.go` | The simulation's state and save-schema version 10: builders, workers, troopers, mechanics and rivals with saved hull, facing and stillness ticks; rival-city reconstruction and refounding timers; the first scout's saved core-bubble crossing tick; buildings, jobs, piles and pipes with mite wear; stock, deposits, weather and rival tables; one-tick unit and building death receipts feed view effects without being saved; `newGame` gives the colony one fueled builder |
 | `actions.go` | The actions (`Tick`, `SendRobot`, ID-specific `AssignRobot` and `RecallRobot`, `MarkBuilding`, typed `QueueRobot`, `QueueMechanic`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
 | `sim_robots.go` | The robots' rules and tuning: `robotDay`, common priorities, builders alone claiming construction and pipe work, workers mining posts, builders and unassigned workers collecting piles, oil-pool waits under fog, stationary hull damage and tank wear, `postRobots` and worker-only `pickRobot`, movement, pipe-section claims and idle ranks |
 | `sim_piles.go` | Demolition, unit wrecks and loose items: `canDemolish`, the 25% unit recovery (`dropRobotWreck`), the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |

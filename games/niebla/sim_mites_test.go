@@ -193,7 +193,11 @@ func TestExposedRivalCityConstructionSiteWearsAndShowsMites(t *testing.T) {
 	if host := field.hosts[citySiteMiteKey(id)]; host == nil || host.Wanted == 0 {
 		t.Fatal("the exposed city construction site has no visible mites")
 	}
-	spec := cityBuildingSpec(cityBuildOrder[city.Stage])
+	stage, building := cityNextBuildingStage(s, city)
+	if !building {
+		t.Fatal("the city has no construction stage under way")
+	}
+	spec := cityBuildingSpec(cityBuildOrder[stage])
 	city.MiteDamage = spec.health - want/2
 	city.Work = 1
 	s.Cities[id] = city

@@ -100,7 +100,7 @@ func (s *State) recordRivalBuildingDeath(e Enemy) {
 	})
 }
 
-const stateVersion = 9
+const stateVersion = 10
 
 // Fog is the region's weather, where the fog's breath has got to. The
 // swell rises at a cycle's end and drains tick by tick; NextIn counts
@@ -383,6 +383,18 @@ func (s *State) migrateState() {
 	if s.Version < 9 {
 		// Saves without a scout-crossing tick keep the former 5:30 drop.
 		s.Raids.LegacyFrontierClock = true
+	}
+	if s.Version < 10 {
+		for _, id := range sortedCityIDs(s) {
+			city := s.Cities[id]
+			if city.Ruined || !cityNeedsConstruction(s, city) ||
+				city.Work > 0 {
+				continue
+			}
+			city.Work = cityBuildTicks
+			city.MiteDamage = 0
+			s.Cities[id] = city
+		}
 	}
 	s.Version = stateVersion
 }

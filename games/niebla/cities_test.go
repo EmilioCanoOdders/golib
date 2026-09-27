@@ -8,6 +8,16 @@ import (
 	"testing"
 )
 
+func finishedCityForTest(s *State) int64 {
+	cityID := s.foundCity(3500, 3200, 0.4)
+	city := s.Cities[cityID]
+	for range cityBuildOrder {
+		s.finishCityBuilding(&city)
+	}
+	s.Cities[cityID] = city
+	return cityID
+}
+
 func TestIntroVisitsShareTheScoutsBearing(t *testing.T) {
 	s := newGame()
 	visitNow(s)
@@ -97,6 +107,222 @@ func TestRivalCityBuildingsTakeFortyFiveSecondsEach(t *testing.T) {
 	stepCity(s, &city)
 	if city.Stage != 1 || !cityHasRepulsor(s, city) {
 		t.Fatal("the city did not complete its first building on time")
+	}
+}
+
+func TestCityRebuildsMissingBuildingsBeforeResumingProduction(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	cityID := finishedCityForTest(s)
+	city := s.Cities[cityID]
+	city.OilDeposit = cityOilReserve
+	city.LilacDeposit = cityLilacReserve
+	city.NextSortie = s.Ticks
+	s.Cities[cityID] = city
+
+	nexusID, factoryID := int64(0), int64(0)
+	for _, id := range city.BuildingIDs {
+		switch s.Enemies[id].Kind {
+		case EnemyBase:
+			nexusID = id
+		case EnemyCityFactory:
+			factoryID = id
+		}
+	}
+	if nexusID == 0 || factoryID == 0 {
+		t.Fatal("the completed city is missing its Nexus or factory")
+	}
+
+	s.killEnemy(nexusID)
+	s.killEnemy(factoryID)
+	city = s.Cities[cityID]
+	stage, building := cityNextBuildingStage(s, city)
+	if city.Ruined || !building || stage != 1 ||
+		city.Work != cityBuildTicks || city.Stage != len(cityBuildOrder) {
+		t.Fatalf("city did not prioritize its missing Nexus: %+v", city)
+	}
+
+	city.Work = 1
+	s.Cities[cityID] = city
+	stepCity(s, &city)
+	s.Cities[cityID] = city
+	stage, building = cityNextBuildingStage(s, city)
+	if !building || stage != 4 || city.Work != cityBuildTicks ||
+		city.Stage != len(cityBuildOrder) {
+		t.Fatalf("city did not rebuild the Nexus before its factory: %+v", city)
+	}
+	if city.NexusID == nexusID ||
+		!cityHasBuilding(s, city, EnemyBase) ||
+		cityHasBuilding(s, city, EnemyCityFactory) {
+		t.Fatal("the Nexus was not replaced on its original build-order step")
+	}
+
+	stepCity(s, &city)
+	if city.Oil != 0 || city.Lilac != 0 || len(s.Parties) != 0 {
+		t.Fatalf("the city produced while rebuilding: %+v", city)
+	}
+}
+
+func TestCompletedCityShowsItsRebuildInTheHud(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	cityID := finishedCityForTest(s)
+	city := s.Cities[cityID]
+	city.AnnounceUntil = s.Ticks
+	var factoryID int64
+	for _, id := range city.BuildingIDs {
+		if s.Enemies[id].Kind == EnemyCityFactory {
+			factoryID = id
+		}
+	}
+	s.killEnemy(factoryID)
+	city = s.Cities[cityID]
+	want := "rival city " + compassWord(city.X, city.Y) +
+		", rebuilding " + cityBuildingName(CityFactory)
+	if got := threatWords(s); got != want {
+		t.Fatalf("rebuilding city HUD says %q, want %q", got, want)
+	}
+}
+
+func TestRazedCityRefoundsWithACrawlerAtANewSite(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	cityID := finishedCityForTest(s)
+	origin := s.Cities[cityID]
+	structureIDs := make([]int64, 0, len(cityBuildOrder))
+	for _, id := range origin.BuildingIDs {
+		if cityStageForEnemy(s.Enemies[id].Kind) >= 0 {
+			structureIDs = append(structureIDs, id)
+		}
+	}
+	if len(structureIDs) != len(cityBuildOrder) {
+		t.Fatalf("the city has %d structures, want %d",
+			len(structureIDs), len(cityBuildOrder))
+	}
+	partyID := s.NextID
+	s.NextID++
+	s.Parties[partyID] = Party{
+		ID: partyID, City: cityID, Stage: StageRaid,
+		EntryX: origin.X, EntryY: origin.Y,
+		CampX: origin.X, CampY: origin.Y,
+	}
+	raiderID := s.NextID
+	s.NextID++
+	s.Enemies[raiderID] = Enemy{
+		ID: raiderID, Kind: EnemyRaider, Party: partyID, City: cityID,
+		X: origin.X, Y: origin.Y,
+		Health: enemySpecOf(EnemyRaider).health,
+	}
+
+	for _, id := range structureIDs {
+		s.killEnemy(id)
+	}
+	if got, want := len(s.BuildingDeaths), len(structureIDs)+1;
+		got != want {
+		t.Fatalf("the razed city made %d collapse events, want %d",
+			got, want)
+	}
+	city := s.Cities[cityID]
+	if !city.Ruined || city.RefoundAt != s.Ticks+cityRefoundDelayTicks ||
+		len(city.BuildingIDs) != 0 {
+		t.Fatalf("the city was not fully razed: %+v", city)
+	}
+	if report := lastReport(s); report.Kind != ReportBaseDown {
+		t.Fatalf("the razed city reported %q, want base down", report.Kind)
+	}
+	if s.Parties[partyID].Stage != StageLeave {
+		t.Fatal("the razed city's battalion did not withdraw")
+	}
+
+	s.Deaths = nil
+	s.BuildingDeaths = nil
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored State
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(s, &restored) {
+		t.Fatal("the pending refounding changed across a JSON round trip")
+	}
+
+	robots := len(s.Robots)
+	runTicks(s, int(cityRefoundDelayTicks)-1)
+	runTicks(&restored, int(cityRefoundDelayTicks)-1)
+	if !reflect.DeepEqual(s, &restored) {
+		t.Fatal("the refounding changed after loading its saved state")
+	}
+	if len(s.Parties) != 0 {
+		t.Fatal("a replacement crawler arrived before the one-minute delay")
+	}
+	Apply(s, Tick{})
+	Apply(&restored, Tick{})
+	if !reflect.DeepEqual(s, &restored) {
+		t.Fatal("the replacement crawler did not replay deterministically")
+	}
+	incomingPartyID := int64(0)
+	for _, id := range sortedPartyIDs(s) {
+		party := s.Parties[id]
+		if party.CityArrives && party.City == cityID {
+			incomingPartyID = id
+			break
+		}
+	}
+	if incomingPartyID == 0 {
+		t.Fatal("the city did not send a replacement crawler")
+	}
+	party := s.Parties[incomingPartyID]
+	if math.Hypot(party.CampX-origin.X, party.CampY-origin.Y) <
+		cityMinSeparation {
+		t.Fatalf("the new site is too close to the razed city: %+v", party)
+	}
+	if len(s.Robots) != robots {
+		t.Fatal("refounding spawned a colony-style builder robot")
+	}
+	if movingParty(s) && len(s.Parties) != 1 {
+		t.Fatalf("refounding created %d parties", len(s.Parties))
+	}
+
+	if !tickUntil(s, 60*300, func() bool {
+		return !s.Cities[cityID].Ruined
+	}) {
+		t.Fatal("the replacement crawler never founded its city")
+	}
+	city = s.Cities[cityID]
+	if city.X == origin.X && city.Y == origin.Y {
+		t.Fatal("the refounded city reused its razed location")
+	}
+	if city.Stage != 0 || city.Work != cityBuildTicks ||
+		len(city.BuildingIDs) != 1 ||
+		s.Enemies[city.BuildingIDs[0]].Kind != EnemyCityCrawler {
+		t.Fatalf("the refounded city did not start its normal build: %+v", city)
+	}
+}
+
+func TestVersionNineCityWithMissingBuildingGetsFreshBuildWork(t *testing.T) {
+	s := newGame()
+	cityID := finishedCityForTest(s)
+	city := s.Cities[cityID]
+	var factoryID int64
+	for _, id := range city.BuildingIDs {
+		if s.Enemies[id].Kind == EnemyCityFactory {
+			factoryID = id
+		}
+	}
+	s.killEnemy(factoryID)
+	city = s.Cities[cityID]
+	city.Work = 0
+	s.Cities[cityID] = city
+	s.Version = 9
+
+	s.migrateState()
+	city = s.Cities[cityID]
+	if s.Version != stateVersion || city.Ruined ||
+		city.Work != cityBuildTicks {
+		t.Fatalf("version 9 city migrated to %+v at version %d",
+			city, s.Version)
 	}
 }
 
@@ -589,6 +815,67 @@ func TestWriteCityConstructionShotState(t *testing.T) {
 	}
 	city.Work = cityBuildTicks / 2
 	s.Cities[cityID] = city
+	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+	if err != nil {
+		t.Fatalf("the city state doesn't marshal: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
+	}
+}
+
+func TestWriteCityRebuildShotState(t *testing.T) {
+	path := os.Getenv("NIEBLA_CITY_REBUILD_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_CITY_REBUILD_SHOT_STATE to write a rebuild state")
+	}
+	s := newGame()
+	cityID := finishedCityForTest(s)
+	city := s.Cities[cityID]
+	var nexusID, factoryID int64
+	for _, id := range city.BuildingIDs {
+		switch s.Enemies[id].Kind {
+		case EnemyBase:
+			nexusID = id
+		case EnemyCityFactory:
+			factoryID = id
+		}
+	}
+	s.killEnemy(nexusID)
+	s.killEnemy(factoryID)
+	city = s.Cities[cityID]
+	city.Work = cityBuildTicks / 2
+	s.Cities[cityID] = city
+	s.Reports = nil
+	writeCityShotState(t, path, s)
+}
+
+func TestWriteCityRefoundingShotState(t *testing.T) {
+	path := os.Getenv("NIEBLA_CITY_REFOUNDING_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_CITY_REFOUNDING_SHOT_STATE to write " +
+			"a refounding state")
+	}
+	s := newGame()
+	cityID := finishedCityForTest(s)
+	city := s.Cities[cityID]
+	for _, id := range append([]int64(nil), city.BuildingIDs...) {
+		if cityStageForEnemy(s.Enemies[id].Kind) >= 0 {
+			s.killEnemy(id)
+		}
+	}
+	city = s.Cities[cityID]
+	city.RefoundAt = s.Ticks
+	s.Cities[cityID] = city
+	s.Reports = nil
+	stepCity(s, &city)
+	s.Cities[cityID] = city
+	runTicks(s, 12*60)
+	writeCityShotState(t, path, s)
+}
+
+func writeCityShotState(t *testing.T, path string, s *State) {
+	t.Helper()
 	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
 	if err != nil {
 		t.Fatalf("the city state doesn't marshal: %v", err)

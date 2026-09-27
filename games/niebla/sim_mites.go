@@ -95,15 +95,16 @@ func stepMiteSiteWear(s *State) {
 func stepMiteCitySiteWear(s *State) {
 	for _, id := range sortedCityIDs(s) {
 		city := s.Cities[id]
-		if city.Stage >= len(cityBuildOrder) {
+		stage, building := cityNextBuildingStage(s, city)
+		if !building {
 			continue
 		}
-		x, y := cityBuildingPosition(city, city.Stage)
+		x, y := cityBuildingPosition(city, stage)
 		exposure := miteExposureAt(s, x, y)
 		if exposure <= 0 {
 			continue
 		}
-		spec := cityBuildingSpec(cityBuildOrder[city.Stage])
+		spec := cityBuildingSpec(cityBuildOrder[stage])
 		city.MiteDamage +=
 			miteDamagePerSecond * exposure * miteSwellFactor(s) / 60
 		if city.MiteDamage >= spec.health {

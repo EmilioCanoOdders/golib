@@ -75,10 +75,11 @@ func TestArtilleryArrivesAfterThreeNormalAttacksEnd(t *testing.T) {
 func TestCityFactoryCompletionAndSortiesDoNotUnlockArtillery(t *testing.T) {
 	s := artilleryTechTestState()
 	s.Raids.Visits = 3
-	city := City{
-		ID: 90, Stage: len(cityBuildOrder) - 1, Work: 1,
-		Oil: 1000, Lilac: 1000,
+	city := City{ID: 90, Oil: 1000, Lilac: 1000}
+	for range len(cityBuildOrder) - 1 {
+		s.finishCityBuilding(&city)
 	}
+	city.Work = 1
 	s.Cities[city.ID] = city
 	stepCity(s, &city)
 	s.Cities[city.ID] = city

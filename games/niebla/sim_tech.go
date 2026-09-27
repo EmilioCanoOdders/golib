@@ -112,13 +112,16 @@ func rivalForcesInLull(s *State) bool {
 
 func pressureCitySortieReady(s *State) bool {
 	city, exists := s.Cities[s.Raids.PressureCity]
-	if !exists || s.Raids.PressureSortieStarted || movingParty(s) {
+	if !exists || city.Ruined || s.Raids.PressureSortieStarted ||
+		movingParty(s) {
 		return false
 	}
-	if city.Stage == len(cityBuildOrder)-1 && city.Work <= 1 {
+	stage, needsConstruction := cityNextBuildingStage(s, city)
+	if needsConstruction && stage == city.Stage &&
+		stage == len(cityBuildOrder)-1 && city.Work <= 1 {
 		return true
 	}
-	if city.Stage < len(cityBuildOrder) ||
+	if needsConstruction ||
 		!cityHasBuilding(s, city, EnemyCityFactory) ||
 		city.NextSortie > s.Ticks {
 		return false

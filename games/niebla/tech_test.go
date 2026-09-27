@@ -352,7 +352,7 @@ func TestFrontierKitDoesNotArriveOnItsFormerClockInNewSaves(t *testing.T) {
 
 func TestOldFrontierClockStaysOnMigratedSaves(t *testing.T) {
 	s := newGame()
-	s.Version = stateVersion - 1
+	s.Version = 8
 	s.Tech = map[string]bool{techIndustryID: true}
 	s.Ticks = legacyTechFrontierTicks - 2
 	s.enterRegion()
@@ -734,7 +734,7 @@ func TestOldGuardUnlocksMigrateWithoutNewBadges(t *testing.T) {
 			t.Run(fmt.Sprintf("ledger=%v/%s", hasLedger, trigger),
 				func(t *testing.T) {
 					s := newGame()
-					s.Version = stateVersion - 4
+					s.Version = 5
 					s.Ticks = 2
 					if hasLedger {
 						s.Tech = map[string]bool{techIndustryID: true}
@@ -767,7 +767,7 @@ func TestOldGuardUnlocksMigrateWithoutNewBadges(t *testing.T) {
 
 func TestOldPendingGuardBadgeStaysPendingAfterMigration(t *testing.T) {
 	s := newGame()
-	s.Version = stateVersion - 4
+	s.Version = 5
 	s.Tech = map[string]bool{
 		techIndustryID: true,
 		techGuardID:    false,

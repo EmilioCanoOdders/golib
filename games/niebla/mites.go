@@ -182,11 +182,12 @@ func (f *miteField) update(s *State, dt float32) {
 	}
 	for _, id := range sortedCityIDs(s) {
 		city := s.Cities[id]
-		if city.Stage >= len(cityBuildOrder) {
+		stage, building := cityNextBuildingStage(s, city)
+		if !building {
 			continue
 		}
-		x, y := cityBuildingPosition(city, city.Stage)
-		spec := cityBuildingSpec(cityBuildOrder[city.Stage])
+		x, y := cityBuildingPosition(city, stage)
+		spec := cityBuildingSpec(cityBuildOrder[stage])
 		across, height, _ := enemyMiteBody(Enemy{Kind: spec.kind})
 		h := f.host(citySiteMiteKey(id), x, y, dt)
 		h.Across, h.Height = across, height

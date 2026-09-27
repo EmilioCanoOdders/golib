@@ -285,7 +285,7 @@ func TestDestroyedCityStructureEmitsABuildingDeath(t *testing.T) {
 	}
 }
 
-func TestCityCoreCollapseRecordsItsWholeCity(t *testing.T) {
+func TestCityCoreCollapseRecordsItsDeath(t *testing.T) {
 	s := newGame()
 	noRivals(s)
 	cityID := s.foundCity(3300, 3000, 0.4)
@@ -309,20 +309,21 @@ func TestCityCoreCollapseRecordsItsWholeCity(t *testing.T) {
 	s.Cities[cityID] = city
 
 	s.killEnemy(baseID)
-	if len(s.BuildingDeaths) != 3 {
-		t.Fatalf("the falling city made %d collapse events: %+v",
+	if len(s.BuildingDeaths) != 1 {
+		t.Fatalf("the falling Nexus made %d collapse events: %+v",
 			len(s.BuildingDeaths), s.BuildingDeaths)
 	}
-	got := map[EnemyKind]bool{}
-	for _, death := range s.BuildingDeaths {
-		got[death.RivalKind] = true
+	if s.BuildingDeaths[0].RivalKind != EnemyBase {
+		t.Fatalf("the collapse event is %+v, want the Nexus",
+			s.BuildingDeaths[0])
 	}
-	for _, kind := range []EnemyKind{
-		EnemyBase, EnemyCityCrawler, EnemyCityRepulsor,
-	} {
-		if !got[kind] {
-			t.Errorf("the city's %s has no collapse event", kind)
-		}
+	city = s.Cities[cityID]
+	if city.Ruined || city.NexusID != 0 {
+		t.Fatalf("the surviving city did not queue its Nexus for rebuilding: %+v",
+			city)
+	}
+	if _, exists := s.Enemies[repulsorID]; !exists {
+		t.Fatal("the surviving repulsor was destroyed with the Nexus")
 	}
 }
 
@@ -968,7 +969,7 @@ func mechanicForFactory(s *State, factory int64) (Robot, bool) {
 	return Robot{}, false
 }
 
-func TestArtilleryShellsWhatTheColonySeesAndCityNexusFalls(t *testing.T) {
+func TestArtilleryShellsWhatTheColonySeesAndCityNexusRefounds(t *testing.T) {
 	s := newGame()
 	s.Stock = Stock{Oil: 1000, Lilac: 2500}
 	delete(s.Robots, 1)
@@ -981,6 +982,7 @@ func TestArtilleryShellsWhatTheColonySeesAndCityNexusFalls(t *testing.T) {
 		}
 	}
 	city.BuildingIDs = []int64{core.ID}
+	city.Work = cityBuildTicks * 1000
 	s.Cities[city.ID] = city
 	x, y := towardCore(core.X, core.Y, 1000)
 	col, row := cellNear(x, y)
@@ -1038,8 +1040,30 @@ func TestArtilleryShellsWhatTheColonySeesAndCityNexusFalls(t *testing.T) {
 	if !found {
 		t.Errorf("nobody reported the city's fall: %+v", s.Reports)
 	}
-	if !tickUntil(s, 60*600, func() bool { return !settled(s) && len(s.Enemies) == 0 }) {
-		t.Errorf("the garrison never left: %d vehicles", len(s.Enemies))
+	cityID := city.ID
+	if !s.Cities[cityID].Ruined {
+		t.Fatal("the city did not enter its refounding state")
+	}
+	if !tickUntil(s, int(cityRefoundDelayTicks)+1, func() bool {
+		for _, id := range sortedPartyIDs(s) {
+			party := s.Parties[id]
+			if party.City == cityID && party.CityArrives {
+				return true
+			}
+		}
+		return false
+	}) {
+		t.Fatal("the city did not send a replacement crawler")
+	}
+	party := s.Parties[sortedPartyIDs(s)[0]]
+	if math.Hypot(party.CampX-city.X, party.CampY-city.Y) <
+		cityMinSeparation {
+		t.Fatal("the replacement city is too close to the Nexus that fell")
+	}
+	if !tickUntil(s, 60*300, func() bool {
+		return !s.Cities[cityID].Ruined
+	}) {
+		t.Fatal("the replacement crawler did not establish a city")
 	}
 }
 

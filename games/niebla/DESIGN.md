@@ -289,7 +289,8 @@ Artillery keeps its separate range and rules.
 For one minute after a city establishes, the HUD announces its location and
 status. Its founding report and offscreen arrow use that same deadline,
 unless newer news replaces them; other reports and arrows last
-`reportShowTicks` 15 s.
+`reportShowTicks` 15 s. A completed city identifies its current rebuilding
+target in the HUD until its construction queue is clear.
 
 The arrival crawler stays as the city's construction rig. The Nexus ID is
 reserved at founding, but its entity appears only after the antimist pylon
@@ -299,9 +300,21 @@ Nexus, each a gray rival structure with health and a `cityBuildTicks` 45 s
 build. Five buildings take 3 min 45 s of uninterrupted construction. Oil
 and lilac are finite city-local reserves (`cityOilReserve` 900 L and
 `cityLilacReserve` 1800 kg). The extractors add to city stores; the factory
-spends them on sorties. Destroying an extractor stops that resource.
-Destroying the factory stops new forces; destroying the Nexus removes the
-city. City buildings never fire.
+spends them on sorties. City buildings never fire.
+
+The city keeps constructing without spawning a builder for each job. If a
+structure is destroyed while another city structure remains, the city pauses
+extraction and sorties and rebuilds the first missing structure in the same
+order as its founding. Each replacement takes the full 45 seconds. This
+includes the Nexus: its loss does not erase the city while another structure
+still stands. A rebuilt Nexus gets a new entity ID. Once every one of the
+five structures is gone, the city is razed: its stores and unfinished work
+are lost, and any force away from home withdraws. After 60 seconds, a crawler
+sets out to found the same city's replacement at a site at least 900 m from
+the ruins, subject to the region's one-moving-party rule. The old location
+stays reserved until the crawler settles; the new base starts with its
+original reserves and build order. Saves keep this wait and the crawler's
+route deterministic.
 
 Once the factory and stores are ready, the first city battalion attacks
 immediately. It has two raiders and no mobile artillery, walks directly to
@@ -352,7 +365,7 @@ from JSON and cleared by the next tick.
 
 The game is a deterministic simulation first, and a picture of it second. These rules are law; every feature bends around them.
 
-1. **One serializable state.** The whole game is a single value (`State`) that serializes to JSON with no pointers, no channels, no functions. `State.Version` identifies its save schema; `enterRegion` migrates old protector records, robot roles and hull. Entities live in ID-keyed tables (`map[int64]Entity`-style, with fixed field structs); every reference between things is an ID, like a relational database. Saving = the state's JSON into the local database (SQLite, the schema a server keeps; `golib shot --save` feeds the same value through the shot channel). Loading the state = loading the game, exactly.
+1. **One serializable state.** The whole game is a single value (`State`) that serializes to JSON with no pointers, no channels, no functions. `State.Version` identifies its save schema; `enterRegion` migrates old protector records, robot roles and hull, and gives a missing rival-city building its full reconstruction timer. Entities live in ID-keyed tables (`map[int64]Entity`-style, with fixed field structs); every reference between things is an ID, like a relational database. Saving = the state's JSON into the local database (SQLite, the schema a server keeps; `golib shot --save` feeds the same value through the shot channel). Loading the state = loading the game, exactly.
 2. **Actions in, state out (flux/redux).** Nothing mutates the state
    except reducers. Actions are serializable structs (`MarkBuilding`,
    `QueueMechanic`, `OrderSquad`, `Tick`...). `Apply(state, action) ->

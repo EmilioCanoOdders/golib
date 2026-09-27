@@ -386,11 +386,11 @@ func enemyDetails(s *State, thing Thing) []Detail {
 				Detail{"city oil", si(math.Round(city.Oil), "L")},
 				Detail{"city mineral", si(math.Round(city.Lilac), "kg")},
 			)
-			if city.Stage < len(cityBuildOrder) {
+			if stage, building := cityNextBuildingStage(s, city); building {
 				left := (city.Work + 59) / 60
 				details = append(details, Detail{
 					"building", fmt.Sprintf("%s, %d:%02d",
-						cityBuildingName(cityBuildOrder[city.Stage]),
+						cityBuildingName(cityBuildOrder[stage]),
 						left/60, left%60),
 				})
 			} else {
