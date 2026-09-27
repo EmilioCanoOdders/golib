@@ -270,6 +270,11 @@ The guard-post schematic arrives when the first scout, returning after its
 theft, crosses outward past the core's fixed 800 m bubble. Its oil and mark
 do not unlock the post while it is still inside.
 
+The frontier kit (shadow protector, pump and pipes) arrives one minute after
+that crossing. The crossing tick is saved, so leaving the guard badge unopened
+does not shift the next drop. Saves from before this timing change keep the
+frontier kit's former 5:30 clock.
+
 Artillery arrives after the third normal crawler-and-raider attack ends.
 The scout is not an attack, and sorties produced by city factories do not
 count. Rival factory completion alone does not unlock artillery in new
@@ -501,10 +506,10 @@ For whoever works on the game, not for the player: in the region, hold Control a
   first delivered load brings infrastructure (silo, warehouse, charger);
   the guard post comes when the first scout returns and crosses outward past
   the fixed 800 m core bubble; the mark and oil alone do not unlock it. The
-  frontier kit (protector, pump, pipes) comes at 5:30, and the war factory
-  comes when the first peripheral city begins construction. Artillery arrives
-  after three normal attacks end; the scout and city-produced sorties do not
-  count. The repair protocol is a later,
+  frontier kit (protector, pump, pipes) follows one minute after that
+  crossing. The war factory comes when the first peripheral city begins
+  construction. Artillery arrives after three normal attacks end; the scout
+  and city-produced sorties do not count. The repair protocol is a later,
   unit-only drop: it waits until the first real attack has ended, rival fire
   has damaged a colony building, and the first city force unloads, rebuilds,
   regroups or is destroyed. If no first force is produced, its timing falls
@@ -774,11 +779,13 @@ simulation damage is unchanged.
 Pinned as code lands, all at the top of the sim files with units in the name: `fogCycleTicks`, `protectorOilPerSecond`, `robotChargeSeconds`, `robotMoveSpeed` (units/s), `oilPerPoolUnit`, `lilacPerVeinUnit`, blueprint costs. Pinned so far, in `region.go`: `regionCols`/`regionRows` (25x25 tiles), `tileW`/`tileH` (48x24 px at 2K/2), `unitsPerTile` 200 (the world's unit is a meter: a tile is 200 m across, the region 5 km; a robot is 6 u across, the core's monolith 16 u, a future building 40 u, a deposit patch of four tiles is 400 m aside), `coreBubbleRadius` 4 tiles, `fogLineRadius` 10.5 tiles, `fogFadeTiles` 2.4 tiles. In `play.go`: `zoomOut`/`zoomIn`, the wheel's stops, each twice the last: 1, 2, 4, 8, 16, 32 (stop 0 shows the whole region as icons, stop 5 about 80 m of ground; at 32 a robot's 6 u is about 46 screen px), `zoomGlide` 0.1 s (the zoom glides from stop to stop instead of jumping, keeping the point under the cursor under it; only at rest is the zoom a whole power of two), `panSpeed` 480 screen px/s, constant on the screen at every zoom; the right button drags the view, grab style. The camera is view, not state: it lives in the play scene and never serializes. In `draw.go`: `propZoom` 4, the zoom from which the rocks and bushes are drawn; they are world-sized (6 u across), so zooming in grows them from pebbles to boulders. Robots draw at their world size but never under about 3 screen px (`dotRadius`): far out, everything alive is a point, R.U.S.E.-style. The core draws as a dark monolith on its tile's middle (`drawCore`), broad face to the right, a seam of light down it and a top in the core's warm white, the part the glow filter picks; it obeys the buildings' icon law and sorts by depth among them, and its pad, the whole tile, lies on the ground under the robots. Deposits draw as one continuous body per patch - a pool as one sheet of oil, a vein as one shelf with crystal clusters over its tiles - shrinking as the patch drains, one big scar when dry. The fog's shape and speed are the feel of the game: their section is [The fog](#the-fog), and their dials are pinned, in `sim_fog.go`: `fogCycleTicks` 1800 (30 s a cycle), `fogSwellPeriod` 18 cycles (the first swell at 9 min), `fogSwellQuickener` 0.90 (each swell shortens the next calm; `fogSwellMinPeriod` 4 cycles), `fogSwellTicks` 900 (15 s) growing `fogSwellTicksGrowth` 180 apiece to `fogSwellTicksMax` 3600 (a minute), `fogSwellReach` 2.0 tiles growing `fogSwellGrowth` 0.35 apiece, capped by `fogSwellMargin` 0.75 tiles the line never takes off the bubble, `fogSwellSpeedFactor` 0.25 in the pushed band (fog that was already there keeps `fogSpeedFactor` 0.5) and `fogSwellBurn` 1.5x outside the bubbles.
 
 In `sim_tech.go`: the factory blueprint is the opening drop, and the
-first delivery unlocks infrastructure. `techFrontierTicks` 5:30 is the
-frontier kit's clock drop. `techRepairFallbackTicks` 12:00 is the repair
-protocol's timing fallback when the pressure city produces no first force;
-rival building damage is still required. `legacyTechIndustryTicks` keeps
-the former 7:00 factory trigger for migrating saves without a tech ledger. The view's
+first delivery unlocks infrastructure. `techFrontierDelayTicks` is one
+minute after the first scout crosses out of the core bubble;
+`legacyTechFrontierTicks` keeps the former 5:30 clock for old saves.
+`techRepairFallbackTicks` 12:00 is the repair protocol's timing fallback
+when the pressure city produces no first force; rival building damage is
+still required. `legacyTechIndustryTicks` keeps the former 7:00 factory
+trigger for migrating saves without a tech ledger. The view's
 `techBadgeR` is 22 px, `techPulseTicks` is 90 (one breath of the glow,
 from the state's tick), `techCalloutW` is 280 px and `techUsedVeil` is
 0.72, the dark overlay on a building square used from its drop.
@@ -907,8 +914,9 @@ option at once; save for the next known threat.
 1. Build the robot factory and work the safe oil and lilac patches. Grow to
    three workers, assigning several robots to the two safe patches instead
    of making six workers that have no active deposit.
-2. After the scout returns beyond the core bubble, build the guard post. In
-   the three-seed probe, this defense plan raises one by minute 3-4.
+2. After the scout returns beyond the core bubble, build the guard post.
+   One minute later, the frontier kit brings the protector, pump and pipes.
+   In the three-seed probe, the defense plan raises a guard by minute 3-4.
 3. When the first city appears, mark the war factory and build two troopers.
    The probe has both by minute 7, before the first city sortie at minute
    9-11. Send the squad against an approaching party or keep it where it can
@@ -974,6 +982,11 @@ time and rerun all four probe policies.
   integrity returns. The mechanic still spends its own 0.2 L per point;
   either repair resource can pause the work. Building cards show the cost
   left. Pinned by `shots_test.go`, `markup_test.go` and the repair-cost shot.
+- 2026-09-27: the guard unlocks when the first scout crosses outward past
+  the core bubble; the frontier kit follows one minute later. That crossing
+  tick is saved; old saves keep the former 5:30 clock after
+  migration to version 9. Pinned by `tech_test.go` for the exact delay, no
+  clock unlock in new saves, and old-save timing.
 - 2026-09-27: rival city hosts now animate 60% of their former mite count,
   including city construction sites and city-produced vehicles. This is a
   view-only density factor; exposure and simulation damage are unchanged.

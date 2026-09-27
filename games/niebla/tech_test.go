@@ -233,6 +233,10 @@ func TestGuardUnlockWaitsForTheFirstScoutToLeaveTheCoreBubble(t *testing.T) {
 		if !s.Raids.ScoutClearedCore || !kindUnlocked(s, BuildingGuard) {
 			t.Fatal("the scout's outward crossing did not unlock the guard post")
 		}
+		if s.Raids.ScoutClearedCoreAt != s.Ticks {
+			t.Fatalf("the crossing tick is %d, want %d",
+				s.Raids.ScoutClearedCoreAt, s.Ticks)
+		}
 		if techPending(s) != techGuardID {
 			t.Fatalf("the crossing's pending schematic is %q", techPending(s))
 		}
@@ -260,6 +264,7 @@ func TestGuardUnlockWaitsForTheFirstScoutToLeaveTheCoreBubble(t *testing.T) {
 	}
 	loaded.enterRegion()
 	if !loaded.Raids.ScoutClearedCore ||
+		loaded.Raids.ScoutClearedCoreAt != s.Raids.ScoutClearedCoreAt ||
 		!kindUnlocked(&loaded, BuildingGuard) ||
 		techPending(&loaded) != techGuardID {
 		t.Fatalf("the scout crossing or pending guard badge was lost: %+v",
@@ -268,6 +273,17 @@ func TestGuardUnlockWaitsForTheFirstScoutToLeaveTheCoreBubble(t *testing.T) {
 	if !reflect.DeepEqual(loaded.Tech, s.Tech) {
 		t.Errorf("the tech ledger changed across save/load: %v vs %v",
 			loaded.Tech, s.Tech)
+	}
+	noRivals(&loaded)
+	runTicks(&loaded, techFrontierDelayTicks-1)
+	if kindUnlocked(&loaded, BuildingProtector) ||
+		kindUnlocked(&loaded, BuildingPump) {
+		t.Fatal("the frontier kit arrived before one minute after the crossing")
+	}
+	runTicks(&loaded, 1)
+	if !kindUnlocked(&loaded, BuildingProtector) ||
+		!kindUnlocked(&loaded, BuildingPump) {
+		t.Fatal("the saved crossing did not time the frontier kit")
 	}
 }
 
@@ -309,11 +325,47 @@ func TestCoreBubbleCrossingRequiresMovingOutwardPastItsBoundary(t *testing.T) {
 	}
 }
 
-func TestTheFrontierKitComesOnItsClock(t *testing.T) {
+func TestFrontierKitArrivesOneMinuteAfterTheScoutCrosses(t *testing.T) {
 	s := newGame()
-	runTicks(s, techFrontierTicks)
+	noRivals(s)
+	s.Raids.ScoutClearedCore = true
+	s.Raids.ScoutClearedCoreAt = 120
+	s.Ticks = s.Raids.ScoutClearedCoreAt
+	runTicks(s, techFrontierDelayTicks-1)
+	if kindUnlocked(s, BuildingProtector) || kindUnlocked(s, BuildingPump) {
+		t.Fatal("the frontier kit arrived before one minute had passed")
+	}
+	runTicks(s, 1)
 	if !kindUnlocked(s, BuildingProtector) || !kindUnlocked(s, BuildingPump) {
-		t.Fatal("the frontier kit never arrived at its tick")
+		t.Fatal("the frontier kit did not arrive one minute after the crossing")
+	}
+}
+
+func TestFrontierKitDoesNotArriveOnItsFormerClockInNewSaves(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	runTicks(s, legacyTechFrontierTicks)
+	if kindUnlocked(s, BuildingProtector) || kindUnlocked(s, BuildingPump) {
+		t.Fatal("the new frontier kit still arrived on the 5:30 clock")
+	}
+}
+
+func TestOldFrontierClockStaysOnMigratedSaves(t *testing.T) {
+	s := newGame()
+	s.Version = stateVersion - 1
+	s.Tech = map[string]bool{techIndustryID: true}
+	s.Ticks = legacyTechFrontierTicks - 2
+	s.enterRegion()
+	if !s.Raids.LegacyFrontierClock {
+		t.Fatal("an old save lost its frontier clock")
+	}
+	runTicks(s, 1)
+	if kindUnlocked(s, BuildingProtector) || kindUnlocked(s, BuildingPump) {
+		t.Fatal("the migrated frontier kit arrived before 5:30")
+	}
+	runTicks(s, 1)
+	if !kindUnlocked(s, BuildingProtector) || !kindUnlocked(s, BuildingPump) {
+		t.Fatal("the migrated frontier kit did not arrive at 5:30")
 	}
 }
 
@@ -682,7 +734,7 @@ func TestOldGuardUnlocksMigrateWithoutNewBadges(t *testing.T) {
 			t.Run(fmt.Sprintf("ledger=%v/%s", hasLedger, trigger),
 				func(t *testing.T) {
 					s := newGame()
-					s.Version = stateVersion - 3
+					s.Version = stateVersion - 4
 					s.Ticks = 2
 					if hasLedger {
 						s.Tech = map[string]bool{techIndustryID: true}
@@ -715,7 +767,7 @@ func TestOldGuardUnlocksMigrateWithoutNewBadges(t *testing.T) {
 
 func TestOldPendingGuardBadgeStaysPendingAfterMigration(t *testing.T) {
 	s := newGame()
-	s.Version = stateVersion - 3
+	s.Version = stateVersion - 4
 	s.Tech = map[string]bool{
 		techIndustryID: true,
 		techGuardID:    false,

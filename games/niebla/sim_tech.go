@@ -13,12 +13,13 @@ package main
 // State.Tech, so a save with the badge unclicked keeps it.
 
 // Tuning: the factory blueprint is the opening gift. The first delivery
-// brings logistics. The frontier kit's clock drop sits before the first
-// raid; the guard answers the scout's theft, and the war factory arrives
-// when the first city is founded; artillery waits through three ordinary
-// attacks, not the scout or city-produced sorties.
+// brings logistics. The guard answers the scout's outward crossing, and the
+// frontier kit follows one minute later. The war factory arrives when the
+// first city is founded; artillery waits through three ordinary attacks,
+// not the scout or city-produced sorties.
 const (
-	techFrontierTicks       = 5*60*60 + 30*60 // mid-valley, before the first raid
+	legacyTechFrontierTicks = 5*60*60 + 30*60 // old saves' frontier unlock
+	techFrontierDelayTicks  = 60 * 60         // one minute after the scout
 	legacyTechIndustryTicks = 7 * 60 * 60     // old saves' factory unlock
 	techRepairFallbackTicks = 12 * 60 * 60    // no first city force by minute 12
 	techArtilleryVisits     = 4               // scout plus three normal attacks
@@ -56,7 +57,7 @@ var techLadder = []techDrop{
 	{techGuardID, []BuildingKind{BuildingGuard},
 		func(s *State) bool { return s.Raids.ScoutClearedCore }},
 	{techFrontierID, []BuildingKind{BuildingProtector, BuildingPump},
-		func(s *State) bool { return s.Ticks >= techFrontierTicks }},
+		func(s *State) bool { return frontierTechArrived(s) }},
 	{techMobileID, []BuildingKind{BuildingWarFactory},
 		func(s *State) bool {
 			return s.Raids.PressureCity != 0 || s.Raids.Visits >= 2
@@ -69,6 +70,14 @@ var techLadder = []techDrop{
 			return s.Raids.Visits >= techArtilleryVisits
 		}},
 	{techRepairID, nil, repairProtocolTrigger},
+}
+
+func frontierTechArrived(s *State) bool {
+	if s.Raids.LegacyFrontierClock {
+		return s.Ticks >= legacyTechFrontierTicks
+	}
+	crossedAt := s.Raids.ScoutClearedCoreAt
+	return crossedAt > 0 && s.Ticks >= crossedAt+techFrontierDelayTicks
 }
 
 func repairProtocolTrigger(s *State) bool {
@@ -146,6 +155,8 @@ func legacyTechArrived(s *State, id string) bool {
 		return false
 	case techGuardID:
 		return legacyGuardTechArrived(s)
+	case techFrontierID:
+		return s.Ticks >= legacyTechFrontierTicks
 	case techArtilleryID:
 		return rivalFactoryExists(s)
 	}
@@ -183,6 +194,7 @@ func legacyGuardTechArrived(s *State) bool {
 func stepTech(s *State) {
 	if s.Tech == nil {
 		s.Tech = map[string]bool{}
+		s.Raids.LegacyFrontierClock = true
 		if s.Ticks > 1 {
 			// A save from before the schematics: every drop it has
 			// already earned stands opened, so nobody clicks through a

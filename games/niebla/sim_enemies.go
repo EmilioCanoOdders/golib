@@ -147,6 +147,8 @@ type Raids struct {
 	FirstBearing           float64
 	BearingKnown           bool
 	ScoutClearedCore       bool  // first scout crossed the core bubble outward
+	ScoutClearedCoreAt     int64 // tick of that crossing; zero when unknown
+	LegacyFrontierClock    bool  // old saves retain the 5:30 frontier unlock
 	PressureCity           int64 // the first city, founded with the second visit
 	RivalBuildingHit       bool  // any rival shot has damaged a colony building
 	PressureSortieStarted  bool  // the pressure city's first force was produced
@@ -518,6 +520,7 @@ func stepParty(s *State, p Party) {
 			moved := s.Enemies[lead.ID]
 			if crossedCoreBubble(oldX, oldY, moved.X, moved.Y) {
 				s.Raids.ScoutClearedCore = true
+				s.Raids.ScoutClearedCoreAt = s.Ticks
 				// Input can acknowledge the badge before the next stepTech.
 				if _, arrived := s.Tech[techGuardID]; !arrived {
 					s.Tech[techGuardID] = false
