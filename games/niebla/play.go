@@ -72,6 +72,7 @@ type playScene struct {
 	radialGroup    buildGroup // the group the second ring shows
 	laying         pipeLaying // the pipe the pointer is drawing, if any
 	ordering       int64      // the war factory whose squad the pointer is ordering; 0 is none
+	orderTicks     int
 	robotsOpen     bool
 	robotsPage     int
 	robotsPicked   int64
@@ -121,6 +122,7 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 		golib.SwitchScene(newMenuScene())
 		return
 	}
+	s.tickOrdering()
 	// F11 or Alt+Enter switches fullscreen. The screen keeps its size: GoLib
 	// scales it to fit.
 	altEnter := (input.KeyDown(golib.KeyLeftAlt) || input.KeyDown(golib.KeyRightAlt)) &&
@@ -214,7 +216,7 @@ func (s *playScene) updateSquadKeys(input *golib.Input) {
 			if s.ordering == slots[i] {
 				s.ordering = 0
 			} else {
-				s.ordering = slots[i]
+				s.armOrdering(slots[i])
 				s.au.ui(1)
 				s.closeRadial()
 			}
@@ -289,7 +291,7 @@ func (s *playScene) updateSquadBoxes(input *golib.Input) bool {
 		if s.ordering == slots[i] {
 			s.ordering = 0
 		} else {
-			s.ordering = slots[i]
+			s.armOrdering(slots[i])
 			s.au.ui(1)
 			s.closeRadial()
 		}
@@ -525,7 +527,7 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 		// a guarding one, the ring around an attack's focus. The click
 		// arms the ordering pointer instead of picking the cell.
 		if home, ok := s.squadMarkAt(mx, my); ok {
-			s.ordering = home
+			s.armOrdering(home)
 			s.au.ui(1)
 			s.closeRadial()
 			return
@@ -672,7 +674,7 @@ func (s *playScene) pressButton(row tooltipRow) {
 	case buttonMechanic:
 		Apply(s.state, QueueMechanic{Building: thing.Ref})
 	case buttonOrder:
-		s.ordering = thing.Ref
+		s.armOrdering(thing.Ref)
 	case buttonBuildPump:
 		if d, ok := depositAt(tcol, trow); ok {
 			col, row := pumpCell(d)
@@ -768,6 +770,9 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	if s.laying.on {
 		s.drawLaying(screen)
 	}
+	if s.ordering != 0 {
+		s.drawOrderingPreview(screen)
+	}
 	screen.SetCamera(nil)
 	drawSwellStatic(s.state, screen, s.camera)
 	drawIdleCount(s.state, screen, s.camera)
@@ -789,7 +794,7 @@ func (s *playScene) Draw(screen *golib.Screen) {
 		}
 	}
 	if s.ordering != 0 {
-		help = "ordering a squad: click a rival vehicle to attack its party, that vehicle first, or click the ground to post the squad there; right-click or the squad's number again puts the order away"
+		help = "ordering a squad (20 s): click a rival vehicle to attack its party, that vehicle first, or click the ground to post the squad there; right-click or the squad's number again puts the order away"
 	}
 	if s.laying.on {
 		help = "laying a pipe: click the ground to bend it, click a ringed tank (silo, charger, core) to connect it, click the last node for its menu, right-click takes the last bend back"

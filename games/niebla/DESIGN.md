@@ -464,8 +464,8 @@ report may each have a guide at once, with all guides kept apart.
 | Mouse left, on a robot in the roster | Select it; `assign deposit` arms an individual order, then click an oil pool or lilac vein to assign that robot |
 | Mouse right, after `assign deposit` | Cancel the individual assignment |
 | Mouse left, after a pump's `lay pipe` | On the ground: a bend of the pipe. On a ringed tank (silo, charger, core): the pipe's end, which marks it. On the pipe's last node: its menu (`connect` to the nearest store, `undo`, `cancel`). Right click: the menu away, the last bend back, or out of the mode |
-| Mouse left, after a war factory's `give order` | On a rival vehicle's body: the squad attacks its party, that vehicle first. On the ground: the squad guards that spot. Right click: the order away |
-| 1-9 | Call a squad: 1 is the first war factory raised, 2 the next. The key arms the order the same way `give order` does (one click orders, right click puts it away); the same key again takes it back. A squad's box at the top right - tank icon, unit count, the key below - calls it too |
+| Mouse left, after a war factory's `give order` | On a rival vehicle's body: the squad attacks its party, that vehicle first. On the ground: the squad guards that spot. A translucent pennant previews where the green guard pennant will stand. Right click cancels; the mode also expires after 20 seconds without an order |
+| 1-9 | Call a squad: 1 is the first war factory raised, 2 the next. The key arms the order the same way `give order` does (one click orders, right click puts it away, or wait 20 seconds); the same key again takes it back. A squad's box at the top right - tank icon, unit count, the key below - calls it too |
 | Mouse left, on a squad's pennant or ring | Call that squad, where it stands |
 | Mouse left, on a card's trash can | First press arms it (`demolish?`), the second orders the building taken down - a builder goes and works it - or cancels a site; a click anywhere else disarms |
 | Mouse right, clicked | Close the menu / deselect / close the schematics callout; during building placement, cancel and restore the callout |
@@ -959,6 +959,9 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-27: squad ordering expires after 20 seconds without a target;
+  hovering the ground shows a translucent pennant at the exact spot the
+  green guard marker will occupy after clicking.
 - 2026-09-27: colony and settled rival-city buildings now throw metal
   fragments, sparks and dust as they fall. A CC0 mechanical explosion with
   clattering metal plays from the building's position; ordered dismantling

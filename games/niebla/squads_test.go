@@ -292,6 +292,32 @@ func TestTheNumberKeysCallTheWarFactoriesOldestFirst(t *testing.T) {
 	}
 }
 
+func TestSquadOrderExpiresAndSwitchingSquadsRestartsTheWait(t *testing.T) {
+	scene := &playScene{}
+	scene.armOrdering(1)
+	for i := 0; i < orderTimeoutTicks-1; i++ {
+		scene.tickOrdering()
+	}
+	if scene.ordering != 1 {
+		t.Fatal("the squad order expired before 20 seconds")
+	}
+	scene.armOrdering(2)
+	for i := 0; i < orderTimeoutTicks-1; i++ {
+		scene.tickOrdering()
+	}
+	if scene.ordering != 2 {
+		t.Fatal("switching squads did not restart the 20-second wait")
+	}
+	scene.tickOrdering()
+	if scene.ordering != 0 {
+		t.Fatal("the squad order stayed armed after 20 seconds")
+	}
+	scene.armOrdering(1)
+	if scene.ordering != 1 || scene.orderTicks != orderTimeoutTicks {
+		t.Fatal("calling a squad again did not start a fresh wait")
+	}
+}
+
 func TestASquadsMarkPicksItsSquad(t *testing.T) {
 	s := newGame()
 	noRivals(s)

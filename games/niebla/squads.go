@@ -14,7 +14,9 @@ import (
 // through OrderSquad.
 
 const (
-	orderPickPx = 16 // screen pixels around a vehicle that still pick it
+	orderPickPx         = 16 // screen pixels around a vehicle that still pick it
+	orderTimeoutTicks   = 20 * 60
+	orderPreviewOpacity = 0.3
 
 	squadKeys      = 9  // the number keys that call a squad: 1 through 9
 	squadPickPx    = 14 // screen pixels around a squad's mark that pick it
@@ -22,6 +24,28 @@ const (
 	squadBoxHeight = 44 //
 	squadBoxGap    = 6  //
 )
+
+func (s *playScene) armOrdering(home int64) {
+	s.ordering = home
+	s.orderTicks = orderTimeoutTicks
+}
+
+func (s *playScene) tickOrdering() {
+	if s.ordering == 0 {
+		return
+	}
+	s.orderTicks--
+	if s.orderTicks <= 0 {
+		s.ordering = 0
+	}
+}
+
+func (s *playScene) orderSpot(mx, my float32) (float64, float64) {
+	world := s.camera.ToWorld(mx, my)
+	x, y := unitsAtWorld(float64(world.X), float64(world.Y))
+	most := float64(regionCols*unitsPerTile) - 1
+	return clamp64(x, 1, most), clamp64(y, 1, most)
+}
 
 // squadSlots lists the war factories whose squads the number keys call,
 // oldest first: 1 calls the first war factory raised, 2 the next, and
@@ -109,10 +133,22 @@ func (s *playScene) updateOrdering(input *golib.Input, clickTaken, rightClick bo
 	} else if !s.hoverCell {
 		return
 	}
-	world := s.camera.ToWorld(mx, my)
-	order.X, order.Y = unitsAtWorld(float64(world.X), float64(world.Y))
+	order.X, order.Y = s.orderSpot(mx, my)
 	Apply(s.state, order)
 	s.ordering = 0
+}
+
+func (s *playScene) drawOrderingPreview(screen *golib.Screen) {
+	if !s.hoverCell {
+		return
+	}
+	if _, over := s.enemyUnder(s.mouse.X, s.mouse.Y); over {
+		return
+	}
+	x, y := s.orderSpot(s.mouse.X, s.mouse.Y)
+	gx, gy := project(float32(x), float32(y))
+	drawSquadPennant(screen, gx, gy, s.zoom,
+		golib.WithOpacity(guardColor, orderPreviewOpacity))
 }
 
 // drawOrderingLabel writes by the pointer what a click would order.
@@ -148,11 +184,17 @@ func drawSquadMarks(s *State, screen *golib.Screen, zoom float32) {
 			continue
 		}
 		gx, gy := project(float32(sq.X), float32(sq.Y))
-		pole := dotRadius(14, zoom, 10)
-		screen.DrawLine(gx, gy, gx, gy-pole, 1.5/zoom, guardColor)
-		screen.DrawTriangle(gx, gy-pole, gx, gy-pole*0.55,
-			gx+pole*0.6, gy-pole*0.78, guardColor)
+		drawSquadPennant(screen, gx, gy, zoom, guardColor)
 	}
+}
+
+func drawSquadPennant(
+	screen *golib.Screen, gx, gy, zoom float32, color golib.Color,
+) {
+	pole := dotRadius(14, zoom, 10)
+	screen.DrawLine(gx, gy, gx, gy-pole, 1.5/zoom, color)
+	screen.DrawTriangle(gx, gy-pole, gx, gy-pole*0.55,
+		gx+pole*0.6, gy-pole*0.78, color)
 }
 
 // drawSquadStrip paints the squads' boxes at the top right, one per
