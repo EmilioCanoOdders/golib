@@ -354,7 +354,7 @@ func drawRadialLeaves(
 	}
 }
 
-// costPart is one resource a blueprint asks for, as the tip writes it.
+// costPart is one resource a blueprint or production order asks for.
 type costPart struct {
 	name    string // "lilac" or "oil", for the tip's short line
 	words   string // the amount with its unit, e.g. "180 kg"
@@ -390,21 +390,26 @@ func radialTipOf(s *State, kind BuildingKind) radialTip {
 	info := catalogInfo(buildingType(kind))
 	tip := radialTip{name: info.Name, color: info.Color}
 	lilac, oil := buildingCost(kind)
-	tip.parts = append(tip.parts, costPart{
+	tip.parts = resourceCosts(s, lilac, oil)
+	return tip
+}
+
+func resourceCosts(s *State, lilac, oil float64) []costPart {
+	parts := []costPart{{
 		name:    "lilac",
 		words:   si(lilac, "kg"),
 		color:   lilacColor,
 		missing: s.Stock.Lilac < lilac,
-	})
+	}}
 	if oil > 0 {
-		tip.parts = append(tip.parts, costPart{
+		parts = append(parts, costPart{
 			name:    "oil",
 			words:   si(oil, "L"),
 			color:   oilColor,
 			missing: oilTotal(s) < oil,
 		})
 	}
-	return tip
+	return parts
 }
 
 // drawRadialTip paints the tip beside the option under the pointer: a

@@ -334,6 +334,24 @@ func robotProduction(kind RobotKind) (lilac, oil float64, ticks int64, ok bool) 
 	return 0, 0, 0, false
 }
 
+func canQueueUnit(s *State, b Building, kind RobotKind) bool {
+	if !canProduce(b, kind) || b.Work > 0 {
+		return false
+	}
+	switch kind {
+	case RobotCombat:
+		if !squadRoom(s, b) {
+			return false
+		}
+	case RobotRepair:
+		if !repairProtocolUnlocked(s) || !mechanicRoom(s, b) {
+			return false
+		}
+	}
+	lilac, oil, _, builds := robotProduction(kind)
+	return builds && s.Stock.Lilac >= lilac && oilTotal(s) >= oil
+}
+
 func canProduce(b Building, kind RobotKind) bool {
 	switch b.Kind {
 	case BuildingFactory:

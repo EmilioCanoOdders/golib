@@ -297,27 +297,109 @@ func TestWarFactoryCardWaitsForRepairProtocolBeforeOfferingMechanic(t *testing.T
 
 	s.Tech[techRepairID] = false
 	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
-	if panel.findButton(buttonMechanic) == nil {
-		t.Fatal("the repair protocol did not offer an affordable mechanic")
+	mechanic := panel.findButton(buttonMechanic)
+	if mechanic == nil || mechanic.disabled {
+		t.Fatal("the repair protocol did not enable an affordable mechanic")
 	}
 	if !hasMechanicDetails(panel) || !hasRepairPrice(panel) {
 		t.Fatal("the war factory did not show the repair cost details")
 	}
 	s.Stock.Lilac = mechanicCostLilac - 1
 	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
-	if panel.findButton(buttonMechanic) != nil {
-		t.Fatal("the war factory offers a mechanic the stores cannot pay for")
+	mechanic = panel.findButton(buttonMechanic)
+	if mechanic == nil || !mechanic.disabled {
+		t.Fatal("the unaffordable mechanic button is missing or enabled")
+	}
+	if len(mechanic.costs) != 2 || !mechanic.costs[0].missing ||
+		mechanic.costs[1].missing {
+		t.Fatal("the mechanic price did not mark only the missing lilac")
+	}
+	if panel.buttonRowAt(
+		mechanic.bx+mechanic.bw/2,
+		mechanic.by+mechanic.bh/2,
+	) != nil {
+		t.Fatal("the unaffordable mechanic button still accepts clicks")
 	}
 	s.Stock.Lilac = 2500
 	Apply(s, QueueMechanic{Building: home.ID})
 	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
-	if panel.findButton(buttonMechanic) != nil {
-		t.Fatal("the war factory offers a second job while building a mechanic")
+	mechanic = panel.findButton(buttonMechanic)
+	if mechanic == nil || !mechanic.disabled {
+		t.Fatal("the mechanic button should stay visible and disabled while busy")
 	}
 	runTicks(s, mechanicBuildTicks)
 	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
-	if panel.findButton(buttonMechanic) != nil {
-		t.Fatal("the war factory offers a second mechanic after filling its slot")
+	mechanic = panel.findButton(buttonMechanic)
+	if mechanic == nil || !mechanic.disabled {
+		t.Fatal("the mechanic button should stay disabled after filling its slot")
+	}
+	if trooper := panel.findButton(buttonTrooper); trooper == nil ||
+		trooper.disabled {
+		t.Fatal("a full mechanic slot should not disable trooper production")
+	}
+	for i := 0; i < squadSize; i++ {
+		id := s.spawnRobot(RobotCombat, 0, 0)
+		trooper := s.Robots[id]
+		trooper.Squad = home.ID
+		s.Robots[id] = trooper
+	}
+	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
+	trooper := panel.findButton(buttonTrooper)
+	if trooper == nil || !trooper.disabled {
+		t.Fatal("the full squad's trooper button is missing or enabled")
+	}
+}
+
+func TestRobotFactoryButtonsShowTheirCostsAndAvailability(t *testing.T) {
+	s := newGame()
+	col, row := groundNearCore()
+	home := raised(t, s, BuildingFactory, col, row)
+	camera := golib.NewCamera(screenWidth, screenHeight)
+	panel := tooltipLayout(s, camera, col, row, map[string]bool{})
+	for _, label := range []string{buttonBuildBuilder, buttonBuildWorker} {
+		button := panel.findButton(label)
+		if button == nil || button.disabled {
+			t.Fatalf("the affordable %q button is missing or disabled", label)
+		}
+		if len(button.costs) != 2 || button.costs[0].missing ||
+			button.costs[1].missing {
+			t.Errorf("%q does not show both affordable resource costs", label)
+		}
+	}
+
+	s.Stock.Oil = 0
+	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
+	button := panel.findButton(buttonBuildWorker)
+	if button == nil || !button.disabled {
+		t.Fatal("the unaffordable worker button is missing or enabled")
+	}
+	if len(button.costs) != 2 || button.costs[0].missing ||
+		!button.costs[1].missing {
+		t.Fatal("the worker price did not mark only the missing oil")
+	}
+	if panel.buttonRowAt(
+		button.bx+button.bw/2,
+		button.by+button.bh/2,
+	) != nil {
+		t.Fatal("the unaffordable worker button still accepts clicks")
+	}
+
+	s.Stock.Oil = 1000
+	Apply(s, QueueRobot{Building: home.ID, Kind: RobotBuilder})
+	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
+	for _, label := range []string{buttonBuildBuilder, buttonBuildWorker} {
+		button := panel.findButton(label)
+		if button == nil || !button.disabled {
+			t.Errorf("the busy factory's %q button is missing or enabled", label)
+		}
+	}
+	runTicks(s, factoryRobotTicks)
+	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
+	for _, label := range []string{buttonBuildBuilder, buttonBuildWorker} {
+		button := panel.findButton(label)
+		if button == nil || button.disabled {
+			t.Errorf("the idle factory's %q button is missing or disabled", label)
+		}
 	}
 }
 

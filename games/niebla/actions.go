@@ -154,22 +154,10 @@ func (a QueueMechanic) apply(s *State) {
 
 func queueUnit(s *State, id int64, kind RobotKind) {
 	b, ok := s.Buildings[id]
-	if !ok || !canProduce(b, kind) || b.Work > 0 {
+	if !ok || !canQueueUnit(s, b, kind) {
 		return
 	}
-	if kind == RobotRepair && !repairProtocolUnlocked(s) {
-		return
-	}
-	if kind == RobotCombat && !squadRoom(s, b) {
-		return
-	}
-	if kind == RobotRepair && !mechanicRoom(s, b) {
-		return
-	}
-	lilac, oil, ticks, builds := robotProduction(kind)
-	if !builds || s.Stock.Lilac < lilac || oilTotal(s) < oil {
-		return
-	}
+	lilac, oil, ticks, _ := robotProduction(kind)
 	s.Stock.Lilac -= lilac
 	s.payOil(oil)
 	b.Work, b.WorkKind = ticks, kind

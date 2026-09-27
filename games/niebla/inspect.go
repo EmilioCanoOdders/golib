@@ -66,23 +66,24 @@ const (
 const pipeButtonWidth = 58 // a pipe row's remove button: its note needs the room
 
 // tooltipRow is one line the panel draws: the header, a card's title, an
-// expanded card's detail, or a button. A button is only on the panel
-// when the colony could really press it - what the stores, the
-// schematics or the room refuse is not offered.
+// expanded card's detail, or a button. Unlocked production options stay
+// visible when disabled; other buttons appear only when they can work.
 type tooltipRow struct {
 	thing       Thing  // the card the row belongs to; empty on the header
 	detail      Detail // on a detail row
 	header      bool
 	title       bool
-	open        bool    // the card is expanded
-	summary     string  // the title's headline, right-aligned
-	button      string  // the label on a button row, "" otherwise
-	note        string  // markup written beside the button
+	open        bool   // the card is expanded
+	summary     string // the title's headline, right-aligned
+	button      string // the label on a button row, "" otherwise
+	note        string // markup written beside the button
+	costs       []costPart
 	ref         int64   // what the button acts on, when it isn't the card's thing: a pipe
 	bx, by      float32 // the button's rectangle on the screen
 	bw, bh      float32 //
 	trash       bool    // a title row that ends in a trash can, at bx, by
 	blocked     bool    // the trash can is dimmed: this one can't go
+	disabled    bool    // a visible button that cannot be pressed now
 	armed       bool    // the trash can was pressed once and asks again
 	workers     bool
 	portraits   []robotPortrait
@@ -247,42 +248,28 @@ func tooltipLayoutForThings(
 			}})
 		}
 		if thing.Type == TypeFactory {
-			if b, ok := s.Buildings[thing.Ref]; ok && b.Work <= 0 {
-				lilac, oil, _, _ := robotProduction(RobotBuilder)
+			if b, ok := s.Buildings[thing.Ref]; ok {
 				t.rows = append(t.rows,
-					tooltipRow{
-						thing: thing, button: buttonBuildBuilder,
-						note: "[dim]" + costWords(lilac, oil) + "[/]",
-					},
-				)
-				lilac, oil, _, _ = robotProduction(RobotWorker)
-				t.rows = append(t.rows,
-					tooltipRow{
-						thing: thing, button: buttonBuildWorker,
-						note: "[dim]" + costWords(lilac, oil) + "[/]",
-					},
+					productionButtonRow(
+						s, thing, b, buttonBuildBuilder, RobotBuilder,
+					),
+					productionButtonRow(
+						s, thing, b, buttonBuildWorker, RobotWorker,
+					),
 				)
 			}
 			continue
 		}
 		if thing.Type == TypeWarFactory {
 			if b, ok := s.Buildings[thing.Ref]; ok {
-				if repairProtocolUnlocked(s) && b.Work <= 0 &&
-					mechanicRoom(s, b) &&
-					s.Stock.Lilac >= mechanicCostLilac &&
-					oilTotal(s) >= mechanicCostOil {
-					t.rows = append(t.rows, tooltipRow{
-						thing: thing, button: buttonMechanic,
-					})
+				if repairProtocolUnlocked(s) {
+					t.rows = append(t.rows, productionButtonRow(
+						s, thing, b, buttonMechanic, RobotRepair,
+					))
 				}
-				if b.Work <= 0 && squadRoom(s, b) &&
-					s.Stock.Lilac >= trooperCostLilac &&
-					oilTotal(s) >= trooperCostOil {
-					t.rows = append(t.rows, tooltipRow{
-						thing:  thing,
-						button: buttonTrooper,
-					})
-				}
+				t.rows = append(t.rows, productionButtonRow(
+					s, thing, b, buttonTrooper, RobotCombat,
+				))
 				if len(squadMembers(s, b.ID)) > 0 {
 					t.rows = append(t.rows, tooltipRow{
 						thing: thing, button: buttonOrder,
@@ -410,6 +397,22 @@ func tooltipLayoutForThings(
 	return t
 }
 
+func productionButtonRow(
+	s *State,
+	thing Thing,
+	b Building,
+	button string,
+	kind RobotKind,
+) tooltipRow {
+	lilac, oil, _, _ := robotProduction(kind)
+	return tooltipRow{
+		thing:    thing,
+		button:   button,
+		disabled: !canQueueUnit(s, b, kind),
+		costs:    resourceCosts(s, lilac, oil),
+	}
+}
+
 // trashFor reports whether a thing's card carries a trash can, and
 // whether it is dimmed: every building and site can go but the core,
 // which has none, a building already ordered down, whose card says
@@ -524,6 +527,9 @@ func (t tooltip) buttonRowAt(x, y float32) *tooltipRow {
 		if r.button == "" {
 			continue
 		}
+		if r.disabled {
+			continue
+		}
 		if x >= r.bx && x <= r.bx+r.bw && y >= r.by && y <= r.by+r.bh {
 			return r
 		}
@@ -608,15 +614,19 @@ func drawTooltip(screen *golib.Screen, t tooltip, mx, my float32) {
 			screen.DrawText(summary, right, y, textSize, summaryColor,
 				golib.TextOptions{Font: uiFont, Align: golib.AlignRight})
 		case r.button != "":
-			fill, ink := buttonColor, panelTextColor
+			fill, ink, edge := buttonColor, panelTextColor, buttonEdgeColor
 			rect := golib.Rectangle{X: r.bx, Y: r.by, Width: r.bw, Height: r.bh}
-			if rect.Contains(mx, my) {
+			if r.disabled {
+				fill, ink, edge = panelColor, panelDimColor, blockedColor
+			} else if rect.Contains(mx, my) {
 				fill = buttonHoverColor
 			}
 			screen.DrawRectangle(rect, fill)
-			screen.DrawRectangleOutline(rect, 1, buttonEdgeColor)
+			screen.DrawRectangleOutline(rect, 1, edge)
 			screen.DrawText(r.button, r.bx+8, r.by+4, textSize, ink, uiText)
-			if r.note != "" {
+			if len(r.costs) > 0 {
+				drawProductionCost(screen, *r)
+			} else if r.note != "" {
 				drawMarkup(screen, r.note, r.bx+r.bw+10, r.by+4,
 					textSize, panelTextColor)
 			}
@@ -626,6 +636,29 @@ func drawTooltip(screen *golib.Screen, t tooltip, mx, my float32) {
 				textSize, panelTextColor)
 		}
 		y += rowHeight(r)
+	}
+}
+
+func drawProductionCost(screen *golib.Screen, row tooltipRow) {
+	const slack = 2
+	x := row.bx + row.bw + 10
+	y := row.by + 4
+	for i, part := range row.costs {
+		if i > 0 {
+			screen.DrawText("+", x, y, textSize, panelDimColor, uiText)
+			x += screen.TextWidth("+", textSize, uiText) + 4
+		}
+		width := screen.TextWidth(part.words, textSize, uiText)
+		screen.DrawText(part.words, x, y, textSize, part.color, uiText)
+		border := buttonEdgeColor
+		if part.missing {
+			border = dangerColor
+		}
+		screen.DrawRectangleOutline(golib.Rectangle{
+			X: x - slack, Y: y - slack,
+			Width: width + 2*slack, Height: textSize + 2*slack,
+		}, 1, border)
+		x += width + 6
 	}
 }
 

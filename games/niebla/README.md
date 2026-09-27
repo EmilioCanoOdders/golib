@@ -154,17 +154,21 @@ NIEBLA_MITE_SHOT_STATE=../../build/niebla/mites.json \
   --scale 2
 ```
 
-To compare the war factory card before and after the protocol, write both
-states and use the printed cell click coordinate in the two shots:
+To compare the war factory card before and after the protocol, and see its
+disabled orders and red resource shortfalls, write the three states and use
+the printed cell click coordinate in the shots:
 
 ```text
 NIEBLA_REPAIR_LOCKED_SHOT_STATE=../../build/niebla/repair-locked.json \
 NIEBLA_REPAIR_UNLOCKED_SHOT_STATE=../../build/niebla/repair-unlocked.json \
+NIEBLA_REPAIR_SHORT_SHOT_STATE=../../build/niebla/repair-short.json \
   ./golib go -C games/niebla test \
   -run TestWriteRepairCardShotStates -v
 ./golib shot niebla 60 --save build/niebla/repair-locked.json \
   --input "Enter@1 Mouse@2:664,362 MouseLeft@3"
 ./golib shot niebla 60 --save build/niebla/repair-unlocked.json \
+  --input "Enter@1 Mouse@2:664,362 MouseLeft@3"
+./golib shot niebla 60 --save build/niebla/repair-short.json \
   --input "Enter@1 Mouse@2:664,362 MouseLeft@3"
 ```
 
@@ -334,7 +338,7 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | `actions.go` | The actions (`Tick`, `SendRobot`, ID-specific `AssignRobot` and `RecallRobot`, `MarkBuilding`, typed `QueueRobot`, `QueueMechanic`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
 | `sim_robots.go` | The robots' rules and tuning: `robotDay`, common priorities, builders alone claiming construction and pipe work, workers mining posts, builders and unassigned workers collecting piles, oil-pool waits under fog, stationary hull damage and tank wear, `postRobots` and worker-only `pickRobot`, movement, pipe-section claims and idle ranks |
 | `sim_piles.go` | Demolition, unit wrecks and loose items: `canDemolish`, the 25% unit recovery (`dropRobotWreck`), the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
-| `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, protector upkeep, storage, refueling and production choices for builders, workers, troopers and mechanics; protector upkeep reports its oil cost |
+| `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, protector upkeep, storage, refueling and production eligibility for builders, workers, troopers and mechanics; `canQueueUnit` is shared by the cards and queue action |
 | `sim_oil.go` | Oil's spendable tanks and dedicated protector reserves: `oilTotal`, `oilCap`, `payOil`, all physical tank capacity, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
 | `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus`; fog-covered oil pools stop pumps without losing oil, protectors clear them, tanks fill from pipes at a shared 1.6 L/s limit and pass excess onward, while protectors keep their reserve and upkeep; each pipe records offered, moved and cumulative liters for the view |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, local exposure (`fogExposureAt`), oil pools covered outside bubbles, where the line stands now (`fogLineNow`), and the drag a walker keeps (`fogDrag`) |
@@ -356,7 +360,7 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | `things.go` | What a cell holds, the unit the player picks by: `Thing` snapshots out of layout plus state (a deposit's card spans its patch, while buildings and sites stay on their own cell; rival vehicles and bases standing on the cell have cards too), builders', workers', troopers' and mechanics' captions, `tileAtWorld`, the SI quantities; pure Go, no drawing |
 | `catalog.go` | The entity database: per thing type its name, color, unit and card lines, plus the stable-color fallback |
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
-| `inspect.go` | The inspection panel: layout, hit testing, painting, clickable paginated worker portraits, remotely opened robot cards, individual recall and return buttons, other card actions and the integrity line of a damaged building; the cell's outline (`cellDiamond`) |
+| `inspect.go` | The inspection panel: layout, hit testing, painting, clickable paginated worker portraits, remotely opened robot cards, individual recall and return buttons, other card actions and the integrity line of a damaged building; unlocked factory orders stay visible but dim and unclickable while unavailable, with each resource price outlined and shortfalls red; the cell's outline (`cellDiamond`) |
 | `robots_panel.go` | The fixed colony roster under the squad strip: builders, available workers, workers grouped by deposit and mechanics; current activity, paging, individual deposit assignment and recall |
 | `sim_mites.go` | Deterministic mite exposure and wear: common unit damage, colony and rival building sites, buildings, piles that lose material over three minutes at full exposure, and laid pipe sections that wear only where exposed; active repulsors shelter their bubbles |
 | `mites.go` | The mites' view: volume- and exposure-scaled swarms around robots, rivals, buildings, sites, piles and laid pipe sections; city-owned hosts animate 60% of the usual particles, without changing damage; swarms double when stationary and again in a full swell, with a red halo around still hosts |

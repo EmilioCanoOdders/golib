@@ -603,6 +603,12 @@ For whoever works on the game, not for the player: in the region, hold Control a
   Troopers do no work and shoot from their own tanks. Rivals shoot
   troopers, mechanics and guard posts; a post they bring down falls into
   a pile like any building.
+- Factory cards keep every unlocked production option visible, even while
+  the factory is working, its squad or mechanic slot is full, or stores are
+  short. Such buttons are gray and have no click target. Each lilac and oil
+  amount is outlined beside its button; an amount the stores cannot cover
+  has a red outline. The card and `QueueRobot` use the same eligibility
+  rule, so the visual state matches the production action.
 - Lose nothing at the start: the core is indestructible and its bubble has no upkeep. Protector reserves are not part of the oil rivals can steal. The rivals take oil, never the game.
 - Lose units: any tanked unit outside a bubble whose tank or hull reaches
   zero is digested by the fog. Stationary units lose hull and oil after
@@ -843,7 +849,10 @@ stable hash of the type name; `markup.go` colors text with `[name]...[/]`.
 In `inspect.go`, `tooltipWidth` is 290 px, `titleSize`/`textSize` are
 15/13, and `buttonWidth`/`buttonRow` are 112/22. Deposit portraits use a
 four-column grid, eight per page, and the panel stays anchored to the
-selected cell's projected middle. `robots_panel.go` adds the fixed roster
+selected cell's projected middle. Factory production rows stay visible
+after their schematic unlocks; disabled rows are dim and ignore clicks,
+while each resource amount gets its own outline, red only for a shortfall.
+`robots_panel.go` adds the fixed roster
 under the squad strip: five entries per page, grouped by role and post,
 with individual assignment and recall controls.
 
@@ -991,6 +1000,11 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-28: robot- and war-factory cards keep unlocked production buttons
+  visible while busy, out of capacity or short on resources. Disabled orders
+  are gray and cannot be clicked; lilac and oil prices are individually
+  outlined, with resource shortfalls in red. The UI and queue action share
+  the same eligibility check. Pinned by `markup_test.go`.
 - 2026-09-27: squad ordering expires after 20 seconds without a target;
   hovering the ground shows a translucent pennant at the exact spot the
   green guard marker will occupy after clicking.

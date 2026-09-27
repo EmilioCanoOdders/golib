@@ -290,10 +290,11 @@ func TestRepairBattleMarkersSurviveSaveRoundTrip(t *testing.T) {
 func TestWriteRepairCardShotStates(t *testing.T) {
 	lockedPath := os.Getenv("NIEBLA_REPAIR_LOCKED_SHOT_STATE")
 	unlockedPath := os.Getenv("NIEBLA_REPAIR_UNLOCKED_SHOT_STATE")
-	if lockedPath == "" && unlockedPath == "" {
+	shortPath := os.Getenv("NIEBLA_REPAIR_SHORT_SHOT_STATE")
+	if lockedPath == "" && unlockedPath == "" && shortPath == "" {
 		t.Skip("set a repair card shot-state path to write a fixture")
 	}
-	write := func(path string, unlocked bool) {
+	write := func(path string, unlocked, short bool) {
 		if path == "" {
 			return
 		}
@@ -307,6 +308,12 @@ func TestWriteRepairCardShotStates(t *testing.T) {
 			s.Tech[techRepairID] = true
 		}
 		s.Stock = Stock{Oil: 1000, Lilac: 2500}
+		if short {
+			s.Stock = Stock{
+				Oil:   mechanicCostOil - 1,
+				Lilac: mechanicCostLilac - 1,
+			}
+		}
 		col, row := groundNearCore()
 		factory := raised(t, s, BuildingWarFactory, col, row)
 		scene := newPlayScene(s)
@@ -321,6 +328,7 @@ func TestWriteRepairCardShotStates(t *testing.T) {
 			t.Fatalf("writing %s: %v", path, err)
 		}
 	}
-	write(lockedPath, false)
-	write(unlockedPath, true)
+	write(lockedPath, false, false)
+	write(unlockedPath, true, false)
+	write(shortPath, true, true)
 }
