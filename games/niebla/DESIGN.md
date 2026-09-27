@@ -521,8 +521,9 @@ Rival scouts are small and red, raiders carry an oil drum, crawlers carry
 a repulsor mast, and mobile artillery has its cannon raised above its
 turret. Their wheels and shaded sides have real 3D geometry. Portraits
 and squad icons show these same models, scaled for the UI rather than the
-world. Cargo, refuel blink, damage and oil carried remain view overlays;
-the simulation and saved facing do not change.
+world. Cargo, the refuel blink and oil carried remain view overlays. Damage
+and worker tank levels show as bars below their feet; they never enter the
+simulation, and saved facing does not change.
 
 The single `studio.py` makes the geometry primitives, materials, light,
 camera, world-yaw conversion, model sheet and shadow mask for all models.
@@ -815,6 +816,8 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-27: worker oil-tank bars now sit below the units, beneath the
+  health bar when one is visible, instead of above the chassis.
 - 2026-09-27: artillery schematics now arrive after the third normal attack
   ends. The scout and city-produced sorties do not count, and completing a
   rival factory alone no longer unlocks artillery in new saves. Version 7

@@ -53,6 +53,7 @@ func drawRobots(
 			screen.DrawCircle(pack.X, pack.Y, radius*0.32, cargo)
 		}
 		maxHealth := robotMaxHealth(r.Kind)
+		statusY := p.Y + radius*1.5
 		healthColor := robotColor
 		switch r.Kind {
 		case RobotWorker:
@@ -64,15 +65,13 @@ func drawRobots(
 		}
 		if maxHealth > 0 && r.Health < maxHealth {
 			drawUnitBar(screen, golib.Rectangle{
-				X: p.X - radius, Y: p.Y + radius*1.5,
+				X: p.X - radius, Y: statusY,
 				Width: 2 * radius, Height: 2 / zoom,
 			}, r.Health/maxHealth, healthColor)
 		}
 		if r.Kind == RobotWorker {
-			scale := model.iconScale(zoom)
-			roof := p.Y - 6.4*scale*unitH
 			drawUnitBar(screen, golib.Rectangle{
-				X: p.X - radius, Y: roof - 12/zoom,
+				X: p.X - radius, Y: statusY + 4/zoom,
 				Width: 2 * radius, Height: 2 / zoom,
 			}, r.Tank/robotTankLiters, oilColor)
 		}
