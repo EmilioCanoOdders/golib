@@ -178,7 +178,8 @@ func techWords(id string) (title, body string) {
 				"chargers."
 	case techGuardID:
 		return "guard post",
-			"They are at the tanks: the mark they leave is their claim. A guard post would stop the next visit."
+			"The scout has left the core's clear circle. Build a guard post " +
+				"before its next visit."
 	case techFrontierID:
 		return "frontier kit",
 			"Grow the safe ground and draw oil without legs. Pipes come with them."

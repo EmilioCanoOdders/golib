@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"math"
 	"os"
 	"reflect"
 	"testing"
@@ -171,39 +173,133 @@ func TestOpeningCalloutsExplainTheNextStep(t *testing.T) {
 		body != wantRepairBody {
 		t.Fatalf("repair callout is %q, %q", title, body)
 	}
+	title, body = techWords(techGuardID)
+	wantGuardBody := "The scout has left the core's clear circle. Build a " +
+		"guard post before its next visit."
+	if title != "guard post" || body != wantGuardBody {
+		t.Fatalf("guard callout is %q, %q", title, body)
+	}
 }
 
-func TestTheGuardPostAnswersTheMark(t *testing.T) {
+func TestGuardUnlockWaitsForTheFirstScoutToLeaveTheCoreBubble(t *testing.T) {
 	s := newGame()
+	Apply(s, AckTech{ID: techIndustryID})
 	if kindUnlocked(s, BuildingGuard) {
 		t.Fatal("the guard post stood ready before anyone came")
 	}
-	visitNow(s)
-	if !tickUntil(s, 60*60, func() bool { return len(s.Parties) > 0 }) {
-		t.Fatal("the scout never drove in")
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	radius := coreBubbleRadius * unitsPerTile
+	partyID, scoutID := int64(10), int64(11)
+	s.Parties[partyID] = Party{
+		ID: partyID, Stage: StageRaid, Siphon: 0,
+		EntryX: cx + radius + 200, EntryY: cy,
 	}
-	// Driving in is not enough: the drawing must be inevitable first.
-	runTicks(s, 60)
+	s.Enemies[scoutID] = Enemy{
+		ID: scoutID, Party: partyID, Kind: EnemyScout,
+		X: cx + radius - 300, Y: cy, Oil: 3,
+	}
+	Apply(s, Tick{})
+	if s.Parties[partyID].Stage != StageLeave || len(s.Marks) == 0 {
+		t.Fatal("the scout did not paint its mark and begin leaving")
+	}
 	if kindUnlocked(s, BuildingGuard) {
-		t.Fatal("the guard post came while the scout was still driving in")
+		t.Fatal("the scout's oil and mark unlocked the guard inside the bubble")
 	}
-	// A rival at the tanks, drinking, makes it inevitable: there the
-	// guard comes, while the thief steals and before the mark dries.
-	s.Enemies[7] = Enemy{ID: 7, Party: 1, Kind: EnemyScout, X: 100, Y: 100, Oil: 3}
-	runTicks(s, 1)
-	if !kindUnlocked(s, BuildingGuard) {
-		t.Fatal("a rival drinking at the tanks brought no guard post")
+
+	crossed := false
+	for tick := 0; tick < 1800; tick++ {
+		before := s.Enemies[scoutID]
+		Apply(s, Tick{})
+		after, alive := s.Enemies[scoutID]
+		if !alive {
+			t.Fatal("the scout reached its entry before crossing the bubble")
+		}
+		gap := math.Hypot(after.X-cx, after.Y-cy)
+		if gap <= radius {
+			if kindUnlocked(s, BuildingGuard) {
+				t.Fatalf("the guard arrived while the scout was %.1f m inside", gap)
+			}
+			continue
+		}
+		if !crossedCoreBubble(before.X, before.Y, after.X, after.Y) {
+			t.Fatalf("the scout moved outside without crossing from inside: %+v", after)
+		}
+		if !s.Raids.ScoutClearedCore || !kindUnlocked(s, BuildingGuard) {
+			t.Fatal("the scout's outward crossing did not unlock the guard post")
+		}
+		if techPending(s) != techGuardID {
+			t.Fatalf("the crossing's pending schematic is %q", techPending(s))
+		}
+		crossed = true
+		break
+	}
+	if !crossed {
+		t.Fatal("the first scout never crossed out of the core bubble")
 	}
 	if kindUnlocked(s, BuildingProtector) || kindUnlocked(s, BuildingWarFactory) {
-		t.Error("more than the guard post came with the mark")
+		t.Error("the scout's crossing unlocked more than the guard post")
 	}
-	// And a mark already on the ground brings it too, should the moment
-	// have passed while the state stood still.
-	marked := newGame()
-	marked.Marks[1] = Mark{ID: 1, X: 100, Y: 100}
-	runTicks(marked, 1)
-	if !kindUnlocked(marked, BuildingGuard) {
-		t.Fatal("a mark on the ground brought no guard post")
+
+	if opened, arrived := s.Tech[techGuardID]; !arrived || opened {
+		t.Fatalf("guard schematic ledger entry is opened=%v arrived=%v",
+			opened, arrived)
+	}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var loaded State
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatal(err)
+	}
+	loaded.enterRegion()
+	if !loaded.Raids.ScoutClearedCore ||
+		!kindUnlocked(&loaded, BuildingGuard) ||
+		techPending(&loaded) != techGuardID {
+		t.Fatalf("the scout crossing or pending guard badge was lost: %+v",
+			loaded.Raids)
+	}
+	if !reflect.DeepEqual(loaded.Tech, s.Tech) {
+		t.Errorf("the tech ledger changed across save/load: %v vs %v",
+			loaded.Tech, s.Tech)
+	}
+}
+
+func TestOnlyTheFirstScoutCrossingClearsTheCore(t *testing.T) {
+	s := newGame()
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	radius := coreBubbleRadius * unitsPerTile
+	partyID, scoutID := int64(10), int64(11)
+	s.Parties[partyID] = Party{
+		ID: partyID, Stage: StageLeave,
+		EntryX: cx + radius + 200, EntryY: cy,
+	}
+	s.Enemies[scoutID] = Enemy{
+		ID: scoutID, Party: partyID, Kind: EnemyScout,
+		X: cx + radius - 1, Y: cy,
+	}
+	s.Raids.Visits = 1
+
+	for i := 0; i < 10; i++ {
+		Apply(s, Tick{})
+	}
+	if s.Raids.ScoutClearedCore || kindUnlocked(s, BuildingGuard) {
+		t.Fatal("a later scout cleared the first visit's guard trigger")
+	}
+}
+
+func TestCoreBubbleCrossingRequiresMovingOutwardPastItsBoundary(t *testing.T) {
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	radius := coreBubbleRadius * unitsPerTile
+
+	if crossedCoreBubble(cx+radius-1, cy, cx+radius, cy) {
+		t.Fatal("reaching the boundary counted as leaving the bubble")
+	}
+	if crossedCoreBubble(cx+radius, cy, cx+radius-1, cy) {
+		t.Fatal("moving inward from the boundary counted as leaving")
+	}
+	if !crossedCoreBubble(cx+radius, cy, cx+radius+1, cy) {
+		t.Fatal("moving outward past the boundary was not a crossing")
 	}
 }
 
@@ -586,18 +682,71 @@ func TestASaveFromBeforeTheSchematicsOpensWhatItEarned(t *testing.T) {
 	if _, ok := s.Tech[techRepairID]; ok {
 		t.Error("repair schematics came to an old save with no building hit")
 	}
-	// No badge waits: the guard post comes when a scout paints its mark,
-	// and this region has none on the ground yet.
+	// No badge waits: this legacy save has no earned guard trigger.
 	if techPending(s) != "" {
 		t.Errorf("an old save owes a click: pending %q", techPending(s))
 	}
 	s.Marks[1] = Mark{ID: 1, X: 100, Y: 100}
 	Apply(s, Tick{})
-	if opened := s.Tech[techGuardID]; opened {
-		t.Error("the mark brought the guard post already opened")
+	if kindUnlocked(s, BuildingGuard) || techPending(s) != "" {
+		t.Error("a mark unlocked the guard post in a migrated current save")
+	}
+}
+
+func TestOldGuardUnlocksMigrateWithoutNewBadges(t *testing.T) {
+	for _, hasLedger := range []bool{false, true} {
+		for _, trigger := range []string{"mark", "drinking"} {
+			t.Run(fmt.Sprintf("ledger=%v/%s", hasLedger, trigger),
+				func(t *testing.T) {
+					s := newGame()
+					s.Version = stateVersion - 1
+					s.Ticks = 2
+					if hasLedger {
+						s.Tech = map[string]bool{techIndustryID: true}
+					} else {
+						s.Tech = nil
+					}
+					if trigger == "mark" {
+						s.Marks[1] = Mark{ID: 1, X: 100, Y: 100}
+					} else {
+						s.Enemies[2] = Enemy{
+							ID: 2, Party: 1, Kind: EnemyScout, Oil: 3,
+						}
+					}
+
+					s.migrateState()
+					stepTech(s)
+					if opened, arrived := s.Tech[techGuardID]; !arrived || !opened {
+						t.Fatalf(
+							"legacy %s trigger migrated as opened=%v arrived=%v",
+							trigger, opened, arrived,
+						)
+					}
+					if techPending(s) == techGuardID {
+						t.Fatal("migration created a new guard badge")
+					}
+				})
+		}
+	}
+}
+
+func TestOldPendingGuardBadgeStaysPendingAfterMigration(t *testing.T) {
+	s := newGame()
+	s.Version = stateVersion - 1
+	s.Tech = map[string]bool{
+		techIndustryID: true,
+		techGuardID:    false,
+	}
+	s.Marks[1] = Mark{ID: 1, X: 100, Y: 100}
+
+	s.migrateState()
+	if opened, arrived := s.Tech[techGuardID]; !arrived || opened {
+		t.Fatalf("the old guard badge migrated as opened=%v arrived=%v",
+			opened, arrived)
 	}
 	if techPending(s) != techGuardID {
-		t.Errorf("the mark's badge is %q, want the guard post's", techPending(s))
+		t.Fatalf("the old guard badge is %q, want %q",
+			techPending(s), techGuardID)
 	}
 }
 
@@ -759,5 +908,35 @@ func TestWriteTechShotState(t *testing.T) {
 			techFrontierID: true, techMobileID: true,
 			techArtilleryID: true, techRepairID: false,
 		})
+	}
+}
+
+func TestWriteGuardTimingShotState(t *testing.T) {
+	path := os.Getenv("NIEBLA_GUARD_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_GUARD_SHOT_STATE to write a guard timing state")
+	}
+	s := newGame()
+	s.Tech = map[string]bool{techIndustryID: true}
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	radius := coreBubbleRadius * unitsPerTile
+	s.Parties[100] = Party{
+		ID: 100, Stage: StageLeave,
+		EntryX: cx + radius + 2500, EntryY: cy,
+	}
+	s.Enemies[101] = Enemy{
+		ID: 101, Party: 100, Kind: EnemyScout,
+		X: cx + radius - 9, Y: cy, Oil: 3,
+	}
+	s.Marks[102] = Mark{ID: 102, X: cx, Y: cy}
+	play := newPlayScene(s)
+	badgeX, badgeY := techBadgeAt(play)
+	t.Logf("guard badge click: %.0f,%.0f", badgeX, badgeY)
+	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+	if err != nil {
+		t.Fatalf("the guard timing state doesn't marshal: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
 	}
 }

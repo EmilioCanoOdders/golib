@@ -30,6 +30,7 @@ var economyPlans = []economyPlan{
 }
 
 type economyMilestones struct {
+	scoutClearedCoreAt      int64
 	firstBuildingHitAt      int64
 	firstIntroAttackEndedAt int64
 	firstPressureSortieAt   int64
@@ -39,6 +40,7 @@ type economyMilestones struct {
 
 func newEconomyMilestones() economyMilestones {
 	return economyMilestones{
+		scoutClearedCoreAt:      -1,
 		firstBuildingHitAt:      -1,
 		firstIntroAttackEndedAt: -1,
 		firstPressureSortieAt:   -1,
@@ -48,6 +50,9 @@ func newEconomyMilestones() economyMilestones {
 }
 
 func (m *economyMilestones) observe(s *State) {
+	if m.scoutClearedCoreAt < 0 && s.Raids.ScoutClearedCore {
+		m.scoutClearedCoreAt = s.Ticks
+	}
 	if m.firstBuildingHitAt < 0 && s.Raids.RivalBuildingHit {
 		m.firstBuildingHitAt = s.Ticks
 	}
@@ -100,7 +105,7 @@ func TestWriteEconomyReport(t *testing.T) {
 		"pumps", "pipes", "guards", "swells", "visits", "enemies",
 		"party_stage", "party_size", "party_raiders", "party_artillery",
 		"city_stage", "city_work_ticks", "city_sorties", "city_oil",
-		"city_lilac", "first_building_hit_tick",
+		"city_lilac", "scout_cleared_core_tick", "first_building_hit_tick",
 		"first_intro_attack_end_tick", "first_pressure_sortie_tick",
 		"first_pressure_sortie_lull_tick", "repair_protocol_tick",
 		"mechanics", "building_damage",
@@ -397,6 +402,7 @@ func economyRow(
 		citySorties,
 		cityOil,
 		cityLilac,
+		economyTick(milestones.scoutClearedCoreAt),
 		economyTick(milestones.firstBuildingHitAt),
 		economyTick(milestones.firstIntroAttackEndedAt),
 		economyTick(milestones.firstPressureSortieAt),
@@ -430,6 +436,7 @@ func TestEconomyMilestonesRememberTheirTicks(t *testing.T) {
 	s := newGame()
 	milestones := newEconomyMilestones()
 	s.Ticks = 100
+	s.Raids.ScoutClearedCore = true
 	s.Raids.RivalBuildingHit = true
 	milestones.observe(s)
 	s.Ticks = 200
@@ -447,7 +454,8 @@ func TestEconomyMilestonesRememberTheirTicks(t *testing.T) {
 	s.Tech[techRepairID] = false
 	milestones.observe(s)
 
-	if milestones.firstBuildingHitAt != 100 ||
+	if milestones.scoutClearedCoreAt != 100 ||
+		milestones.firstBuildingHitAt != 100 ||
 		milestones.firstIntroAttackEndedAt != 200 ||
 		milestones.firstPressureSortieAt != 300 ||
 		milestones.firstPressureLullAt != 400 ||

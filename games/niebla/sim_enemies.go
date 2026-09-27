@@ -149,11 +149,12 @@ type Raids struct {
 	NextAt                 int64
 	FirstBearing           float64
 	BearingKnown           bool
+	ScoutClearedCore       bool  // first scout crossed the core bubble outward
 	PressureCity           int64 // the first city, founded with the second visit
 	RivalBuildingHit       bool  // any rival shot has damaged a colony building
 	PressureSortieStarted  bool  // the pressure city's first force was produced
 	PressureSortieResolved bool  // its first force reached a lull or was destroyed
-	LegacyRepairUnlocked   bool // an old save already had mechanic production
+	LegacyRepairUnlocked   bool  // an old save already had mechanic production
 }
 
 // Mark is what a scout paints on the ground before it leaves.
@@ -507,7 +508,19 @@ func stepParty(s *State, p Party) {
 			s.report(ReportRaid, 0, lead.X, lead.Y)
 		}
 	case StageLeave:
-		if s.driveParty(members, p.EntryX, p.EntryY) {
+		oldX, oldY := lead.X, lead.Y
+		arrived := s.driveParty(members, p.EntryX, p.EntryY)
+		if lead.Kind == EnemyScout && p.City == 0 && s.Raids.Visits == 0 {
+			moved := s.Enemies[lead.ID]
+			if crossedCoreBubble(oldX, oldY, moved.X, moved.Y) {
+				s.Raids.ScoutClearedCore = true
+				// Input can acknowledge the badge before the next stepTech.
+				if _, arrived := s.Tech[techGuardID]; !arrived {
+					s.Tech[techGuardID] = false
+				}
+			}
+		}
+		if arrived {
 			stolen := 0.0
 			for _, e := range members {
 				stolen += e.Oil
@@ -536,6 +549,14 @@ func stepParty(s *State, p Party) {
 		s.Raids.PressureSortieResolved = true
 	}
 	s.Parties[p.ID] = p
+}
+
+func crossedCoreBubble(oldX, oldY, newX, newY float64) bool {
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	radius := coreBubbleRadius * unitsPerTile
+	wasInside := math.Hypot(oldX-cx, oldY-cy) <= radius
+	isOutside := math.Hypot(newX-cx, newY-cy) > radius
+	return wasInside && isOutside
 }
 
 // endParty removes a party, reports its end and schedules what follows.

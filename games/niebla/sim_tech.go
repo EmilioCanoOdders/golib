@@ -51,17 +51,7 @@ var techLadder = []techDrop{
 	{techInfraID, []BuildingKind{BuildingSilo, BuildingWarehouse, BuildingCharger},
 		func(s *State) bool { return s.Deliveries > 0 }},
 	{techGuardID, []BuildingKind{BuildingGuard},
-		func(s *State) bool {
-			if len(s.Marks) > 0 {
-				return true // the drawing lies on the ground
-			}
-			for _, e := range s.Enemies {
-				if e.Oil > 0 {
-					return true // at the tanks, drinking: the drawing is inevitable
-				}
-			}
-			return false
-		}},
+		func(s *State) bool { return s.Raids.ScoutClearedCore }},
 	{techFrontierID, []BuildingKind{BuildingProtector, BuildingPump},
 		func(s *State) bool { return s.Ticks >= techFrontierTicks }},
 	{techMobileID, []BuildingKind{BuildingWarFactory},
@@ -153,10 +143,24 @@ func legacyTechArrived(s *State, id string) bool {
 		return s.Ticks >= legacyTechIndustryTicks
 	case techRepairID:
 		return false
+	case techGuardID:
+		return legacyGuardTechArrived(s)
 	}
 	for i := range techLadder {
 		if techLadder[i].id == id {
 			return techLadder[i].trigger(s)
+		}
+	}
+	return false
+}
+
+func legacyGuardTechArrived(s *State) bool {
+	if len(s.Marks) > 0 {
+		return true
+	}
+	for _, e := range s.Enemies {
+		if e.Oil > 0 {
+			return true
 		}
 	}
 	return false

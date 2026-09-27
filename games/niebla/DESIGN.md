@@ -168,6 +168,10 @@ sooner than 30 cycles apart, up to three; each city is part of the saved
 state. The city has a fixed 170 m repulsor post. The colony is told when
 the first city establishes and when later crawlers approach.
 
+The guard-post schematic arrives when the first scout, returning after its
+theft, crosses outward past the core's fixed 800 m bubble. Its oil and mark
+do not unlock the post while it is still inside.
+
 The colony's guard posts and troopers, and rival crawlers and raiders, all
 have a `smallArmsRangeUnits` reach of 130 m. A guard post on the first
 attack's approach to the nearest tank should end that first raid at 20% hull
@@ -371,14 +375,15 @@ For whoever works on the game, not for the player: in the region, hold Control a
 ## Rules (MVP)
 - The robot factory's schematic waits over the core from the start. The
   first delivered load brings infrastructure (silo, warehouse, charger);
-  the guard post comes when the scout's theft is inevitable, the frontier
-  kit (protector, pump, pipes) at 5:30, the war factory when the first
-  peripheral city begins construction, and artillery when a rival city
-  completes its war factory. The repair protocol is a later, unit-only
-  drop: it waits until the first
-  real attack has ended, rival fire has damaged a colony building, and the
-  first city force is unloading, rebuilding, regrouping or destroyed. If no
-  first force is produced, its timing falls back to minute 12; building
+  the guard post comes when the first scout returns and crosses outward past
+  the fixed 800 m core bubble; the mark and oil alone do not unlock it. The
+  frontier kit (protector, pump, pipes) comes at 5:30, and the war factory
+  comes when the first peripheral city begins construction. Artillery arrives
+  when a rival city completes its war factory. The repair protocol is a later,
+  unit-only drop: it waits until the first real attack has ended, rival fire
+  has damaged a colony building, and the first city force unloads, rebuilds,
+  regroups or is destroyed. If no first force is produced, its timing falls
+  back to minute 12; building
   damage is still required. A drop's badge waits until opened; the menu
   offers only what the cell could really take, and unaffordable options
   stand washed out
@@ -752,8 +757,8 @@ option at once; save for the next known threat.
 1. Build the robot factory and work the safe oil and lilac patches. Grow to
    three workers, assigning several robots to the two safe patches instead
    of making six workers that have no active deposit.
-2. When the scout steals oil, build the guard post. In the three-seed probe,
-   this defense plan raises one by minute 3-4.
+2. After the scout returns beyond the core bubble, build the guard post. In
+   the three-seed probe, this defense plan raises one by minute 3-4.
 3. When the first city appears, mark the war factory and build two troopers.
    The probe has both by minute 7, before the first city sortie at minute
    9-11. Send the squad against an approaching party or keep it where it can
@@ -804,6 +809,13 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-27: the guard-post schematic now arrives when the first scout,
+  returning after its theft, crosses outward past the core's fixed 800 m
+  bubble. Its mark and stolen oil no longer unlock it inside the bubble.
+  Version 6 saves the crossing, and older saves retain guard access earned
+  under the former mark-or-oil trigger without receiving a new badge. The
+  economy probe records the crossing at tick 12,051 for seeds 0, 1 and 2;
+  tests and paired shots pin the timing and its presentation.
 - 2026-09-26: mechanic production now requires the repair protocol, a
   separate informational schematic delivered after rival fire damages a
   colony building and the first city force reaches a lull. It waits through

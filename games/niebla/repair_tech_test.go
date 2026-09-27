@@ -242,7 +242,7 @@ func TestOldWarFactorySavesKeepTheirRepairCapability(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			s := newGame()
-			s.Version = stateVersion - 1
+			s.Version = 4
 			test.setup(s)
 			s.migrateState()
 			if !repairProtocolUnlocked(s) {
@@ -252,7 +252,7 @@ func TestOldWarFactorySavesKeepTheirRepairCapability(t *testing.T) {
 	}
 
 	s := newGame()
-	s.Version = stateVersion - 1
+	s.Version = 4
 	s.Tech = map[string]bool{techIndustryID: true}
 	s.migrateState()
 	if repairProtocolUnlocked(s) {

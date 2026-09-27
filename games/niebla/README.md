@@ -20,7 +20,8 @@ schematics each policy has actually earned. The plans are safe harvesting,
 worker growth, a protected oil outpost, and a guard with a two-trooper
 defense. The `oil` column is spendable oil; `protector_oil` tracks dedicated
 fuel separately. Party size, city progress, stores and sortie counts are
-recorded too, along with rival building damage, repair milestone ticks,
+recorded too, along with the first scout's core-bubble crossing, rival
+building damage, repair milestone ticks,
 mechanic count and remaining building damage. It writes only when given a
 path, so normal tests leave no report:
 
@@ -90,6 +91,18 @@ NIEBLA_TECH_REPAIR_SHOT_STATE=../../build/niebla/repair-tech.json \
   ./golib go -C games/niebla test -run TestWriteTechShotState
 ./golib shot niebla 60 --save build/niebla/repair-tech.json \
   --input "Enter@1 Mouse@2:640,312 MouseLeft@3"
+```
+
+To see the scout inside the bubble, crossing out, and the guard callout in
+one sequence of shots:
+
+```text
+NIEBLA_GUARD_SHOT_STATE=../../build/niebla/guard-timing.json \
+  ./golib go -C games/niebla test \
+  -run TestWriteGuardTimingShotState -v
+./golib shot niebla 1 22 24 25 \
+  --save build/niebla/guard-timing.json \
+  --input "Enter@1 Mouse@24:640,312 MouseLeft@25"
 ```
 
 To compare the war factory card before and after the protocol, write both
@@ -240,9 +253,9 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `sim_oil.go` | Oil's spendable tanks and dedicated protector reserves: `oilTotal`, `oilCap`, `payOil`, all physical tank capacity, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
 | `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus`; fog-covered oil pools stop pumps without losing oil, protectors clear them, tanks fill from pipes at a shared 1.6 L/s limit and pass excess onward, while protectors keep their reserve and upkeep; each pipe records offered, moved and cumulative liters for the view |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, local exposure (`fogExposureAt`), oil pools covered outside bubbles, where the line stands now (`fogLineNow`), and the drag a walker keeps (`fogDrag`) |
-| `sim_enemies.go` | The rivals' timing and movement: `Enemy` with its saved facing octant, `Party`, `Raids`, `Mark` and `Report`; the one-minute scout and follow-up clocks, the first no-camp attack, slow raider-count growth, city arrivals, party stages, siphoning and return, fog exposure, wrecks, guard posts, the shared 130 m small-arms reach and repair-protocol battle markers |
+| `sim_enemies.go` | The rivals' timing and movement: `Enemy` with its saved facing octant, `Party`, `Raids`, `Mark` and `Report`; the one-minute scout and follow-up clocks, the first no-camp attack, slow raider-count growth, city arrivals, party stages, siphoning and return, the first scout's saved outward crossing of the core bubble, fog exposure, wrecks, guard posts, the shared 130 m small-arms reach and repair-protocol battle markers |
 | `sim_cities.go` | Rival cities: serializable production, deterministic 45-second building steps, finite local oil/mineral reserves, city arrival and old-save migration, city-produced sorties, unloading, 90-second rests, squad replacement and mobile artillery; records the pressure city's first sortie |
-| `sim_tech.go` | The schematics: the robot factory is the opening drop, first delivery unlocks infrastructure, then the scout's theft, frontier clock, first-city founding and rival factory trigger their drops; the repair protocol waits for rival building damage and a city-force lull (minute 12 if no first force is produced); `stepTech`, `kindUnlocked`, `dropArrived` and `techPending` derive arrivals and `State.Tech` keeps which drops were opened |
+| `sim_tech.go` | The schematics: the robot factory is the opening drop, first delivery unlocks infrastructure, the guard post follows the first scout's return past the core bubble, then the frontier clock, first-city founding and rival factory trigger their drops; the repair protocol waits for rival building damage and a city-force lull (minute 12 if no first force is produced); `stepTech`, `kindUnlocked`, `dropArrived` and `techPending` derive arrivals and `State.Tech` keeps which drops were opened |
 | `sim_squads.go` | The military units' law and tuning: troopers (`RobotCombat`) and mechanics (`RobotRepair`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), the shared 130 m small-arms reach, the war factory's capacity (`squadRoom`, `mechanicRoom`), and rivals targeting defenders (`stepEnemyGuns`) |
 | `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right with a trooper icon, unit count and key (`drawSquadStrip`, `drawTrooperIcon`, `squadBoxRect`, `squadBoxAt`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the marks that pick a squad where it stands (`squadMarkAt`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
 | `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), vulnerable colony units, rival-shot building damage markers, building health and oil-paid mechanic repairs, what the colony sees (`seen`) and its artillery (`stepArtillery`) |
@@ -281,7 +294,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `repair_tech_test.go` | Repair-protocol triggers and lull boundaries, rival-fire markers that survive building destruction, rejected locked mechanic orders, and legacy-save compatibility |
 | `squads_test.go` | Trooper production and squad behavior, mechanic limits, target selection, health and wrecks; squads can attack the first incoming crawler without a camp delay |
 | `world_test.go` | The simulation driven directly: the starting builder, explicit individual assignment, worker-only auto-assignment, role-specific carrying, loot and construction priorities, migration, dry deposits, determinism and JSON round trip |
-| `economy_test.go` | The deterministic economy probe: four legal opening policies over three seeds, sampled each minute into an opt-in CSV with protector fuel, party and city production, repair milestones, mechanic count and outstanding building damage |
+| `economy_test.go` | The deterministic economy probe: four legal opening policies over three seeds, sampled each minute into an opt-in CSV with the scout's core crossing tick, protector fuel, party and city production, repair milestones, mechanic count and outstanding building damage |
 | `buildings_test.go` | The buildings driven directly: five-second marked construction, payment, fog placement, factory robots, refueling, digestion, full stores, silos and the protector's bubble |
 | `pipes_test.go` | Pumps and pipes driven directly: oil-pool fog stops robot loading and pump flow without draining the pool, a protector restores extraction, an exposed pump is eaten unless sheltered, pipes are paid and laid by sections, robots claim one section each, tanks share their pipe-fill limit across inlets and pass excess through a chain, protectors keep their reserve and upkeep, source outlets share flow, blocked tanks throttle pumps, bands show offered versus actual flow, pipes move oil between tanks, workers haul and refuel, illegal pipe actions are refused, pipe removal drops its cost as a pile, curves follow bends, and saves resume deterministically; can write a pump/protector flow fixture with `NIEBLA_PIPE_FLOW_SHOT_STATE` |
 | `protector_test.go` | Protector fuel: upkeep drains its dedicated tank, radius fades below the configured threshold and vanishes empty, robots and pipes refill it, the reserve stays unavailable to other costs, old saves migrate once with starting charge, and an opt-in state fixture supports visual shots |
@@ -291,7 +304,7 @@ NIEBLA_CITY_SHOT_STATE=../../build/niebla/city.json \
 | `fog_test.go` | The fog driven directly: cycles, swell timing, line and bubble margin, pushed-band drag, stationary wear by exposure, movement and bubble resets, saved wear and the HUD forecast |
 | `identity_test.go` | The identity derived from a machine ID: stable, distinct, and the parsers of what `reg query`, `ioreg` and the machine-id files say |
 | `store_test.go` | The database driven directly: an identity kept across runs, the fallback one too, the token column waiting empty, a base saved and loaded back whole, a second save replacing the first, one player's save invisible to another, the DB path's rules |
-| `tech_test.go` | The schematics driven directly: factory at start, first delivery brings infrastructure before the scout, the pressure city unlocks mobile units, the old visit trigger remains for saves, later triggers fire on time, locked actions are refused, `DevNextTech` brings the ladder in order, the mechanic's informational callout square, one-use building selection, snapped pump placement and automatic dismissal; the ledger survives a round trip |
+| `tech_test.go` | The schematics driven directly: factory at start, first delivery brings infrastructure before the scout, the first scout unlocks the guard only after crossing out of the core bubble, old mark-or-oil saves keep earned guard access, the pressure city unlocks mobile units, locked actions are refused, `DevNextTech` brings the ladder in order, the mechanic's informational callout square, one-use building selection, snapped pump placement and automatic dismissal; the ledger survives a round trip and optional shot states cover the guard crossing |
 
 ## Architecture
 
@@ -304,11 +317,13 @@ robot-sized form:
   parties, rival cities and their production, reports and projectiles.
   The ground itself is generated from `State.Seed` and never enters the
   state. It has no pointers, channels or functions, so it serializes as it
-  is. `State.Version` 5 migrates saves: legacy `core` units become fueled
+  is. `State.Version` 6 migrates saves: legacy `core` units become fueled
   builders, `built` units become workers, factories keep their selected
   product while it is in progress, builders and workers receive their
   initial hull, active city forces infer composition from survivors, and
   saves with a previously available mechanic keep that repair capability.
+  Guard schematics earned under the old mark-or-oil trigger stay unlocked
+  without a new badge.
 - Actions (`actions.go`) are structs (`Tick`, `SendRobot`, `AssignRobot`,
   `RecallRobot`, typed `QueueRobot`, `QueueMechanic`);
   `Apply` mutates the state it is given — one owner, no copies — and is
@@ -358,8 +373,9 @@ and the callout). The factory blueprint waits over the core from the
 start. A drop lights a pulsing **badge over the core** while it waits —
 the HUD adds `schematics at the core` —; its click opens a callout that
 says what came in, and the blueprints join the menu. The first delivered
-load brings infrastructure. The guard post comes when the scout's drawing
-is inevitable - a rival drinking at the tanks, or the mark already sprayed.
+load brings infrastructure. The guard post comes when the first scout,
+returning after its theft, crosses outward past the core's fixed 800 m
+bubble; its oil and mark alone do not unlock it inside.
 The menu offers only
 what the cell could really take - what the schematics, the ground or
 the fog refuse is not on the rings, and before the first drop the menu

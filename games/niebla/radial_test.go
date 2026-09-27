@@ -155,7 +155,8 @@ func TestRadialGoesBackARingAndThenCloses(t *testing.T) {
 
 // The menu only offers what the cell could take: the factory is the
 // opening blueprint, the first delivery brings infrastructure, and the
-// guard post answers the scout. The stores are not part of the offer.
+// guard post answers the scout's return across the core bubble. The stores
+// are not part of the offer.
 func TestTheRadialOnlyOffersWhatArrived(t *testing.T) {
 	s := newPlayScene(newGame())
 	s.openRadial(104, 96)
@@ -184,11 +185,16 @@ func TestTheRadialOnlyOffersWhatArrived(t *testing.T) {
 		t.Error("the factory reads as affordable over an empty store")
 	}
 	s.state.Stock.Lilac = lilac
-	// The guard post comes with the scout's mark on the ground, alone.
+	// A mark alone no longer unlocks the guard post.
 	s.state.Marks[1] = Mark{ID: 1, X: 100, Y: 100}
 	runTicks(s.state, 1)
+	if kindUnlocked(s.state, BuildingGuard) {
+		t.Fatal("the scout's mark unlocked the guard post before its return")
+	}
+	s.state.Raids.ScoutClearedCore = true
+	runTicks(s.state, 1)
 	if !kindUnlocked(s.state, BuildingGuard) {
-		t.Fatal("the guard post never answered the mark")
+		t.Fatal("the scout's return did not unlock the guard post")
 	}
 	groups = radialGroupLayout(s)
 	if len(groups) != 2 {
