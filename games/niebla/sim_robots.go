@@ -58,6 +58,7 @@ func robotMaxHealth(kind RobotKind) float64 {
 // or hull runs out outside every bubble is digested by the fog and leaves
 // a quarter of its cost and onboard resources in a wreck.
 func stepSim(s *State) {
+	s.Deaths = nil
 	stepTech(s)
 	stepFog(s)
 	stepFactories(s)
@@ -78,6 +79,7 @@ func stepSim(s *State) {
 		stepRobot(s, &r)
 		if r.tanked() && (r.Tank <= 0 || r.Health <= 0) &&
 			!inSafeZone(s, r.X, r.Y) {
+			s.recordRobotDeath(r)
 			delete(s.Robots, id)
 			s.dropRobotWreck(r)
 			continue

@@ -104,6 +104,46 @@ func TestWriteShotVehicleState(t *testing.T) {
 	}
 }
 
+func TestWriteUnitDeathShotState(t *testing.T) {
+	path := os.Getenv("NIEBLA_UNIT_DEATH_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_UNIT_DEATH_SHOT_STATE to write unit death shots")
+	}
+	s := newGame()
+	noRivals(s)
+
+	x, y := parkCenter()
+	robotID := s.spawnRobot(RobotRepair, x-45, y+30)
+	robot := s.Robots[robotID]
+	robot.Health = 1
+	s.Robots[robot.ID] = robot
+	s.fire(Shot{
+		Kind: ShotBullet, FromX: robot.X, FromY: robot.Y,
+		ToX: robot.X, ToY: robot.Y,
+		Robot: robot.ID, Damage: 2, Rival: true,
+	})
+
+	id := s.NextID
+	s.NextID++
+	e := Enemy{
+		ID: id, Kind: EnemyArtillery,
+		X: x + 65, Y: y + 30,
+		Health: 1,
+	}
+	s.Enemies[id] = e
+	s.fire(Shot{
+		Kind: ShotBullet, FromX: e.X, FromY: e.Y,
+		ToX: e.X, ToY: e.Y, Enemy: id, Damage: 2,
+	})
+	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestWriteShotMovingArtilleryState(t *testing.T) {
 	path := os.Getenv("NIEBLA_MOVING_ARTILLERY_SHOT_STATE")
 	if path == "" {

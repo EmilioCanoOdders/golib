@@ -762,6 +762,7 @@ func (s *State) killEnemy(id int64) {
 	if !ok {
 		return
 	}
+	s.recordEnemyDeath(e)
 	delete(s.Enemies, id)
 	if e.City != 0 && (e.Party == 0 || e.Kind == EnemyBase) {
 		city, belongs := s.Cities[e.City]

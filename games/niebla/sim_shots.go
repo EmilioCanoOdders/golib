@@ -201,6 +201,7 @@ func (s *State) hurtColonyUnit(id int64, damage float64) {
 	r.Health -= damage
 	s.Robots[id] = r
 	if r.Health <= 0 {
+		s.recordRobotDeath(r)
 		delete(s.Robots, id)
 		s.dropRobotWreck(r)
 	}

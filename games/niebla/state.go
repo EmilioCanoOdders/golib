@@ -37,6 +37,34 @@ type State struct {
 	Squads     map[int64]Squad    // the squads' orders, by their war factory's ID
 	Shots      map[int64]Shot     // bullets and shells in the air, by ID (sim_shots.go)
 	Tech       map[string]bool    // the schematics that arrived: drop ID -> opened (sim_tech.go)
+	// The latest tick's death events, for view effects; never saved.
+	Deaths []UnitDeath `json:"-"`
+}
+
+// UnitDeath is a one-tick simulation event for the view. It is not saved:
+// effects are cosmetic and must not replay when a saved game is opened.
+type UnitDeath struct {
+	ID        int64
+	RobotKind RobotKind
+	EnemyKind EnemyKind
+	X, Y      float64
+}
+
+func (s *State) recordRobotDeath(r Robot) {
+	s.Deaths = append(s.Deaths, UnitDeath{
+		ID: r.ID, RobotKind: r.Kind, X: r.X, Y: r.Y,
+	})
+}
+
+func (s *State) recordEnemyDeath(e Enemy) {
+	switch e.Kind {
+	case EnemyScout, EnemyCrawler, EnemyRaider, EnemyArtillery:
+	default:
+		return
+	}
+	s.Deaths = append(s.Deaths, UnitDeath{
+		ID: e.ID, EnemyKind: e.Kind, X: e.X, Y: e.Y,
+	})
 }
 
 const stateVersion = 7

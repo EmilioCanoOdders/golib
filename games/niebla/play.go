@@ -155,8 +155,10 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 	// The loop is the clock: one tick of simulation per update, more
 	// while the dev tools fast forward.
 	ticks := s.dev.ticksPerUpdate()
+	var deaths []UnitDeath
 	for i := 0; i < ticks; i++ {
 		Apply(s.state, Tick{})
+		deaths = append(deaths, s.state.Deaths...)
 		s.au.update(s, 1)
 		if report, ok := latestReport(s.state); ok &&
 			(!hadReport || report != previousReport) {
@@ -172,7 +174,7 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 	s.clampRobotPage()
 	s.clampRobotPanel()
 	s.mites.update(s.state, dt)
-	s.fx.update(s.state, dt)
+	s.fx.update(s.state, dt, deaths)
 	s.savedTicks += int64(ticks)
 	if s.savedTicks >= autosaveTicks {
 		s.saveNow()

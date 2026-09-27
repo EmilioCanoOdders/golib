@@ -54,11 +54,11 @@ func TestShellLeavesSubtleSmokeAlongItsFlight(t *testing.T) {
 	}
 	shot.X, shot.Y = shot.FromX, shot.FromY
 	s := &State{Shots: map[int64]Shot{shot.ID: shot}}
-	f.update(s, 1.0/60)
+	f.update(s, 1.0/60, nil)
 	shot.X = shot.FromX + shellSmokeStepUnits*2 + shellSmokeStepUnits/2
 	shot.Y = shot.FromY
 	s.Shots[shot.ID] = shot
-	f.update(s, 1.0/60)
+	f.update(s, 1.0/60, nil)
 
 	trailPuffs := 0
 	for _, particle := range f.sparks {
@@ -68,6 +68,203 @@ func TestShellLeavesSubtleSmokeAlongItsFlight(t *testing.T) {
 	}
 	if trailPuffs != 2 {
 		t.Fatalf("the shell left %d trail puffs, want 2", trailPuffs)
+	}
+}
+
+func TestTickReportsUnitDeathsAndKeepsThemOutOfSaves(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	x, y := parkCenter()
+
+	robotID := s.spawnRobot(RobotRepair, x+35, y+35)
+	robot := s.Robots[robotID]
+	robot.Health = 1
+	s.Robots[robotID] = robot
+	s.fire(Shot{
+		Kind: ShotBullet, FromX: robot.X, FromY: robot.Y,
+		ToX: robot.X, ToY: robot.Y,
+		Robot: robotID, Damage: 2, Rival: true,
+	})
+
+	enemyIDs := []int64{}
+	wantKinds := map[int64]EnemyKind{}
+	for i, kind := range []EnemyKind{EnemyScout, EnemyArtillery} {
+		id := s.NextID
+		s.NextID++
+		e := Enemy{
+			ID: id, Kind: kind,
+			X: x + float64(i*120), Y: y - 40,
+			Health: 1,
+		}
+		s.Enemies[id] = e
+		s.fire(Shot{
+			Kind: ShotBullet, FromX: e.X, FromY: e.Y,
+			ToX: e.X, ToY: e.Y, Enemy: id, Damage: 2,
+		})
+		enemyIDs = append(enemyIDs, id)
+		wantKinds[id] = kind
+	}
+
+	Apply(s, Tick{})
+	if got, want := len(s.Deaths), 3; got != want {
+		t.Fatalf(
+			"the tick reported %d deaths, want %d: %+v",
+			got, want, s.Deaths,
+		)
+	}
+	foundRobot := false
+	foundEnemies := map[int64]bool{}
+	for _, death := range s.Deaths {
+		switch {
+		case death.RobotKind != "":
+			if death.ID != robotID || death.RobotKind != RobotRepair {
+				t.Errorf("wrong robot death receipt: %+v", death)
+			}
+			if death.X != robot.X || death.Y != robot.Y {
+				t.Errorf("robot death position is (%v, %v)", death.X, death.Y)
+			}
+			foundRobot = true
+		case death.EnemyKind != "":
+			if wantKinds[death.ID] != death.EnemyKind {
+				t.Errorf("wrong enemy death receipt: %+v", death)
+			}
+			foundEnemies[death.ID] = true
+		}
+	}
+	if !foundRobot {
+		t.Error("the robot death was not reported")
+	}
+	for _, id := range enemyIDs {
+		if !foundEnemies[id] {
+			t.Errorf("enemy %d's death was not reported", id)
+		}
+	}
+
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("the state did not marshal: %v", err)
+	}
+	var loaded State
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("the state did not unmarshal: %v", err)
+	}
+	if len(loaded.Deaths) != 0 {
+		t.Fatalf("cosmetic death receipts survived a save: %+v", loaded.Deaths)
+	}
+
+	Apply(s, Tick{})
+	if len(s.Deaths) != 0 {
+		t.Fatalf("death receipts were not cleared by the next tick: %+v", s.Deaths)
+	}
+}
+
+func TestTickReportsFogDeathsButNotDepartingRivals(t *testing.T) {
+	t.Run("fog", func(t *testing.T) {
+		s := stationaryBuilderDeepFog(t)
+		noRivals(s)
+		robot := s.Robots[1]
+		robot.Health = 0
+		s.Robots[robot.ID] = robot
+
+		id := s.NextID
+		s.NextID++
+		s.Enemies[id] = Enemy{
+			ID: id, Kind: EnemyRaider,
+			X: robot.X + 30, Y: robot.Y,
+			Health: 1, Fogged: enemyFogTicks - 1,
+		}
+		Apply(s, Tick{})
+
+		if len(s.Deaths) != 2 {
+			t.Fatalf(
+				"the fog reported %d deaths, want 2: %+v",
+				len(s.Deaths), s.Deaths,
+			)
+		}
+		foundRobot, foundEnemy := false, false
+		for _, death := range s.Deaths {
+			foundRobot = foundRobot ||
+				(death.ID == robot.ID && death.RobotKind == RobotBuilder)
+			foundEnemy = foundEnemy ||
+				(death.ID == id && death.EnemyKind == EnemyRaider)
+		}
+		if !foundRobot || !foundEnemy {
+			t.Fatalf(
+				"the fog death receipts are incomplete: %+v",
+				s.Deaths,
+			)
+		}
+	})
+
+	t.Run("departure", func(t *testing.T) {
+		s := newGame()
+		party := Party{
+			ID: 900, Stage: StageLeave, EntryX: 120, EntryY: 160,
+		}
+		enemy := Enemy{
+			ID: 901, Kind: EnemyRaider, Party: party.ID,
+			X: party.EntryX, Y: party.EntryY, Health: 1,
+		}
+		s.Parties[party.ID] = party
+		s.Enemies[enemy.ID] = enemy
+		stepParty(s, party)
+		if len(s.Deaths) != 0 {
+			t.Fatalf(
+				"a departed rival produced death effects: %+v",
+				s.Deaths,
+			)
+		}
+		if _, alive := s.Enemies[enemy.ID]; alive {
+			t.Fatal("the departing rival remained in the region")
+		}
+	})
+}
+
+func TestUnitExplosionProfilesGiveArtilleryTheLargestBlast(t *testing.T) {
+	if len(robotExplosions) != 4 {
+		t.Fatalf(
+			"there are %d robot blast profiles, want one per role",
+			len(robotExplosions),
+		)
+	}
+	if len(enemyExplosions) != 4 {
+		t.Fatalf(
+			"there are %d rival blast profiles, want one per mobile unit",
+			len(enemyExplosions),
+		)
+	}
+	artillery := enemyExplosions[EnemyArtillery]
+	crawler := enemyExplosions[EnemyCrawler]
+	if artillery.lightReach <= crawler.lightReach ||
+		artillery.sparkCount <= crawler.sparkCount ||
+		artillery.smokeSize <= crawler.smokeSize {
+		t.Fatal(
+			"mobile artillery should have the largest light, sparks and smoke",
+		)
+	}
+}
+
+func TestUnitExplosionMergesWithItsImpact(t *testing.T) {
+	f := newFxField()
+	death := UnitDeath{ID: 7, RobotKind: RobotBuilder, X: 120, Y: 240}
+	f.spawnUnitExplosion(death, nil)
+	if len(f.flashes) != 1 {
+		t.Fatalf("the standalone explosion made %d flashes, want 1", len(f.flashes))
+	}
+	fullSparks := len(f.sparks)
+	if fullSparks <= robotExplosions[RobotBuilder].sparkCount {
+		t.Fatalf("the explosion made only %d particles", fullSparks)
+	}
+
+	impact := Shot{
+		Kind: ShotBullet, ToX: death.X, ToY: death.Y,
+	}
+	f.spawnUnitExplosion(death, []Shot{impact})
+	if len(f.flashes) != 1 {
+		t.Fatalf("the merged explosion added another flash: %d", len(f.flashes))
+	}
+	if len(f.sparks) >= fullSparks*2 {
+		t.Fatalf("the merged explosion duplicated its full particle burst: %d", len(f.sparks))
 	}
 }
 

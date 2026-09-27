@@ -18,6 +18,7 @@ import (
 const (
 	fxGravity    = 320.0 // u/s2 on a spark
 	fxMaxSparks  = 1600
+	fxMaxFlashes = 256
 	fxLightRings = 14 // ellipses a pool of light is stacked from
 	fxSparkRings = 3  // and a spark's own little pool
 
@@ -62,6 +63,84 @@ type flash struct {
 	ring      bool
 }
 
+type unitExplosion struct {
+	lightReach float64
+	flashLife  float32
+	sparkCount int
+	sparkSpeed float64
+	sparkLift  float64
+	sparkLife  float32
+	sparkSize  float32
+	smokeCount int
+	smokeReach float64
+	smokeSize  float32
+	smokeLife  float32
+	height     float64
+	color      golib.Color
+}
+
+var robotExplosions = map[RobotKind]unitExplosion{
+	RobotBuilder: {
+		lightReach: 22, flashLife: 0.18,
+		sparkCount: 24, sparkSpeed: 42, sparkLift: 58,
+		sparkLife: 0.65, sparkSize: 0.9,
+		smokeCount: 5, smokeReach: 5, smokeSize: 0.9,
+		smokeLife: 0.8, height: 3, color: sparkYellow,
+	},
+	RobotWorker: {
+		lightReach: 22, flashLife: 0.18,
+		sparkCount: 24, sparkSpeed: 42, sparkLift: 58,
+		sparkLife: 0.65, sparkSize: 0.9,
+		smokeCount: 5, smokeReach: 5, smokeSize: 0.9,
+		smokeLife: 0.8, height: 3, color: sparkYellow,
+	},
+	RobotCombat: {
+		lightReach: 29, flashLife: 0.2,
+		sparkCount: 34, sparkSpeed: 56, sparkLift: 78,
+		sparkLife: 0.85, sparkSize: 1.05,
+		smokeCount: 8, smokeReach: 7, smokeSize: 1.1,
+		smokeLife: 1, height: 4, color: sparkYellow,
+	},
+	RobotRepair: {
+		lightReach: 26, flashLife: 0.19,
+		sparkCount: 30, sparkSpeed: 50, sparkLift: 68,
+		sparkLife: 0.75, sparkSize: 1,
+		smokeCount: 6, smokeReach: 6, smokeSize: 1,
+		smokeLife: 0.9, height: 4, color: sparkYellow,
+	},
+}
+
+var enemyExplosions = map[EnemyKind]unitExplosion{
+	EnemyScout: {
+		lightReach: 30, flashLife: 0.2,
+		sparkCount: 34, sparkSpeed: 58, sparkLift: 78,
+		sparkLife: 0.9, sparkSize: 1.1,
+		smokeCount: 8, smokeReach: 7, smokeSize: 1.1,
+		smokeLife: 1, height: 5, color: sparkOrange,
+	},
+	EnemyRaider: {
+		lightReach: 34, flashLife: 0.22,
+		sparkCount: 40, sparkSpeed: 64, sparkLift: 90,
+		sparkLife: 1, sparkSize: 1.15,
+		smokeCount: 10, smokeReach: 8, smokeSize: 1.15,
+		smokeLife: 1.05, height: 5, color: sparkOrange,
+	},
+	EnemyCrawler: {
+		lightReach: 52, flashLife: 0.28,
+		sparkCount: 76, sparkSpeed: 92, sparkLift: 132,
+		sparkLife: 1.2, sparkSize: 1.4,
+		smokeCount: 17, smokeReach: 13, smokeSize: 1.5,
+		smokeLife: 1.3, height: 8, color: shellLight,
+	},
+	EnemyArtillery: {
+		lightReach: 78, flashLife: 0.36,
+		sparkCount: 132, sparkSpeed: 130, sparkLift: 200,
+		sparkLife: 1.5, sparkSize: 1.8,
+		smokeCount: 28, smokeReach: 22, smokeSize: 2,
+		smokeLife: 1.5, height: 10, color: shellLight,
+	},
+}
+
 type fxField struct {
 	known         map[int64]Shot
 	smokeDistance map[int64]float64
@@ -82,7 +161,12 @@ func spread(low, high float64) float64 {
 
 // burst throws n sparks out of a spot, up and around, in the fire's
 // colors, the hottest the fastest.
-func (f *fxField) burst(x, y, z float64, n int, speed, lift float64, life float32) {
+func (f *fxField) burst(
+	x, y, z float64,
+	n int,
+	speed, lift float64,
+	life, size float32,
+) {
 	colors := []golib.Color{sparkYellow, sparkYellow, sparkOrange, sparkOrange, sparkRed, sparkRed}
 	for i := 0; i < n && len(f.sparks) < fxMaxSparks; i++ {
 		angle := spread(0, 2*math.Pi)
@@ -92,19 +176,28 @@ func (f *fxField) burst(x, y, z float64, n int, speed, lift float64, life float3
 			vx: math.Cos(angle) * speed * push, vy: math.Sin(angle) * speed * push,
 			vz:    spread(0.3, 1) * lift,
 			life:  life * float32(spread(0.5, 1)),
-			size:  float32(spread(0.7, 1.6)),
+			size:  float32(spread(0.7, 1.6)) * size,
 			color: colors[int((1-push)/0.75*float64(len(colors)-1))],
 		})
 	}
 }
 
 func (f *fxField) smoke(x, y, z float64, n int, reach float64) {
+	f.smokeScaled(x, y, z, n, reach, 1, 1)
+}
+
+func (f *fxField) smokeScaled(
+	x, y, z float64,
+	n int,
+	reach float64,
+	size, life float32,
+) {
 	for i := 0; i < n && len(f.sparks) < fxMaxSparks; i++ {
 		f.sparks = append(f.sparks, spark{
 			x: x + spread(-reach, reach), y: y + spread(-reach, reach), z: z,
 			vx: spread(-6, 6), vy: spread(-6, 6), vz: spread(10, 28),
-			life: float32(spread(1.2, 2.6)),
-			size: float32(spread(4, 9)), opacity: 0.32,
+			life: float32(spread(1.2, 2.6)) * life,
+			size: float32(spread(4, 9)) * size, opacity: 0.32,
 			color: smokeColor, smoke: true,
 		})
 	}
@@ -123,9 +216,9 @@ func (f *fxField) shellSmoke(x, y, z float64) {
 	})
 }
 
-// update compares the state's shots with the ones seen last, lights what
-// was fired and bursts what landed, then moves every particle a frame.
-func (f *fxField) update(s *State, dt float32) {
+// update learns of shots and unit deaths, makes their effects, then moves
+// every particle a frame.
+func (f *fxField) update(s *State, dt float32, deaths []UnitDeath) {
 	for id, shot := range s.Shots {
 		if _, old := f.known[id]; old {
 			continue
@@ -138,7 +231,7 @@ func (f *fxField) update(s *State, dt float32) {
 			f.flashes = append(f.flashes, flash{
 				x: shot.FromX, y: shot.FromY, reach: 90, life: 0.22, color: shellLight,
 			})
-			f.burst(shot.FromX, shot.FromY, 8, 8, 60, 90, 0.4)
+			f.burst(shot.FromX, shot.FromY, 8, 8, 60, 90, 0.4, 1)
 			f.smoke(shot.FromX, shot.FromY, 8, 4, 6)
 			continue
 		}
@@ -147,23 +240,28 @@ func (f *fxField) update(s *State, dt float32) {
 		})
 	}
 	f.updateShellSmoke(s)
+	var landed []Shot
 	for id, shot := range f.known {
 		if _, flying := s.Shots[id]; flying {
 			continue
 		}
+		landed = append(landed, shot)
 		if shot.Kind == ShotShell {
 			f.flashes = append(f.flashes, flash{
 				x: shot.ToX, y: shot.ToY, reach: 190, life: 0.45,
 				color: shellLight, ring: true,
 			})
-			f.burst(shot.ToX, shot.ToY, 1, 90, 170, 230, 1.5)
+			f.burst(shot.ToX, shot.ToY, 1, 90, 170, 230, 1.5, 1)
 			f.smoke(shot.ToX, shot.ToY, 2, 14, shellBlastUnits/3)
 			continue
 		}
 		f.flashes = append(f.flashes, flash{
 			x: shot.ToX, y: shot.ToY, reach: 26, life: 0.12, color: sparkYellow,
 		})
-		f.burst(shot.ToX, shot.ToY, 3, 5, 45, 60, 0.35)
+		f.burst(shot.ToX, shot.ToY, 3, 5, 45, 60, 0.35, 1)
+	}
+	for _, death := range deaths {
+		f.spawnUnitExplosion(death, landed)
 	}
 	f.known = make(map[int64]Shot, len(s.Shots))
 	for id, shot := range s.Shots {
@@ -228,6 +326,56 @@ func (f *fxField) updateShellSmoke(s *State) {
 			delete(f.smokeDistance, id)
 		}
 	}
+}
+
+func (f *fxField) spawnUnitExplosion(death UnitDeath, landed []Shot) {
+	profile, found := robotExplosions[death.RobotKind]
+	if death.RobotKind == "" {
+		profile, found = enemyExplosions[death.EnemyKind]
+	}
+	if !found {
+		return
+	}
+	merged := false
+	for _, shot := range landed {
+		if shotCoversDeath(shot, death) {
+			merged = true
+			break
+		}
+	}
+	if !merged && len(f.flashes) < fxMaxFlashes {
+		f.flashes = append(f.flashes, flash{
+			x: death.X, y: death.Y,
+			reach: profile.lightReach, life: profile.flashLife,
+			color: profile.color, ring: true,
+		})
+	}
+	sparkCount := profile.sparkCount
+	sparkSize := profile.sparkSize
+	smokeCount := profile.smokeCount
+	if merged {
+		sparkCount = max(8, sparkCount/2)
+		sparkSize *= 0.85
+		smokeCount = max(3, smokeCount/2)
+	}
+	f.burst(
+		death.X, death.Y, profile.height, sparkCount,
+		profile.sparkSpeed, profile.sparkLift,
+		profile.sparkLife, sparkSize,
+	)
+	f.smokeScaled(
+		death.X, death.Y, profile.height/2,
+		smokeCount, profile.smokeReach,
+		profile.smokeSize, profile.smokeLife,
+	)
+}
+
+func shotCoversDeath(shot Shot, death UnitDeath) bool {
+	reach := 12.0
+	if shot.Kind == ShotShell {
+		reach = shellBlastUnits
+	}
+	return math.Hypot(shot.ToX-death.X, shot.ToY-death.Y) <= reach
 }
 
 // lightPool adds a soft pool of light on the ground around a spot: a

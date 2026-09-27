@@ -234,10 +234,19 @@ vulnerable mechanic, which repairs damaged colony buildings with oil from
 its own tank. Bullets and shells stay in the serialized state with hit,
 damage, wreck and visual-effect rules. City structures can be selected
 and attacked by guard posts, squads and artillery like other rival targets.
+When a robot or mobile rival is destroyed by weapons or the fog, it bursts
+at its last position: sparks and falling embers, a fading ground reflection,
+and smoke. The blast profile belongs to its unit kind; mobile artillery has
+the largest one. Death effects are cosmetic, are not saved, and merge with a
+nearby projectile impact rather than adding a second full flash.
 
 Open: independent city choices and production strategies, pathfinding, cities sending more than one sortie at once, the city's response to a completely guarded oil supply, and city graphics beyond gray versions of the existing silhouettes.
 
 ## Architecture
+
+One-tick `UnitDeath` receipts are reducer output for the view, excluded
+from JSON and cleared by the next tick.
+
 The game is a deterministic simulation first, and a picture of it second. These rules are law; every feature bends around them.
 
 1. **One serializable state.** The whole game is a single value (`State`) that serializes to JSON with no pointers, no channels, no functions. `State.Version` identifies its save schema; `enterRegion` migrates old protector records, robot roles and hull. Entities live in ID-keyed tables (`map[int64]Entity`-style, with fixed field structs); every reference between things is an ID, like a relational database. Saving = the state's JSON into the local database (SQLite, the schema a server keeps; `golib shot --save` feeds the same value through the shot channel). Loading the state = loading the game, exactly.
@@ -816,6 +825,12 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-27: destroyed robots and mobile rivals now leave a view-only
+  explosion: per-kind sparks, embers, ground light and smoke, with mobile
+  artillery the largest. One-tick death receipts are excluded from saves
+  and forwarded even during fast-forward; nearby projectile impacts merge
+  with the debris instead of doubling the flash. Pinned by `shots_test.go`
+  and the opt-in `NIEBLA_UNIT_DEATH_SHOT_STATE` capture.
 - 2026-09-27: worker oil-tank bars now sit below the units, beneath the
   health bar when one is visible, instead of above the chassis.
 - 2026-09-27: artillery schematics now arrive after the third normal attack
