@@ -141,21 +141,16 @@ func SetWindowMinSize(width, height int) {
 }
 
 // SetWindowBorder shows or hides the window's title bar and border:
-// fullscreen is a borderless window covering the monitor.
+// fullscreen on Windows and Linux is a borderless window covering the
+// monitor. MeasureWindow, HasSystemFullscreen, SetSystemFullscreen and
+// FullscreenLost differ between macOS, in raylib_darwin.go, and the others,
+// in raylib_other.go.
 func SetWindowBorder(on bool) {
 	if on {
 		rl.ClearWindowState(rl.FlagWindowUndecorated)
 	} else {
 		rl.SetWindowState(rl.FlagWindowUndecorated)
 	}
-}
-
-// FullscreenLost is always false on the desktop: fullscreen there is a window
-// GoLib sizes itself, and nothing but the game takes it away again. A browser
-// is where a player leaves fullscreen on their own, with Esc or a phone's
-// gesture.
-func FullscreenLost() bool {
-	return false
 }
 
 // MonitorBounds returns the position and size of the monitor the window is on.

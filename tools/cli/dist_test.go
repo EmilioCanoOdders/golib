@@ -4,7 +4,10 @@ import (
 	"archive/zip"
 	"bytes"
 	"debug/pe"
+	"errors"
+	"image/png"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -239,7 +242,7 @@ func TestDistLinux(t *testing.T) {
 	if code := tp.c.dist(nil); code != 0 {
 		t.Fatalf("with game.json and icon.png: exit code %d, output:\n%s", code, tp.stdout.String())
 	}
-	if want := "[info] only Windows builds carry the icon from icon.png and the details from game.json so far\n[ok]   built"; !strings.HasPrefix(tp.stdout.String(), want) {
+	if want := "[info] only Windows and macOS builds carry the icon from icon.png and the details from game.json so far\n[ok]   built"; !strings.HasPrefix(tp.stdout.String(), want) {
 		t.Errorf("with game.json and icon.png, output:\n%s\nwant it to start with:\n%s", tp.stdout.String(), want)
 	}
 	if _, err := os.Stat(tp.c.path("build", "rocks", "dist", "rocks-2.0.0-linux-amd64.zip")); err != nil {
@@ -252,10 +255,12 @@ func TestDistMacOS(t *testing.T) {
 	if code := tp.c.dist(nil); code != 0 {
 		t.Fatalf("exit code %d, output:\n%s%s", code, tp.stdout.String(), tp.stderr.String())
 	}
-	want := `[ok]   built games/rocks into build/rocks/dist/rocks/rocks
+	want := `[info] games/rocks has no game.json, so the executable's details say "rocks", version 0.0.0: add one to set the title, version and author (see docs/tooling.md)
+[info] games/rocks has no icon.png, so the game shows macOS's default icon: add a square PNG, ideally 256 by 256 pixels
+[ok]   built games/rocks into build/rocks/dist/rocks/rocks.app
 [ok]   wrote THIRD-PARTY-LICENSES.txt next to it, with the licenses of Go 1.27.1, jfxr, github.com/ebitengine/purego v0.10.0, github.com/gen2brain/raylib-go/raylib v0.60.1, github.com/jupiterrider/ffi v0.7.0, raylib 6.0 and libffi
 [ok]   zipped build/rocks/dist/rocks/ into build/rocks/dist/rocks-0.0.0-macos-amd64.zip (0.0 MB): share this file
-[info] players unzip it and start rocks. On macOS it carries libraylib.6.0.0.dylib and libffi.8.dylib inside, and copies them into the player's ~/Library/Caches folder when it first starts. What the game saves with golib.SaveData goes in ~/Library/Application Support/GoLib games/rocks
+[info] players unzip it and open rocks.app, which carries libraylib.6.0.0.dylib and libffi.8.dylib inside, and copies them into the player's ~/Library/Caches folder when it first starts. What the game saves with golib.SaveData goes in ~/Library/Application Support/GoLib games/rocks. No Apple developer account signs the app, so the first time macOS stops it: players open it from System Settings, Privacy & Security, Open Anyway
 `
 	if !strings.HasPrefix(tp.stdout.String(), want) {
 		t.Errorf("output:\n%s\nwant it to start with:\n%s", tp.stdout.String(), want)
@@ -266,8 +271,8 @@ func TestDistMacOS(t *testing.T) {
 		t.Errorf("go builds = %q, want one: %q", builds, wantBuild)
 	}
 	folder := tp.folder(t, "rocks")
-	if len(folder) != 2 {
-		t.Errorf("build/rocks/dist/rocks/ holds %q, want the game and %s only", folder, noticesFile)
+	if len(folder) != 1 {
+		t.Errorf("build/rocks/dist/rocks/ holds the files %q, want %s only, next to the app", folder, noticesFile)
 	}
 	for _, part := range []string{
 		"\nraylib 6.0\nhttps://www.raylib.com\nBuilt into rocks, from github.com/gen2brain/raylib-go/raylib v0.60.1\n",
@@ -275,6 +280,139 @@ func TestDistMacOS(t *testing.T) {
 	} {
 		if !strings.Contains(folder[noticesFile], part) {
 			t.Errorf("%s doesn't contain %q", noticesFile, part)
+		}
+	}
+
+	// The executable is in the app, which has no icon without icon.png, and
+	// is signed.
+	app := tp.c.path("build", "rocks", "dist", "rocks", "rocks.app")
+	contents := readFolder(t, filepath.Join(app, "Contents"))
+	if len(contents) != 1 || !strings.Contains(contents["Info.plist"], "<key>CFBundleExecutable</key>\n\t<string>rocks</string>") {
+		t.Errorf("rocks.app/Contents/ holds %q, want Info.plist naming the executable", contents)
+	}
+	if strings.Contains(contents["Info.plist"], "CFBundleIconFile") {
+		t.Error("Info.plist names an icon, but the game has no icon.png")
+	}
+	if macOS := readFolder(t, filepath.Join(app, "Contents", "MacOS")); len(macOS) != 1 || macOS["rocks"] != "the game" {
+		t.Errorf("rocks.app/Contents/MacOS/ holds %q, want the executable only", macOS)
+	}
+	if _, err := os.Stat(filepath.Join(app, "Contents", "Resources")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("rocks.app/Contents/Resources/ exists without an icon.png: %v", err)
+	}
+	if !slices.Equal(tp.signed, []string{app}) {
+		t.Errorf("signed %q, want the app, %s", tp.signed, app)
+	}
+}
+
+func TestDistMacOSApp(t *testing.T) {
+	tp := newTestProject(t, "darwin", "_rocks")
+	writeFile(t, tp.c.path("games", "_rocks", gameInfoFile), `{"title": "Rocks: in Space & more", "version": "1.2.3-beta", "copyright": "Copyright 2026 Ada"}`)
+	tp.addIcon(t, "_rocks")
+	if code := tp.c.dist(nil); code != 0 {
+		t.Fatalf("exit code %d, output:\n%s%s", code, tp.stdout.String(), tp.stderr.String())
+	}
+	for _, line := range []string{
+		`[ok]   games/_rocks/game.json: the executable's details say "Rocks: in Space & more", version 1.2.3-beta`,
+		"[ok]   games/_rocks/icon.png (64 by 64 pixels): the game's icon, in 7 sizes from 16 to 1024 pixels\n",
+		"[ok]   built games/_rocks into build/_rocks/dist/_rocks/Rocks- in Space & more.app\n",
+		"players unzip it and open Rocks- in Space & more.app,",
+	} {
+		if !strings.Contains(tp.stdout.String(), line) {
+			t.Errorf("output:\n%s\nwant it to contain:\n%s", tp.stdout.String(), line)
+		}
+	}
+	app := tp.c.path("build", "_rocks", "dist", "_rocks", "Rocks- in Space & more.app")
+	plist, err := os.ReadFile(filepath.Join(app, "Contents", "Info.plist"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range []string{
+		"<key>CFBundleDisplayName</key>\n\t<string>Rocks: in Space &amp; more</string>",
+		"<key>CFBundleExecutable</key>\n\t<string>_rocks</string>",
+		"<key>CFBundleIconFile</key>\n\t<string>icon.icns</string>",
+		"<key>CFBundleIdentifier</key>\n\t<string>golib.games.rocks</string>",
+		"<key>CFBundleShortVersionString</key>\n\t<string>1.2.3</string>",
+		"<key>CFBundleVersion</key>\n\t<string>1.2.3</string>",
+		"<key>LSApplicationCategoryType</key>\n\t<string>public.app-category.games</string>",
+		"<key>NSHighResolutionCapable</key>\n\t<true/>",
+		"<key>NSHumanReadableCopyright</key>\n\t<string>Copyright 2026 Ada</string>",
+	} {
+		if !strings.Contains(string(plist), entry) {
+			t.Errorf("Info.plist:\n%s\nwant it to contain:\n%s", plist, entry)
+		}
+	}
+	icns, err := os.ReadFile(filepath.Join(app, "Contents", "Resources", "icon.icns"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(icns, []byte("icns")) {
+		t.Errorf("icon.icns starts with %q, want icns", icns[:min(4, len(icns))])
+	}
+	if _, err := os.Stat(filepath.Join(app, "Contents", "MacOS", "_rocks")); err != nil {
+		t.Error(err)
+	}
+
+	// An app that can't be signed is still made, with a warning.
+	tp = newTestProject(t, "darwin", "rocks")
+	tp.signError = errors.New("codesign: exit status 1")
+	if code := tp.c.dist(nil); code != 0 {
+		t.Fatalf("unsigned: exit code %d, output:\n%s", code, tp.stdout.String())
+	}
+	if want := "[warn] could not sign rocks.app, so macOS may call it damaged once players download it: codesign: exit status 1\n"; !strings.Contains(tp.stdout.String(), want) {
+		t.Errorf("unsigned: output:\n%s\nwant a warning:\n%s", tp.stdout.String(), want)
+	}
+}
+
+func TestMacIcon(t *testing.T) {
+	icns := macIcon(checkerboard(64))
+	if string(icns[:4]) != "icns" || int(be.Uint32(icns[4:])) != len(icns) {
+		t.Fatalf("header %q, length %d; want icns and the file's length, %d", icns[:4], be.Uint32(icns[4:]), len(icns))
+	}
+	var kinds []string
+	for rest := icns[8:]; len(rest) > 0; {
+		if len(rest) < 8 {
+			t.Fatalf("%d bytes left over after the images", len(rest))
+		}
+		kind, length := string(rest[:4]), int(be.Uint32(rest[4:]))
+		if length < 8 || length > len(rest) {
+			t.Fatalf("%s: length %d, with %d bytes left", kind, length, len(rest))
+		}
+		img, err := png.Decode(bytes.NewReader(rest[8:length]))
+		if err != nil {
+			t.Fatalf("%s: %v", kind, err)
+		}
+		i := slices.IndexFunc(macIconImages, func(m struct {
+			kind string
+			size int
+		}) bool {
+			return m.kind == kind
+		})
+		if i < 0 {
+			t.Fatalf("unknown image type %q", kind)
+		}
+		if size := macIconImages[i].size; img.Bounds().Dx() != size || img.Bounds().Dy() != size {
+			t.Errorf("%s is %v, want %d by %d", kind, img.Bounds().Size(), size, size)
+		}
+		kinds = append(kinds, kind)
+		rest = rest[length:]
+	}
+	if len(kinds) != len(macIconImages) {
+		t.Errorf("icon.icns holds %q, want one image of each of the %d types", kinds, len(macIconImages))
+	}
+}
+
+func TestAppNames(t *testing.T) {
+	for _, tt := range []struct{ title, game, app, id string }{
+		{"Rocks", "rocks", "Rocks.app", "golib.games.rocks"},
+		{"Rocks/Stones: 2", "rocks-2", "Rocks-Stones- 2.app", "golib.games.rocks-2"},
+		{"  .hidden", "_secret", "hidden.app", "golib.games.secret"},
+		{"...", "__", "__.app", "golib.games.game"},
+	} {
+		if got := appName(tt.title, tt.game); got != tt.app {
+			t.Errorf("appName(%q, %q) = %q, want %q", tt.title, tt.game, got, tt.app)
+		}
+		if got := bundleIdentifier(tt.game); got != tt.id {
+			t.Errorf("bundleIdentifier(%q) = %q, want %q", tt.game, got, tt.id)
 		}
 	}
 }

@@ -38,7 +38,7 @@ games/
     main.go         Entry point (package main)
     DESIGN.md       Design brief: the game's memory across sessions
     game.json       Title, version and author: the Windows executable's details, and the dist zip's version (optional)
-    icon.png        The game's icon, a square PNG, for the executables golib builds on Windows (optional)
+    icon.png        The game's icon, a square PNG, for the executables golib builds on Windows and the apps it makes on macOS (optional)
     assets/         Content: maps, sprites, models, sounds, fonts; read with golib.ReadAsset
     assets.go       Embeds assets/ in golib dist builds; needed only when assets/ exists
     sources/        Files the game doesn't load, such as .blend or .psd; committed, not shipped (optional)
@@ -74,6 +74,8 @@ Package `golib` is plain Go: the game loop, the Aseprite and Tiled readers, the 
 internal/device/
   device.go       The contract, and what a backend has to provide
   raylib*.go      //go:build !js   raylib on Windows, Linux and macOS
+  raylib_darwin.go                 what the window needs on macOS alone: measuring it again as it opens, and the system's fullscreen
+  raylib_other.go //go:build !js && !darwin   the same functions for Windows and Linux
   web*.go         //go:build js    WebGL 2 in a browser, with web.js beside it
   web.js          The other half of the web backend, which golib web copies into the page
 ```

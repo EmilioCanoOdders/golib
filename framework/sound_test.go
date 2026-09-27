@@ -208,6 +208,50 @@ func TestSoundFiles(t *testing.T) {
 	}
 }
 
+// A sound from jfxr settings is the sound a .jfxr file with them gives.
+func TestSoundJfxr(t *testing.T) {
+	if audio.isReady() {
+		t.Skip("a sound device is open")
+	}
+	settings := `{"_version":1,"waveform":"square","sustain":0.05,"decay":0.02,"frequency":880}`
+	useAssets(t, map[string][]byte{"zap.jfxr": []byte(settings)})
+	_, fromFile, err := NewSoundFile("zap.jfxr").encoded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	zap := NewSoundJfxr(settings)
+	_, fromCode, err := zap.encoded()
+	if err != nil || !bytes.Equal(fromCode, fromFile) {
+		t.Errorf("the settings and the file give different sounds (%v)", err)
+	}
+	// Without a sound device the settings are still read once, and nothing plays.
+	zap.Play()
+	if err := takeError(); err != nil || !zap.read || len(zap.voices) != 0 {
+		t.Errorf("after playing: error %v, read %v, %d voices", err, zap.read, len(zap.voices))
+	}
+	if zap.describe() != "made from jfxr settings" {
+		t.Errorf("described as %s", zap.describe())
+	}
+
+	for settings, want := range map[string]string{
+		`{"volume":2,"sustain":0.1}`: `golib.NewSoundJfxr: jfxr has no setting called "volume"`,
+		`{}`:                         `golib.NewSoundJfxr: the sound lasts 0 seconds`,
+		`not json`:                   `golib.NewSoundJfxr: the file isn't a jfxr sound`,
+	} {
+		sound := NewSoundJfxr(settings)
+		sound.Play()
+		wantError(t, want)
+		sound.Loop()
+		wantError(t, want)
+	}
+
+	// Unload forgets what was read, so the sound is made again when it plays.
+	zap.Unload()
+	if zap.read || zap.Looping() {
+		t.Errorf("after Unload: read %v, looping %v", zap.read, zap.Looping())
+	}
+}
+
 func TestLoopWithoutASoundDevice(t *testing.T) {
 	if audio.isReady() {
 		t.Skip("a sound device is open")
@@ -325,6 +369,19 @@ func TestSoundFilesWithADevice(t *testing.T) {
 			t.Errorf("%s: Loop after Stop doesn't play", sound.describe())
 		}
 	}
+	// Unload frees a sound and forgets it, and it can play again after.
+	settings := NewSoundJfxr(`{"sustain":0.03,"frequency":660}`)
+	settings.Play()
+	tracked := len(audio.sounds)
+	settings.Unload()
+	if len(settings.voices) != 0 || len(audio.sounds) != tracked-1 {
+		t.Errorf("after Unload: %d voices, the device tracks %d sounds, want none and %d", len(settings.voices), len(audio.sounds), tracked-1)
+	}
+	settings.Play()
+	if err := takeError(); err != nil || len(settings.voices) != soundVoices {
+		t.Errorf("playing again after Unload: %v, %d voices", err, len(settings.voices))
+	}
+
 	audio.close()
 	if made.loopLoaded || made.Looping() {
 		t.Error("closing the device kept the loop")

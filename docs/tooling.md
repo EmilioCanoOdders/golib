@@ -163,7 +163,8 @@ Random numbers from `golib.RandomInt` and `golib.RandomFloat` start from the sam
 ```text
 build/<game>/dist/                  emptied first
   <game>/                           the folder players get
-    <game>.exe                      the game, with its assets inside (no .exe on Linux and macOS)
+    <game>.exe                      the game, with its assets inside (no .exe on Linux)
+    <title>.app/                    on macOS, instead: the app players open, with the executable inside (see below)
     raylib.dll, libffi-8.dll        the libraries it loads when it starts (Windows; see below)
     THIRD-PARTY-LICENSES.txt        the licenses of the software and files in the game made by others
   <game>-<version>-<os>-<arch>.zip  the folder, zipped: the file to share
@@ -173,7 +174,7 @@ build/<game>/dist/                  emptied first
 
 | | Debug build: `build`, `run`, `shot`, `test`, F5 | Dist build: `dist`, `run --dist` |
 | --- | --- | --- |
-| Output | `build/<game>/<game>.exe`, next to the libraries | `build/<game>/dist/<game>/<game>.exe`, next to the libraries and `THIRD-PARTY-LICENSES.txt`, and a zip of that folder |
+| Output | `build/<game>/<game>.exe`, next to the libraries | `build/<game>/dist/<game>/<game>.exe`, next to the libraries and `THIRD-PARTY-LICENSES.txt`, and a zip of that folder. On macOS, `build/<game>/dist/<game>/<title>.app` instead of the executable |
 | Console window (Windows) | Yes: raylib's warnings and Go's errors appear there, and nothing else, so it stays empty while all is well. Started from Explorer, the window closes when the game ends, so `golib.Run` also shows its error, or a panic in the game, in a message box | No. `golib.Run` shows its error, or a panic in the game, in a message box |
 | Debug symbols and paths from this machine | Kept, for Delve and readable stack traces | Removed |
 | raylib and libffi | Loaded from next to the executable | Loaded from next to the executable, except on macOS (below) |
@@ -186,7 +187,7 @@ It runs `go build -trimpath` with these build tags and linker flags:
 | --- | --- | --- | --- |
 | Windows | `raylib.dll`, and `libffi-8.dll` on amd64 | `golib_dist,raylib_no_embed,ffi_no_embed` | `-s -w -X golib.saveName=<game> -H=windowsgui` |
 | Linux | `libraylib.so.6.0.0`. Players' systems provide `libffi.so.8`, `libX11.so.6` and `libGL.so.1` | `golib_dist,raylib_no_embed,ffi_no_embed` | `-s -w -X golib.saveName=<game> -r $ORIGIN` |
-| macOS | Nothing: the executable carries both libraries | `golib_dist` | `-s -w -X golib.saveName=<game>` |
+| macOS | Nothing: the executable carries both libraries, inside the app | `golib_dist` | `-s -w -X golib.saveName=<game>` |
 
 `-X golib.saveName=<game>` names the folder `golib.SaveData` saves in after the game's folder in `games/`, so it stays the same when a player renames the executable.
 
@@ -243,13 +244,13 @@ raylib's library includes other libraries, and raylib's `LICENSE` covers none of
 
 When raylib-go moves to a new raylib version, `golib test` fails until that file exists for it. To write it, copy the previous one, then check it against raylib-go's `external/` folder and `config.h`: which headers the C files include with the default settings, what each header's license says, and whether the prebuilt libraries contain them (search them for strings such as `KHR_materials_emissive_strength` for cgltf or `mtllib` for tinyobj_loader_c). `dist` prints a `[warn]` line, and leaves those notices out, while the file is missing.
 
-### Icon and version information (Windows)
+### Icon and version information (Windows and macOS)
 
-On Windows, the executable carries the game's icon, which Explorer, the title bar and the taskbar show, and the details that Explorer lists under Properties > Details and Task Manager uses as the program's name, in dist builds and in the debug builds of `build`, `run` and `shot` (not in F5's, which the Go extension builds). They come from two optional files in the game's folder:
+On Windows, the executable carries the game's icon, which Explorer, the title bar and the taskbar show, and the details that Explorer lists under Properties > Details and Task Manager uses as the program's name, in dist builds and in the debug builds of `build`, `run` and `shot` (not in F5's, which the Go extension builds). On macOS, `golib dist` wraps the executable in an app, `<title>.app`, which Finder shows and opens as one file, with the icon and the title in Finder, the Dock and the menu bar; debug builds are bare executables, so while one runs the framework puts the icon in the Dock itself. Both come from two optional files in the game's folder:
 
 | File | Holds | Without it |
 | --- | --- | --- |
-| `icon.png` | The icon: a square PNG, ideally 256 by 256 pixels, transparent around the shape. Pixel art can be smaller, down to 16 by 16. | Windows' default program icon |
+| `icon.png` | The icon: a square PNG, ideally 256 by 256 pixels, transparent around the shape. Pixel art can be smaller, down to 16 by 16. | The system's default icon |
 | `game.json` | The title, version and author, below. `golib new` writes one. | The folder name and version 0.0.0 |
 
 Every field of `game.json` is optional. Save it as UTF-8; the byte order mark that Windows PowerShell 5.1 writes is fine.
@@ -269,9 +270,20 @@ Every field of `game.json` is optional. Save it as UTF-8; the byte order mark th
 }
 ```
 
-A mistake in either file stops the build with a `[fail]` line that says what to fix: invalid JSON (with its line), an unknown field, a version that isn't major.minor.patch, an icon that isn't a square PNG of at least 16 pixels. `dist` reports what it found, and checks both files on Linux and macOS too, so a mistake shows up wherever the game is built; debug builds say nothing while both files are fine, and don't check them on Linux and macOS.
+A mistake in either file stops the build with a `[fail]` line that says what to fix: invalid JSON (with its line), an unknown field, a version that isn't major.minor.patch, an icon that isn't a square PNG of at least 16 pixels. `dist` reports what it found, and checks both files on Linux too, so a mistake shows up wherever the game is built; debug builds say nothing while both files are fine, and don't check them on Linux and macOS.
 
 How it works, in `tools/cli` (`dist.go`, `gameinfo.go`, `icon.go` and `winres.go`): golib resizes the icon to 16, 20, 24, 32, 40, 48, 64 and 256 pixels, averaging pixels to shrink and repeating them to grow, so pixel art stays sharp. It writes those images and the version information as Windows resources into a `.syso` file, the object file format the Go linker reads. The linker only picks up `.syso` files from the package's own folder, and `go build -overlay` doesn't cover them, so golib puts the file in the game's folder as `golib_windows_<arch>.syso` while it builds, then deletes it, even when the build fails. Debug and dist builds use the same name, so a file left by an interrupted build is replaced rather than linked twice, and `.gitignore` lists it. The same resources give the same file, so an unchanged game isn't linked again. The icon resource is named `GLFW_ICON`: GLFW, the library raylib opens windows with, gives an icon with that name to the game's window.
+
+On macOS, `macapp.go` makes the app around the executable that `go build` wrote:
+
+```text
+<title>.app/Contents/
+  Info.plist           the details: the title, the version (major.minor.patch, without its label, which macOS doesn't take), the copyright, the identifier golib.games.<game>, and the category Games, which macOS's Game Mode looks for
+  MacOS/<game>         the executable
+  Resources/icon.icns  the icon: PNG images of 16 to 1024 pixels, resized as for Windows, in the types Apple's iconutil writes
+```
+
+The app is named after `title`, with `/` and `:`, which macOS keeps out of file names, replaced by `-`. golib then signs it ad hoc, with macOS's own `codesign --sign -`: no Apple developer account is involved, so macOS stops a downloaded app the first time, and the player opens it from System Settings, Privacy & Security, Open Anyway. Without that signature, macOS would call the app damaged, with no way to open it, because the linker signs the executable alone on Apple silicon and the app's other files wouldn't match. When `codesign` fails, `dist` makes the app anyway and says so in a `[warn]` line. `golib run --dist` starts the executable inside the app, which macOS then treats as the app. In debug builds, `golib.Run` reads `icon.png` from the game's folder and hands it to the Dock (`SetAppIcon` in `framework/internal/device/raylib_darwin.go`), since raylib's `SetWindowIcon` does nothing on macOS.
 
 Dist builds on Linux and macOS don't use the two files yet.
 

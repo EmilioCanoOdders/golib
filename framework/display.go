@@ -13,9 +13,14 @@ var fullscreenWanted atomic.Bool
 
 // SetFullscreen switches the game between a window and fullscreen, from the
 // next frame. Fullscreen covers the monitor the window is on without changing
-// its resolution. The screen games draw on keeps its size either way: Run
-// scales it to fit, with black bars where the shapes differ. Call it from
-// Update, for example on F11 or Alt+Enter:
+// its resolution. On macOS it is the system's own fullscreen, the one the
+// window's green button enters: the window slides into a space of its own,
+// without the menu bar or the Dock, and the player can leave it with that
+// button too. There the switch waits until no key or mouse button is held,
+// such as the Enter that asked for it, because macOS loses a release that
+// comes while the window slides. The screen games draw on keeps its size
+// either way: Run scales it to fit, with black bars where the shapes differ.
+// Call it from Update, for example on F11 or Alt+Enter:
 //
 //	altEnter := input.KeyDown(golib.KeyLeftAlt) && input.KeyPressed(golib.KeyEnter)
 //	if input.KeyPressed(golib.KeyF11) || altEnter {
@@ -27,16 +32,17 @@ var fullscreenWanted atomic.Bool
 //
 // In a browser it happens at the next key, click or touch, which is when a
 // browser allows it, and the player can leave it themselves with Esc or a
-// phone's gesture; IsFullscreen follows them when they do, so this call switches
-// it back on. On a phone, that key, click or touch is a tap, so a game meant for
-// one needs something to tap.
+// phone's gesture; IsFullscreen follows them when they do, there and on macOS,
+// so this call switches it back on. On a phone, that key, click or touch is a
+// tap, so a game meant for one needs something to tap.
 func SetFullscreen(on bool) {
 	fullscreenWanted.Store(on)
 }
 
 // IsFullscreen reports whether the game is in fullscreen, or will be from the
 // next frame. In a browser it turns false by itself when the player leaves
-// fullscreen with Esc or a phone's gesture.
+// fullscreen with Esc or a phone's gesture, and on macOS when they leave it
+// with the window's green button.
 func IsFullscreen() bool {
 	return fullscreenWanted.Load()
 }
@@ -85,7 +91,8 @@ func WindowFocused() bool {
 // window switches the game window between windowed and fullscreen, and
 // remembers where the window was. Fullscreen is a window without borders that
 // covers the monitor, so the monitor keeps its resolution, and switching back
-// puts the window where it was, at the size it had.
+// puts the window where it was, at the size it had. On macOS it is the
+// system's own fullscreen instead, which puts the window back by itself.
 type window struct {
 	fullscreen          bool // what is applied now
 	x, y, width, height int  // the window before it went fullscreen
@@ -93,22 +100,37 @@ type window struct {
 }
 
 // apply switches the window to match fullscreenWanted, and shows or hides the
-// mouse pointer to match mouseHiddenWanted.
-func (w *window) apply() {
+// mouse pointer to match mouseHiddenWanted. held is whether a key or a mouse
+// button was down when the input was last read.
+func (w *window) apply(held bool) {
 	if hide := mouseHiddenWanted.Load(); hide != w.mouseHidden {
 		device.SetCursorVisible(!hide)
 		w.mouseHidden = hide
 	}
 	// A player who leaves fullscreen themselves, which a browser lets them do
-	// with Esc or a phone's gesture, is not put back into it: the game's idea
-	// of fullscreen follows the machine's, so the next SetFullscreen is a real
-	// change again and IsFullscreen keeps telling the truth.
+	// with Esc or a phone's gesture, and macOS with the window's green button,
+	// is not put back into it: the game's idea of fullscreen follows the
+	// machine's, so the next SetFullscreen is a real change again and
+	// IsFullscreen keeps telling the truth.
 	if w.fullscreen && device.FullscreenLost() {
 		w.fullscreen = false
 		fullscreenWanted.Store(false)
 	}
 	want := fullscreenWanted.Load()
 	if want == w.fullscreen {
+		return
+	}
+	// Where the system has a fullscreen of its own that games should use,
+	// macOS's, the backend switches it; elsewhere golib covers the monitor.
+	// macOS drops every key and mouse event while its fullscreen slides in or
+	// out, so a key released meanwhile, such as the Enter that asked for the
+	// switch, would stay down until pressed again: the switch waits until
+	// nothing is held.
+	if device.HasSystemFullscreen() {
+		if !held {
+			device.SetSystemFullscreen(want)
+			w.fullscreen = want
+		}
 		return
 	}
 	if want {

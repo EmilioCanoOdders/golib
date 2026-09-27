@@ -230,6 +230,7 @@ func runWindow(game Game, config Config) error {
 		return err
 	}
 	defer device.CloseWindow()
+	showGameIcon()
 	device.SetTargetFPS(targetFPS)
 	audio.open()
 	defer audio.close()
@@ -257,9 +258,10 @@ func runWindow(game Game, config Config) error {
 	scene := game
 	last := device.Time()
 	for !device.WindowShouldClose() {
-		display.apply()
+		display.apply(queue.held())
 		focused := device.WindowFocused()
 		windowUnfocused.Store(!focused)
+		device.MeasureWindow() // on macOS, raylib can keep a wrong size from while the window opened
 		windowWidth, windowHeight := device.WindowSize()
 		fit := fitScreen(screenWidth, screenHeight, float32(windowWidth), float32(windowHeight), config.PixelArt)
 

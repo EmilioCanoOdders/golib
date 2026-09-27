@@ -64,11 +64,11 @@ func (c *cli) run(options []string) int {
 // dist build carries its assets inside the executable, where a debug build
 // reads them from the game's folder.
 func (c *cli) runDist(game string) int {
-	if !c.distGame(game) {
+	exe := c.distGame(game)
+	if exe == "" {
 		return c.summary("run")
 	}
 	folder := c.path("build", game, "dist", game)
-	exe := filepath.Join(folder, c.executable(game))
 	shownExe := c.shown(exe)
 	c.check("info", fmt.Sprintf("running %s as a player would, from its own folder", shownExe))
 	code, _, err := c.runGame(gameRun{exe: exe, dir: folder, env: c.cleanEnv()})

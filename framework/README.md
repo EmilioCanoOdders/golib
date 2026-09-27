@@ -11,6 +11,7 @@ For AI agents writing game code with GoLib, and for anyone who wants the whole f
 | Draw it | `Draw(screen *golib.Screen)` | [Drawing](#drawing) |
 | Write text in a font | `golib.NewFont`, `screen.DrawText` with `golib.TextOptions` | [Fonts](#fonts) |
 | Draw pictures and animations | `golib.NewSprite`, `golib.NewSpriteSheet`, `screen.DrawSprite`, `golib.Animation` | [Sprites and animations](#sprites-and-animations) |
+| Draw a picture pixel by pixel, such as an emulator's screen | `golib.NewImage`, `image.SetPixel`, `screen.DrawImage` | [Pictures made pixel by pixel](#pictures-made-pixel-by-pixel) |
 | Load levels made in Tiled | `golib.NewMap`, `screen.DrawMap`, `level.TilesIn`, `level.Objects` | [Maps](#maps) |
 | Read keys, mouse and gamepads | `input.KeyDown`, `input.KeyPressed`, `input.MousePosition`, `input.GamepadDown` | [Input](#input) |
 | Move, aim and chase | `golib.Vector2` and its `Add`, `Scale`, `Normalize`, `MoveTowards` | [Vectors, rectangles and collisions](#vectors-rectangles-and-collisions) |
@@ -18,7 +19,7 @@ For AI agents writing game code with GoLib, and for anyone who wants the whole f
 | Scroll a world larger than the screen | `golib.NewCamera`, `screen.SetCamera` | [Camera](#camera) |
 | Move between title, play, pause and game over | `golib.SwitchScene` | [Scenes](#scenes) |
 | Roll dice | `golib.RandomInt`, `golib.RandomFloat` | [Random numbers](#random-numbers) |
-| Play sound effects | `golib.NewSound`, `golib.Laser` and the other recipes, `golib.NewSoundFile` for sound files and sounds designed in jfxr | [Sound effects](#sound-effects) |
+| Play sound effects | `golib.NewSound`, `golib.Laser` and the other recipes, `golib.NewSoundFile` for sound files and sounds designed in jfxr, `golib.NewSoundJfxr` for jfxr settings in code | [Sound effects](#sound-effects) |
 | Play music | `golib.NewMusic` | [Music](#music) |
 | Go fullscreen, add a CRT look | `golib.SetFullscreen`, `golib.NewShader`, `golib.SetPostProcess` | [Window, fullscreen and screen effects](#window-fullscreen-and-screen-effects) |
 | Remember high scores, settings and progress | `golib.SaveData`, `golib.LoadData` | [Saving data](#saving-data) |
@@ -480,6 +481,38 @@ var (
 - `Width`, `Height`, `Frames` and `Animation` read the file, so they work in tests and before `Run`.
 - Only use art the user provides, and write where it came from, and its license, in `assets/ATTRIBUTION.md`, as `games/platformer` does.
 
+### Pictures made pixel by pixel
+
+A sprite is a picture from a file. An `Image` is one the game makes itself, pixel by pixel, as it runs: the screen of an emulator or a fantasy console, a plasma effect, a minimap, a picture a player paints.
+
+| Name | What it does |
+| --- | --- |
+| `NewImage` | `NewImage(width, height int) *Image`: a picture of that size, 1 to 4096 pixels each way, every pixel transparent (`Color{}`) until the game sets it. |
+| `Image` | A picture made in code. |
+| `Image.SetPixel` | `SetPixel(x, y int, color Color)`: sets a pixel, counted from 0, 0 at the top-left corner. Outside the picture it does nothing, so drawing can run off its edges. |
+| `Image.Pixel` | `Pixel(x, y int) Color`: a pixel's color, or `Color{}` outside the picture. |
+| `Image.Clear` | `Clear(color Color)`: sets every pixel. |
+| `Image.Width`, `Image.Height` | `Width() int`, `Height() int`: its size, in pixels. |
+| `Screen.DrawImage` | `DrawImage(img *Image, x, y float32, options ...DrawOptions)`: draws it with its top-left corner at x, y, one screen pixel for each of its pixels. `DrawOptions` scales, flips, rotates and tints it, as with `DrawSprite`. |
+
+```go
+var monitor = golib.NewImage(64, 64) // a package variable, made once
+
+func (g *game) Update(input *golib.Input, dt float32) {
+	monitor.Clear(golib.Black)
+	monitor.SetPixel(g.x, g.y, golib.Green)
+}
+
+func (g *game) Draw(screen *golib.Screen) {
+	screen.DrawImage(monitor, 32, 32, golib.DrawOptions{Scale: 4}) // 256 by 256 on the screen
+}
+```
+
+- Changing pixels is plain Go, and cheap: the picture goes to the graphics card once, at the next `DrawImage` after it changed, however many pixels changed. Setting a pixel to the color it has isn't a change.
+- It is drawn without smoothing, at whole pixels, so its pixels stay square and sharp at any scale, as a sprite's do.
+- A size below 1 or above 4096 stops `Run` with an error the first time the picture is drawn.
+- Make pictures once, as package variables or in the game's state, as sprites are: each stays on the graphics card until `Run` ends.
+
 ## Maps
 
 A map is a level made in [Tiled](https://www.mapeditor.org): a `.tmx` file in the assets folder, with the tilesets (`.tsx`), templates (`.tx`) and PNG images it uses. The game reads the files as Tiled saves them, so there is no export step.
@@ -755,6 +788,7 @@ GoLib makes sound effects in code from a few numbers, so a game needs no sound f
 | --- | --- |
 | `NewSound` | `NewSound(spec SoundSpec) *Sound`: the sound the recipe describes. |
 | `NewSoundFile` | `NewSoundFile(name string) *Sound`: the `.wav`, `.ogg`, `.mp3`, `.qoa` or `.jfxr` file `name` in the game's assets folder, with forward slashes, as in `ReadAsset`. |
+| `NewSoundJfxr` | `NewSoundJfxr(settings string) *Sound`: the sound a `.jfxr` file with these contents gives, with no file: jfxr settings as JSON, written in the code or worked out as the game runs ([below](#sound-effects-from-jfxr)). |
 | `Sound` | A sound effect, ready to play. |
 | `Sound.Play` | `Play()`: plays the sound, over any copy of it that is still playing; up to four copies at once, and a fifth cuts off the oldest. |
 | `Sound.PlayWith` | `PlayWith(volume, pitch float32)`: plays it like `Play`, but louder, quieter, higher or lower, so the same sound over and over doesn't tire the ear. `volume` is 0 to 1, under the sound's own `SetVolume`; `pitch` is 1 for the sound as it is, 2 an octave up, 0.5 an octave down, from 0.25 to 4. Both are kept inside their limits, and the next `Play` sounds as it always did. |
@@ -762,6 +796,7 @@ GoLib makes sound effects in code from a few numbers, so a game needs no sound f
 | `Sound.Stop` | `Stop()`: silences the sound, its loop and every copy `Play` started. |
 | `Sound.Looping` | `Looping() bool`: `Loop` was called, and `Stop` wasn't since. True in tests and shots too, where nothing is heard. |
 | `Sound.SetVolume` | `SetVolume(volume float32)`: how loud this sound is, from 0 to 1, under `SetVolume`. Use it to even out sound files. |
+| `Sound.Unload` | `Unload()`: stops the sound and frees its memory. Only for sounds made as the game runs, such as one for each set of settings with `NewSoundJfxr`, so they don't pile up; `Run` frees the rest when it ends. An unloaded sound can still play: it is made again then. |
 | `Laser` | A falling zap, for shots. |
 | `Explosion` | A low burst of noise, for things breaking apart. |
 | `Pickup` | A bright blip that rises, for coins. |
@@ -837,7 +872,7 @@ For a loop without a click where it starts again, make the sound's end meet its 
 
 - A sound file is kept whole in memory: use `NewMusic` for long tracks. It is read the first time the sound plays, even under `golib shot` and in tests, which play nothing but stop at a file that is missing or can't be read.
 - A game with sound files has an `assets/` folder, so it needs `assets.go` (see [Files](#files-the-assets-folder)). Only use sounds the user provides, and write where they came from, and their license, in `assets/ATTRIBUTION.md`. Sounds designed in jfxr for the game need no entry there.
-- A sound can't loop or be stopped yet.
+- Make sounds once, as package variables: every sound stays in memory until `Run` ends. A game that makes new ones as it runs, such as from settings it works out with `NewSoundJfxr`, keeps the ones it plays again and calls `Sound.Unload` on the rest.
 
 ### Sound effects from jfxr
 
@@ -847,7 +882,7 @@ For a loop without a click where it starts again, make the sound's end meet its 
 var coinSound = golib.NewSoundFile("sounds/coin.jfxr") // games/<game>/assets/sounds/coin.jfxr
 ```
 
-A `.jfxr` file is plain JSON, so it can also be written by hand. Settings left out keep jfxr's defaults. This one is a short rising jump:
+A `.jfxr` file is plain JSON, so it can also be written by hand. Settings left out keep jfxr's defaults. The same settings can live in the code, with no file, through `NewSoundJfxr`, which gives the same sound; a game that works its sounds out as it runs, such as a synthesizer played by the player, builds the JSON and makes a sound from it. This one is a short rising jump:
 
 ```json
 {
@@ -860,6 +895,13 @@ A `.jfxr` file is plain JSON, so it can also be written by hand. Settings left o
   "squareDuty": 30,
   "amplification": 40
 }
+```
+
+The same jump in the code, with no file:
+
+```go
+var jumpSound = golib.NewSoundJfxr(`{"waveform": "square", "sustain": 0.08, "decay": 0.12,
+	"frequency": 300, "frequencySweep": 700, "squareDuty": 30, "amplification": 40}`)
 ```
 
 The settings, with the labels jfxr shows for them. "Over the sound" means from its start to its end; pitch and duty sweeps start over at each repeat.
@@ -903,7 +945,7 @@ The settings, with the labels jfxr shows for them. "Over the sound" means from i
 
 - The sound lasts `attack` + `sustain` + `decay` seconds, 15 at most. A sound whose three are all 0 stops `Run` with an error.
 - jfxr makes every sound as loud as it gets, since `normalization` is on: a jfxr sound is louder than the recipes. Lower `amplification`, to about 30 or 40, or use `Sound.SetVolume`.
-- Numbers out of range are kept in range, as jfxr keeps them. A setting jfxr doesn't have, a value of the wrong kind, a waveform jfxr doesn't have, or a `_version` above 1 stops `Run` with an error. The `_version`, `_name` and `_locked` that jfxr writes are allowed.
+- Numbers out of range are kept in range, as jfxr keeps them. A setting jfxr doesn't have, a value of the wrong kind, a waveform jfxr doesn't have, or a `_version` above 1, in a file or in the settings given to `NewSoundJfxr`, stops `Run` with an error. The `_version`, `_name` and `_locked` that jfxr writes are allowed.
 - GoLib's framework carries jfxr's synthesizer, rewritten in Go, under jfxr's BSD license, so `golib dist` adds jfxr's license to every game's `THIRD-PARTY-LICENSES.txt`. The sounds made with jfxr belong to whoever made them.
 
 ## Music
@@ -983,8 +1025,8 @@ var theme = golib.NewTune(themeSpec)
 
 | Name | What it does |
 | --- | --- |
-| `SetFullscreen` | `SetFullscreen(on bool)`: fullscreen or a window, from the next frame. Fullscreen covers the monitor without changing its resolution, and the screen keeps its size. Call it from `Update`; to start in fullscreen, set `Config.Fullscreen`, because `Run` replaces an earlier call with it. |
-| `IsFullscreen` | `IsFullscreen() bool`: the game is in fullscreen, or will be from the next frame. |
+| `SetFullscreen` | `SetFullscreen(on bool)`: fullscreen or a window, from the next frame. Fullscreen covers the monitor without changing its resolution, and the screen keeps its size. On macOS it is the system's own fullscreen, the one the window's green button enters, which slides into a space of its own without the menu bar or the Dock; the switch waits until no key or mouse button is held, because macOS loses a release that comes while the window slides. Call it from `Update`; to start in fullscreen, set `Config.Fullscreen`, because `Run` replaces an earlier call with it. |
+| `IsFullscreen` | `IsFullscreen() bool`: the game is in fullscreen, or will be from the next frame. It turns false by itself when the player leaves fullscreen on their own: with Esc in a browser, or the green button on macOS. |
 | `WindowFocused` | `WindowFocused() bool`: the window has the player's attention. False while they work in another program, so a game can draw a sign over itself or quieten its music; with `Config.PauseUnfocused`, `Run` stops updating the game meanwhile and keeps drawing it. Always true under `golib shot` and in tests. |
 
 ```go

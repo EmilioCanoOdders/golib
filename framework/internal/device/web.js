@@ -641,6 +641,14 @@ void main() {
 		return id;
 	}
 
+	function updateTexture(id, width, height, pixels) {
+		const made = textures.get(id);
+		if (!made) return;
+		gl.bindTexture(gl.TEXTURE_2D, made);
+		gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+		boundTexture = -1;
+	}
+
 	function unloadTexture(id) {
 		const made = textures.get(id);
 		if (!made) return;
@@ -1497,7 +1505,7 @@ void main() {
 	return {
 		open: open, close: close, frame: frame,
 		draw: draw, drawBuffer: drawBuffer,
-		newTexture: newTexture, unloadTexture: unloadTexture,
+		newTexture: newTexture, updateTexture: updateTexture, unloadTexture: unloadTexture,
 		newTarget: newTarget, unloadTarget: unloadTarget, readTarget: readTarget,
 		inputBuffer: inputBuffer, snapshotInput: snapshotInput, gamepadName: gamepadName,
 		touchScreen: touchScreen,

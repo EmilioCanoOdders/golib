@@ -202,6 +202,15 @@ func NewTexture(pixels []byte, width, height int) Texture {
 	return Texture{ID: uint32(id), Width: int32(width), Height: int32(height)}
 }
 
+// UpdateTexture replaces every pixel of a texture: pixels are RGBA, one byte
+// a channel, the top row first, as many as the texture has.
+func UpdateTexture(texture Texture, pixels []byte) {
+	flush()
+	buffer := js.Global().Get("Uint8Array").New(len(pixels))
+	js.CopyBytesToJS(buffer, pixels)
+	js_().Call("updateTexture", int(texture.ID), int(texture.Width), int(texture.Height), buffer)
+}
+
 // UnloadTexture frees a texture.
 func UnloadTexture(texture Texture) {
 	flush()

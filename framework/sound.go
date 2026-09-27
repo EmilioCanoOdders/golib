@@ -183,11 +183,13 @@ func wav(samples []int16) []byte {
 var soundFormats = []string{".wav", ".ogg", ".mp3", ".qoa", ".jfxr"}
 
 // Sound is a sound effect, ready to play: made in code with NewSound or one of
-// the ready-made recipes, or read from a file with NewSoundFile. Keep it in
-// the game's state, and play it as often as needed.
+// the ready-made recipes, from jfxr settings with NewSoundJfxr, or read from a
+// file with NewSoundFile. Keep it in the game's state, and play it as often as
+// needed.
 type Sound struct {
 	spec   SoundSpec
 	name   string // the file NewSoundFile was given; "" for a sound made in code
+	jfxr   string // the settings NewSoundJfxr was given; "" for any other sound
 	volume float32
 	read   bool // the file has been read, successfully or not
 	err    error
@@ -222,6 +224,21 @@ func NewSound(spec SoundSpec) *Sound {
 // error under golib shot too.
 func NewSoundFile(name string) *Sound {
 	return &Sound{name: name, volume: 1}
+}
+
+// NewSoundJfxr returns the sound effect that a .jfxr file with these contents
+// would give NewSoundFile, with no file: jfxr settings, as JSON, written in
+// the code or worked out as the game runs. Settings left out keep jfxr's
+// defaults, as they do in a file.
+//
+//	var zap = golib.NewSoundJfxr(`{"waveform": "square", "sustain": 0.1, "decay": 0.2, "frequency": 880}`)
+//
+// A mistake in the settings is found the first time the sound plays, and
+// stops Run with an error, as a mistake in a .jfxr file does. A game that
+// makes many sounds this way, one for each set of settings, frees the ones it
+// no longer needs with [Sound.Unload].
+func NewSoundJfxr(settings string) *Sound {
+	return &Sound{jfxr: settings, volume: 1}
 }
 
 // Play plays the sound, over any copy of it that is already playing. Up to
@@ -338,8 +355,8 @@ func (s *Sound) load() bool {
 		return false
 	}
 	ready := audio.isReady()
-	if !ready && (s.name == "" || s.read) {
-		return false
+	if !ready && ((s.name == "" && s.jfxr == "") || s.read) {
+		return false // a sound made from a SoundSpec has no mistakes to find
 	}
 	s.read = true
 	wave, err := s.wave()
@@ -370,6 +387,13 @@ func (s *Sound) load() bool {
 // encoded returns the sound as a file in memory and its type, such as ".wav":
 // made from its spec, read from its file, or made from its .jfxr settings.
 func (s *Sound) encoded() (format string, data []byte, err error) {
+	if s.jfxr != "" {
+		sound, err := parseJfxr([]byte(s.jfxr))
+		if err != nil {
+			return "", nil, fmt.Errorf("golib.NewSoundJfxr: %w", err)
+		}
+		return ".wav", wav(sound.samples()), nil
+	}
 	if s.name == "" {
 		return ".wav", wav(s.spec.samples()), nil
 	}
@@ -429,10 +453,25 @@ func (s *Sound) loadLoop() bool {
 
 // describe names the sound in messages: its file, or "made in code".
 func (s *Sound) describe() string {
+	if s.jfxr != "" {
+		return "made from jfxr settings"
+	}
 	if s.name == "" {
 		return "made in code"
 	}
 	return fmt.Sprintf("%q", s.name)
+}
+
+// Unload frees the memory a sound holds, and stops it. A game that makes
+// sounds as it runs, such as from jfxr settings it works out with
+// [NewSoundJfxr], unloads each one it no longer needs, so they don't pile up.
+// A sound made once, as a package variable, never needs it: Run frees every
+// sound when it ends. An unloaded sound can still play: it is made or read
+// again then.
+func (s *Sound) Unload() {
+	s.Stop()
+	s.unload()
+	audio.untrack(s)
 }
 
 // unload frees the sound, so that it is made or read again if a game runs
@@ -516,6 +555,13 @@ func (a *audioDevice) track(sound *Sound) {
 	a.Lock()
 	defer a.Unlock()
 	a.sounds = append(a.sounds, sound)
+}
+
+// untrack forgets a sound that was freed.
+func (a *audioDevice) untrack(sound *Sound) {
+	a.Lock()
+	defer a.Unlock()
+	a.sounds = slices.DeleteFunc(a.sounds, func(s *Sound) bool { return s == sound })
 }
 
 // trackMusic remembers a music the first time it is played, so that Run keeps
