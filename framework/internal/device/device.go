@@ -51,6 +51,12 @@ const (
 	KeyUp    = 265
 	KeyDown  = 264
 
+	KeyDelete   = 261
+	KeyHome     = 268
+	KeyEnd      = 269
+	KeyPageUp   = 266
+	KeyPageDown = 267
+
 	KeyLeftShift    = 340
 	KeyRightShift   = 344
 	KeyLeftControl  = 341

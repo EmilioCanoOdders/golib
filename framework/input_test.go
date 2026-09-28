@@ -72,6 +72,35 @@ func TestInputQueueKeepsPressesUntilAnUpdateRuns(t *testing.T) {
 	}
 }
 
+func TestInputQueueDeliversTypedTextOnce(t *testing.T) {
+	var queue inputQueue
+	var input Input
+
+	// Two frames type before an update runs; the next update sees none.
+	queue.readKeyboard(noKey, noKey)
+	queue.readText("LD")
+	queue.readText("A #ñ")
+	queue.next(&input)
+	if got := input.TypedText(); got != "LDA #ñ" {
+		t.Errorf("first update: %q, want %q", got, "LDA #ñ")
+	}
+	if !queue.keyboardUsed {
+		t.Error("typing doesn't count as using the keyboard")
+	}
+	queue.next(&input)
+	if got := input.TypedText(); got != "" {
+		t.Errorf("second update saw the text again: %q", got)
+	}
+	// A game that runs no update for a long time doesn't gather text without end.
+	for range maxTyped + 10 {
+		queue.readText("x")
+	}
+	queue.next(&input)
+	if len(input.TypedText()) != maxTyped {
+		t.Errorf("%d bytes kept, want %d", len(input.TypedText()), maxTyped)
+	}
+}
+
 func TestInputIgnoresUnknownKeys(t *testing.T) {
 	var input Input
 	if input.KeyDown(Key(-1)) || input.KeyPressed(Key(100000)) {

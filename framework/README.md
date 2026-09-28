@@ -181,18 +181,20 @@ s.world.step(moveX, jump, dt) // the rules see intentions, not keys
 | --- | --- |
 | `Input.KeyDown` | `KeyDown(key Key) bool`: the key is held down. |
 | `Input.KeyPressed` | `KeyPressed(key Key) bool`: the key went down since the previous update; true in one update per press. |
+| `Input.TypedText` | `TypedText() string`: the characters typed since the previous update, as the player's keyboard makes them (its layout, Shift, AltGr and accents applied, so `#`, `ñ` and `é` come right on any keyboard), repeated while a key is held, as in any text box. For names, chat and code typed in a game. Enter, Backspace, the arrows and the other keys that type nothing aren't in it: read them with `KeyPressed`. |
 | `Key` | A keyboard key: one of the constants below. Letters and digits are named after their place on a US keyboard. |
 
 | Keys | Constants |
 | --- | --- |
 | Common | `KeySpace` `KeyEnter` `KeyEscape` `KeyTab` `KeyBackspace` |
 | Arrows | `KeyLeft` `KeyRight` `KeyUp` `KeyDown` |
+| Editing | `KeyDelete` `KeyHome` `KeyEnd` `KeyPageUp` `KeyPageDown` |
 | Modifiers | `KeyLeftShift` `KeyRightShift` `KeyLeftControl` `KeyRightControl` `KeyLeftAlt` `KeyRightAlt` |
 | Letters | `KeyA` `KeyB` `KeyC` `KeyD` `KeyE` `KeyF` `KeyG` `KeyH` `KeyI` `KeyJ` `KeyK` `KeyL` `KeyM` `KeyN` `KeyO` `KeyP` `KeyQ` `KeyR` `KeyS` `KeyT` `KeyU` `KeyV` `KeyW` `KeyX` `KeyY` `KeyZ` |
 | Digits (spelled out: there is no `Key0`) | `KeyZero` `KeyOne` `KeyTwo` `KeyThree` `KeyFour` `KeyFive` `KeySix` `KeySeven` `KeyEight` `KeyNine` |
 | Function keys | `KeyF1` `KeyF2` `KeyF3` `KeyF4` `KeyF5` `KeyF6` `KeyF7` `KeyF8` `KeyF9` `KeyF10` `KeyF11` `KeyF12` |
 
-Only these keys are read. There is no numeric keypad, punctuation, Delete or Home yet, and a raylib key code converted to `Key` is never down.
+Only these keys are read. There is no numeric keypad or punctuation as keys, and a raylib key code converted to `Key` is never down: read what a punctuation key types with `TypedText`.
 
 ### Mouse
 

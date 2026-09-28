@@ -14,6 +14,16 @@ func IsKeyPressed(key int32) bool {
 	return rl.IsKeyPressed(key)
 }
 
+// TypedText returns the characters typed since the last frame, in order, as
+// the keyboard's layout makes them: Shift, AltGr and dead keys applied.
+func TypedText() string {
+	var text []rune
+	for r := rl.GetCharPressed(); r != 0; r = rl.GetCharPressed() {
+		text = append(text, rune(r))
+	}
+	return string(text)
+}
+
 // IsMouseDown reports whether a mouse button is held down now.
 func IsMouseDown(button int32) bool {
 	return rl.IsMouseButtonDown(rl.MouseButton(button))

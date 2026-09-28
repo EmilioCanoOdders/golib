@@ -25,6 +25,12 @@ const (
 	KeyUp    Key = device.KeyUp
 	KeyDown  Key = device.KeyDown
 
+	KeyDelete   Key = device.KeyDelete
+	KeyHome     Key = device.KeyHome
+	KeyEnd      Key = device.KeyEnd
+	KeyPageUp   Key = device.KeyPageUp
+	KeyPageDown Key = device.KeyPageDown
+
 	KeyLeftShift    Key = device.KeyLeftShift
 	KeyRightShift   Key = device.KeyRightShift
 	KeyLeftControl  Key = device.KeyLeftControl
@@ -94,6 +100,7 @@ var keyNames = func() map[Key]string {
 	names := map[Key]string{
 		KeySpace: "Space", KeyEnter: "Enter", KeyEscape: "Escape", KeyTab: "Tab", KeyBackspace: "Backspace",
 		KeyLeft: "Left", KeyRight: "Right", KeyUp: "Up", KeyDown: "Down",
+		KeyDelete: "Delete", KeyHome: "Home", KeyEnd: "End", KeyPageUp: "PageUp", KeyPageDown: "PageDown",
 		KeyLeftShift: "LeftShift", KeyRightShift: "RightShift", KeyLeftControl: "LeftControl",
 		KeyRightControl: "RightControl", KeyLeftAlt: "LeftAlt", KeyRightAlt: "RightAlt",
 	}

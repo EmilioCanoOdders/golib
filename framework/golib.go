@@ -267,6 +267,7 @@ func runWindow(game Game, config Config) error {
 
 		now := device.Time()
 		queue.readKeyboard(deviceKeyDown, deviceKeyPressed)
+		queue.readText(device.TypedText())
 		pointerX, pointerY := device.MousePosition()
 		mouseX, mouseY := toScreen(pointerX, pointerY, fit, screenWidth, screenHeight)
 		// The oldest finger on a touch screen moves the mouse pointer and holds

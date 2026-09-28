@@ -168,6 +168,13 @@ func TestParseInputScript(t *testing.T) {
 				{first: 50, last: 90, x: 1100, y: 600.5},
 			}},
 		},
+		{
+			name:   "text, with escaped spaces and backslashes",
+			script: `Type@130:LDA\s#1 type@131:a\\b\\s`,
+			want:   inputScript{texts: []typing{{update: 130, text: "LDA #1"}, {update: 131, text: `a\b\s`}}},
+		},
+		{name: "text without an update", script: "Type@:x", wantErr: "Type@update:text"},
+		{name: "no text", script: "Type@5:", wantErr: "Type@update:text"},
 		{name: "finger without a position", script: "Touch@40", wantErr: "Touch@update:x,y"},
 		{name: "finger with one coordinate", script: "Touch@40:200", wantErr: "Touch@update:x,y"},
 		{name: "finger in update zero", script: "Touch@0:200,600", wantErr: "Touch@update:x,y"},
