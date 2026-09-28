@@ -330,7 +330,7 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | `menu.go` | The title screen: the game's name, the player's number, Play and Quit; the `menuButton` hit-testing both scenes' menus use |
 | `identity.go` | Who is playing: the machine's ID (registry value, platform UUID or `/etc/machine-id`), hashed with the game's salt into `player`, the number the menu shows and a later server hands tokens out by |
 | `store.go` | The local database (SQLite): players, saves and the machine table; `saveBase`/`resumeState`, the scenes' door into it; the DB path, `:memory:` under `golib shot` |
-| `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); camera, selection, open cards, robot roster, individual assignment and pointer modes live here, never serialized; unit cards follow a directly selected robot or rival vehicle; the schematics callout and one-use building placement mode, rivals' HUD, reach overlays, floating cost numbers and autosave are view state too |
+| `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); camera, selection, open cards, robot roster, individual assignment and pointer modes live here, never serialized; unit cards follow a directly selected robot or rival vehicle, squad cards follow their pennant or target ring; the cell under a guard pennant selects instead of opening the build menu; the schematics callout and one-use building placement mode, rivals' HUD, reach overlays, floating cost numbers and autosave are view state too |
 | `radial.go` | The build menu: the two rings a click on empty ground opens - the build groups (industry, military, logistics), then the group's blueprints - laid out around the cell every frame, and `backRadial`/`closeRadial`/`openRadial` for the scene |
 | `glyphs.go` | The marks the build menu wears: a group's own glyph, a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both - and the pipe's mark, the tube the region lifts on posts |
 | `state.go` | The simulation's state and save-schema version 10: builders, workers, troopers, mechanics and rivals with saved hull, facing and stillness ticks; rival-city reconstruction and refounding timers; the first scout's saved core-bubble crossing tick; buildings, jobs, piles and pipes with mite wear; stock, deposits, weather and rival tables; one-tick unit, building-death and resource-cost receipts feed view effects without being saved; `newGame` gives the colony one fueled builder |
@@ -346,7 +346,7 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | `sim_cities.go` | Rival cities: serializable production, sequential rebuilding and refounding, construction-site mite damage, deterministic 45-second building steps, finite local oil/mineral reserves, city arrival and old-save migration, city-produced sorties, unloading, 90-second rests, squad replacement and mobile artillery; records the pressure city's first sortie |
 | `sim_tech.go` | The schematics: the robot factory is the opening drop, first delivery unlocks infrastructure, the guard post follows the first scout's return past the core bubble, and the frontier kit follows one minute after that crossing (old saves keep the 5:30 trigger); the war factory follows the first-city founding; artillery follows three ended normal attacks (old saves keep the rival-factory trigger); the repair protocol waits for rival building damage and a city-force lull (minute 12 if no first force is produced); `stepTech`, `kindUnlocked`, `dropArrived` and `techPending` derive arrivals and `State.Tech` keeps which drops were opened |
 | `sim_squads.go` | The military units' law and tuning: troopers (`RobotCombat`) and mechanics (`RobotRepair`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), which reports ammunition oil costs, the shared 130 m small-arms reach, the war factory's capacity (`squadRoom`, `mechanicRoom`), and rivals targeting defenders (`stepEnemyGuns`) |
-| `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right with a trooper icon, unit count and key (`drawSquadStrip`, `drawTrooperIcon`, `squadBoxRect`, `squadBoxAt`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the marks that pick a squad where it stands (`squadMarkAt`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
+| `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right with a trooper icon, unit count and key (`drawSquadStrip`, `drawTrooperIcon`, `squadBoxRect`, `squadBoxAt`), selection of the pennant or target ring and the squad card's `give order` button (`selectSquad`, `squadMarkAt`, `squadMarkScreen`), guard-pennant cell hit-testing (`squadPennantInCell`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
 | `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), vulnerable colony units, rival-shot building damage markers, building health, proportional repair charges and mechanic fuel with cost receipts, what the colony sees (`seen`) and its artillery with shell cost receipts (`stepArtillery`) |
 | `shots.go` | Shots and building collapses on the screen, for looks only: bullets as streaks, shells on their arc over a shadow, pools of light added over the ground and what stands on it (`lightPool`), guns' flashes, and bursts of sparks, embers, smoke and metal shards; unit and building death effects scale to their kind, and projectile impacts merge with nearby falls; `fxField` learns from transient events and shots; view, never state |
 | `spending.go` | Floating oil and lilac costs above the building, pipe or robot that spent them; recurring expenses become one-second totals, while robot carrying/fog fuel burn and refills stay hidden; view, never state |
@@ -360,7 +360,7 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | `things.go` | What a cell holds, the unit the player picks by: `Thing` snapshots out of layout plus state (a deposit's card spans its patch, while buildings and sites stay on their own cell; rival vehicles and bases standing on the cell have cards too), builders', workers', troopers' and mechanics' captions, `tileAtWorld`, the SI quantities; pure Go, no drawing |
 | `catalog.go` | The entity database: per thing type its name, color, unit and card lines, plus the stable-color fallback |
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
-| `inspect.go` | The inspection panel: layout, hit testing, painting, clickable paginated worker portraits, remotely opened robot cards, individual recall and return buttons, other card actions and the integrity line of a damaged building; unlocked factory orders stay visible but dim and unclickable while unavailable, with each resource price outlined and shortfalls red; the cell's outline (`cellDiamond`) |
+| `inspect.go` | The inspection panel: layout, hit testing, painting, clickable paginated worker portraits, remotely opened robot cards, squad cards anchored to their marks, individual recall and return buttons, other card actions and the integrity line of a damaged building; unlocked factory orders stay visible but dim and unclickable while unavailable, with each resource price outlined and shortfalls red; the cell's outline (`cellDiamond`) |
 | `robots_panel.go` | The fixed colony roster under the squad strip: builders, available workers, workers grouped by deposit and mechanics; current activity, paging, individual deposit assignment and recall |
 | `sim_mites.go` | Deterministic mite exposure and wear: common unit damage, colony and rival building sites, buildings, piles that lose material over three minutes at full exposure, and laid pipe sections that wear only where exposed; active repulsors shelter their bubbles |
 | `mites.go` | The mites' view: volume- and exposure-scaled swarms around robots, rivals, buildings, sites, piles and laid pipe sections; city-owned hosts animate 60% of the usual particles, without changing damage; swarms double when stationary and again in a full swell, with a red halo around still hosts |
@@ -386,7 +386,7 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | `unit_picking_test.go` | Opaque bounds for every model and facing, frontmost sprite targeting, direct unit cards following movement, rival health details and closing cards for units that disappear |
 | `shots_test.go` | Small-arms reach limits, the first raid against one guard post over three seeds, bullet and shell impacts, building damage and collapse effects, proportional repair costs and mechanic fuel, transient death receipts, explosion scaling/merging, defender damage and wrecks, and old war-factory saves |
 | `repair_tech_test.go` | Repair-protocol triggers and lull boundaries, rival-fire markers that survive building destruction, rejected locked mechanic orders, and legacy-save compatibility |
-| `squads_test.go` | Trooper production and squad behavior, mechanic limits, target selection, health and wrecks; squads can attack the first incoming crawler without a camp delay |
+| `squads_test.go` | Trooper production and squad behavior, mechanic limits, target selection, health and wrecks; pennants open squad cards whose order button arms the pointer, while their ground cells select instead of opening construction; squads can attack the first incoming crawler without a camp delay |
 | `world_test.go` | The simulation driven directly: the starting builder, explicit individual assignment, worker-only auto-assignment, role-specific carrying, loot and construction priorities, migration, dry deposits, determinism and JSON round trip |
 | `economy_test.go` | The deterministic economy probe: four legal opening policies over three seeds, sampled each minute into an opt-in CSV with the scout's core crossing tick, protector fuel, party and city production, repair milestones, artillery's arrival tick, mechanic count and outstanding building damage |
 | `buildings_test.go` | The buildings driven directly: five-second marked construction, payment, fog placement, factory robots, refueling, digestion, full stores, silos and the protector's bubble |
@@ -945,9 +945,15 @@ squad, the same key again takes it back, and the click that pressed the
 key never orders by itself, since arming lands after the update's
 inspection. A squad's box at the top right calls it too, by click
 (`updateSquadBoxes`, taken with the dev tools' click before the region
-sees the pointer). A click on a squad's mark arms it too (`squadMarkAt`
-in `squads.go`), and `drawSquadStrip` paints the squads' boxes at the
-top right.
+sees the pointer). Clicking a pennant or target ring selects the squad
+and opens its tooltip beside the mark (`selectSquad`,
+`tooltipLayoutForSquad`); it shows the current order and troop count.
+The card follows a moving attack ring. Its `give order` button arms the
+pointer, while clicking the mark alone only selects it.
+The guard pennant's ground cell also selects as though a building occupied
+it, so a click there does not open the build menu; the pennant icon remains
+clickable for its squad card.
+`drawSquadStrip` paints the squads' boxes at the top right.
 
 On the screen (`enemies.go`) the marks lie on the ground under
 everything, and the vehicles are drawn after the fog, so a party reads
@@ -1283,15 +1289,24 @@ remaining tank in its wreck, and a demolished war factory's trooper
 rests by the core.
 `TestTheNumberKeysCallTheWarFactoriesOldestFirst` pins the keys' order
 (`squadSlots`), `TestASquadsMarkPicksItsSquad` the pennant's and the
-ring's picking (`squadMarkAt`), and `TestTheSquadsBoxesLieApartAndPickTheirSquad`
-the boxes' geometry (`squadBoxRect`, `squadBoxAt`). `shotstate_test.go` holds
+ring's hit-testing (`squadMarkAt`), and
+`TestSquadMarkOpensItsCardAndTheCardArmsOrdering` the mark selection,
+card button and ordering mode; `TestSquadCardFollowsItsAttackRing` keeps
+the card with a moving attack target. `TestTheSquadsBoxesLieApartAndPickTheirSquad`
+pins the boxes' geometry (`squadBoxRect`, `squadBoxAt`). `shotstate_test.go` holds
 `TestWriteShotSquadState`: with `NIEBLA_SHOT_STATE` naming a file, it
 writes a region with two war factories and their squads in the shape
-`golib shot --save` reads, so shots can start on the squads:
+`golib shot --save` reads, and prints the first squad's mark and button
+coordinates for a shot of the card and the armed ordering pointer:
 
 ```text
-NIEBLA_SHOT_STATE=../../build/niebla/squads.json ./golib go -C games/niebla test -run TestWriteShotSquadState
-./golib shot niebla 50 --save build/niebla/squads.json --input "Enter@1 One@40 Mouse@45:900,420 MouseLeft@46"
+NIEBLA_SHOT_STATE=../../build/niebla/squad-tooltip.json \
+  ./golib go -C games/niebla test \
+  -run TestWriteShotSquadState -v
+./golib shot niebla 50 60 \
+  --save build/niebla/squad-tooltip.json \
+  --input "Enter@1 Mouse@45:586,354 MouseLeft@46 \
+  Mouse@55:680,440 MouseLeft@56"
 ```
 
 `TestWriteShotUnitState` puts one of each colony chassis by the core

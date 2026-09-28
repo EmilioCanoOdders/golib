@@ -300,6 +300,12 @@ var catalog = map[ThingType]ThingInfo{
 			return details
 		},
 	},
+	TypeSquad: {
+		Name:    "Squad",
+		Color:   guardColor,
+		Primary: true,
+		Details: squadDetails,
+	},
 	TypeArtillery: {
 		Name:    "Artillery",
 		Color:   warFactoryColor,
@@ -419,6 +425,31 @@ func enemyDetails(s *State, thing Thing) []Detail {
 				si(math.Round(e.Oil*10)/10, "L"), si(spec.oilCap, "L")),
 		})
 	}
+	return details
+}
+
+func squadDetails(s *State, thing Thing) []Detail {
+	if _, ok := s.Buildings[thing.Ref]; !ok {
+		return nil
+	}
+	sq := squadOf(s, thing.Ref)
+	details := []Detail{
+		{"troopers", fmt.Sprintf("%d / %d",
+			len(squadMembers(s, thing.Ref)), squadSize)},
+	}
+	if sq.Order == OrderAttack {
+		details = append(details, Detail{"order", "attack"})
+		if enemy, ok := s.Enemies[sq.Focus]; ok {
+			details = append(details, Detail{
+				"target", string(enemy.Kind) + " first",
+			})
+		}
+		return details
+	}
+	details = append(details, Detail{
+		"order", fmt.Sprintf("guard at %s, %s",
+			si(sq.X, "m"), si(sq.Y, "m")),
+	})
 	return details
 }
 

@@ -30,6 +30,69 @@ func (s *playScene) armOrdering(home int64) {
 	s.orderTicks = orderTimeoutTicks
 }
 
+func squadThing(s *State, home int64) Thing {
+	return Thing{
+		Type:    TypeSquad,
+		ID:      fmt.Sprintf("squad-%d", home),
+		Ref:     home,
+		Caption: squadWords(s, home),
+	}
+}
+
+func (s *playScene) selectSquad(home int64) {
+	building, stands := s.state.Buildings[home]
+	if !stands || building.Kind != BuildingWarFactory ||
+		len(squadMembers(s.state, home)) == 0 {
+		return
+	}
+	s.picked = true
+	s.pickedSquad = home
+	s.pickedCol, s.pickedRow = building.Col, building.Row
+	s.pickedThing = squadThing(s.state, home).ID
+	s.pickedRobot = 0
+	s.robotPage = 0
+	s.armed = ""
+	s.clearPickedUnit()
+	s.closeRadial()
+	s.au.ui(1)
+}
+
+func (s *playScene) squadMarkScreen(home int64) (golib.Vector2, bool) {
+	if len(squadMembers(s.state, home)) == 0 {
+		return golib.Vector2{}, false
+	}
+	sq := squadOf(s.state, home)
+	pole := dotRadius(14, s.zoom, 10)
+	gx, gy := project(float32(sq.X), float32(sq.Y))
+	py := gy - pole/2
+	if e, stands := s.state.Enemies[sq.Focus]; stands &&
+		sq.Order == OrderAttack {
+		gx, gy = project(float32(e.X), float32(e.Y))
+		py = gy - 2*unitH
+	}
+	return s.camera.ToScreen(golib.Vector2{X: gx, Y: py}), true
+}
+
+func (s *playScene) squadPennantInCell(col, row int) bool {
+	for _, id := range sortedBuildingIDs(s.state) {
+		if s.state.Buildings[id].Kind != BuildingWarFactory ||
+			len(squadMembers(s.state, id)) == 0 {
+			continue
+		}
+		sq := squadOf(s.state, id)
+		if _, hasTarget := s.state.Enemies[sq.Focus];
+			hasTarget && sq.Order == OrderAttack {
+			continue
+		}
+		x, y := project(float32(sq.X), float32(sq.Y))
+		markCol, markRow, inside := cellAtWorld(float64(x), float64(y))
+		if inside && markCol == col && markRow == row {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *playScene) tickOrdering() {
 	if s.ordering == 0 {
 		return
@@ -98,20 +161,28 @@ func (s *playScene) squadMarkAt(mx, my float32) (int64, bool) {
 		if len(squadMembers(s.state, id)) == 0 {
 			continue
 		}
-		sq := squadOf(s.state, id)
-		pole := dotRadius(14, s.zoom, 10)
-		gx, gy := project(float32(sq.X), float32(sq.Y))
-		py := gy - pole/2
-		if e, stands := s.state.Enemies[sq.Focus]; stands && sq.Order == OrderAttack {
-			gx, gy = project(float32(e.X), float32(e.Y))
-			py = gy - 2*unitH
+		at, stands := s.squadMarkScreen(id)
+		if !stands {
+			continue
 		}
-		at := s.camera.ToScreen(golib.Vector2{X: gx, Y: py})
 		if gap := math.Hypot(float64(at.X-mx), float64(at.Y-my)); gap <= bestGap {
 			best, found, bestGap = id, true, gap
 		}
 	}
 	return best, found
+}
+
+func (s *playScene) syncPickedSquad() {
+	if s.pickedSquad == 0 {
+		return
+	}
+	if _, stands := s.state.Buildings[s.pickedSquad]; stands &&
+		len(squadMembers(s.state, s.pickedSquad)) > 0 {
+		return
+	}
+	s.picked = false
+	s.pickedSquad = 0
+	s.pickedThing = ""
 }
 
 // updateOrdering is the pointer while it gives a squad its order: a left

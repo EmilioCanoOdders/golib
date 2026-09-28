@@ -33,6 +33,15 @@ func TestWriteShotSquadState(t *testing.T) {
 		Home: home.ID, Order: OrderGuard,
 		X: x - 400, Y: y + 300,
 	}
+	scene := newPlayScene(s)
+	mark, _ := scene.squadMarkScreen(home.ID)
+	panel := tooltipLayoutForSquad(scene, home.ID)
+	if button := panel.findButton(buttonOrder); button != nil {
+		t.Logf("squad mark: %.0f, %.0f", mark.X, mark.Y)
+		t.Logf("give order button: %.0f, %.0f",
+			button.bx+button.bw/2, button.by+button.bh/2,
+		)
+	}
 	// The shot file is the store's shape: one saved name per key, and
 	// resumeState reads the name "state".
 	data, err := json.MarshalIndent(map[string]any{"state": s}, "", "  ")

@@ -62,6 +62,7 @@ type playScene struct {
 	pickedRow      int
 	pickedThing    string          // a visible body's card picked on that cell
 	pickedRobot    int64           // a worker opened from a deposit portrait
+	pickedSquad    int64           // a squad opened from its pennant or target ring
 	pickedUnit     unitSelection   // a world unit selected directly
 	robotPage      int             // which page of the selected deposit's portraits
 	expanded       map[string]bool // which cards stand open, by thing ID
@@ -184,6 +185,7 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 		}
 	}
 	s.syncPickedUnit()
+	s.syncPickedSquad()
 	s.clampRobotPage()
 	s.clampRobotPanel()
 	s.mites.update(s.state, dt)
@@ -266,6 +268,7 @@ func (s *playScene) updateTech(input *golib.Input) bool {
 		s.picked = false
 		s.pickedThing = ""
 		s.pickedRobot = 0
+		s.pickedSquad = 0
 		s.clearPickedUnit()
 		s.armed = ""
 		s.ordering = 0
@@ -417,9 +420,10 @@ func (s *playScene) updateRadial() {
 // updateInspection picks the cell under the pointer with the left button,
 // cancels with a right click that never became a drag, expands or folds
 // a card when a click lands on its title, and acts when a click lands on
-// a card's button. A click on empty ground opens the build menu instead,
-// a radial around the cell; picking one of its options marks that
-// blueprint there. A blueprint selected from the schematics callout owns
+// a card's button. A click on buildable empty ground opens the build menu,
+// unless a guard pennant marks that cell; that click selects the cell
+// instead. Picking a radial option marks its blueprint there. A blueprint
+// selected from the schematics callout owns
 // the pointer until it is placed or canceled. The camera has already
 // moved, so the hover follows the view the frame it changes. A left click
 // the dev tools took is none of its business.
@@ -474,6 +478,7 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 		s.picked = false
 		s.pickedThing = ""
 		s.pickedRobot = 0
+		s.pickedSquad = 0
 		s.clearPickedUnit()
 		s.robotPage = 0
 		s.armed = ""
@@ -525,17 +530,15 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 			}
 		}
 		s.pickedRobot = 0
+		s.pickedSquad = 0
 		s.robotPage = 0
 		if s.pickPumpAt(mx, my) {
 			return
 		}
-		// A squad's mark picks its squad where it stands: the pennant of
-		// a guarding one, the ring around an attack's focus. The click
-		// arms the ordering pointer instead of picking the cell.
+		// A squad's mark opens its card: the pennant of a guarding one,
+		// or the ring around an attack's focus.
 		if home, ok := s.squadMarkAt(mx, my); ok {
-			s.armOrdering(home)
-			s.au.ui(1)
-			s.closeRadial()
+			s.selectSquad(home)
 			return
 		}
 		if hit, ok := s.hoveredUnit(); ok {
@@ -544,17 +547,10 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 		}
 		if s.radial {
 			s.pickRadial(mx, my)
-		} else if techAnyArrived(s.state) &&
-			s.buildableCell(s.hoverCellCol, s.hoverCellRow) {
-			s.openRadial(s.hoverCellCol, s.hoverCellRow)
-			s.picked = false
-			s.pickedThing = ""
-			s.clearPickedUnit()
 		} else {
-			s.picked = s.hoverCell
-			s.pickedCol, s.pickedRow = s.hoverCellCol, s.hoverCellRow
-			s.pickedThing = ""
-			s.clearPickedUnit()
+			s.pickCellOrBuild(
+				s.hoverCellCol, s.hoverCellRow, s.hoverCell,
+			)
 		}
 	}
 }
@@ -574,6 +570,9 @@ func (s *playScene) inspectionPanel() tooltip {
 			)
 		}
 	}
+	if s.pickedSquad != 0 {
+		return tooltipLayoutForSquad(s, s.pickedSquad)
+	}
 	return tooltipLayoutForPage(
 		s.state, s.camera, s.pickedCol, s.pickedRow,
 		s.expanded, s.pickedThing, s.robotPage,
@@ -581,7 +580,8 @@ func (s *playScene) inspectionPanel() tooltip {
 }
 
 func (s *playScene) clampRobotPage() {
-	if !s.picked || s.pickedRobot != 0 || s.pickedUnit.id != 0 {
+	if !s.picked || s.pickedRobot != 0 || s.pickedSquad != 0 ||
+		s.pickedUnit.id != 0 {
 		return
 	}
 	tcol, trow := cellTile(s.pickedCol, s.pickedRow)
@@ -630,6 +630,23 @@ func (s *playScene) buildableCell(col, row int) bool {
 		return false
 	}
 	return !unitOnCell(s.state, col, row)
+}
+
+func (s *playScene) pickCellOrBuild(col, row int, inside bool) {
+	if inside && techAnyArrived(s.state) && s.buildableCell(col, row) &&
+		!s.squadPennantInCell(col, row) {
+		s.openRadial(col, row)
+		s.picked = false
+		s.pickedSquad = 0
+		s.pickedThing = ""
+		s.clearPickedUnit()
+		return
+	}
+	s.picked = inside
+	s.pickedCol, s.pickedRow = col, row
+	s.pickedSquad = 0
+	s.pickedThing = ""
+	s.clearPickedUnit()
 }
 
 func unitOnCell(s *State, col, row int) bool {
@@ -750,7 +767,7 @@ func (s *playScene) Draw(screen *golib.Screen) {
 			if outline, ok := s.unitBounds(s.pickedUnit); ok {
 				drawUnitOutline(screen, s.camera, outline, pickedTileColor)
 			}
-		} else {
+		} else if s.pickedSquad == 0 {
 			outline, _, _ := cellDiamond(s.pickedCol, s.pickedRow, s.zoom)
 			screen.DrawPolygonOutline(outline, 2/s.zoom, pickedTileColor)
 		}
@@ -790,8 +807,9 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	drawTechCallout(s, screen)
 	drawSquadStrip(s, screen)
 	s.dev.draw(s, screen)
-	help := "click ground to build, click cells or units to inspect, " +
-		"wheel zooms, WASD / right-drag pans, 1-9 squads, Esc menu, " +
+	help := "click ground to build; inspect cells and units; " +
+		"squad marks open cards; wheel zooms, WASD / right-drag pans, " +
+		"1-9 squads, Esc menu, " +
 		"F11 fullscreen, F2 filter"
 	if s.techCallout != "" && s.techPlacing == "" {
 		help = "schematics received: click outside or right-click to close"

@@ -41,6 +41,7 @@ const (
 	TypeLilac ThingType = "lilac"
 	TypeCore  ThingType = "core"
 	TypeRobot ThingType = "robot"
+	TypeSquad ThingType = "squad"
 
 	TypeFactory   ThingType = "factory"
 	TypeCharger   ThingType = "charger"

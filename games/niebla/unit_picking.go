@@ -226,6 +226,7 @@ func (s *playScene) syncPickedUnit() {
 
 func (s *playScene) selectUnit(hit worldUnitHit) {
 	s.picked = true
+	s.pickedSquad = 0
 	s.pickedUnit = hit.selection
 	s.pickedRobot = 0
 	s.robotPage = 0

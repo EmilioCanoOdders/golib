@@ -106,6 +106,7 @@ type tooltip struct {
 	col, row int // the picked cell
 	x, y     float32
 	w, h     float32
+	heading  string
 	lone     bool // the cell holds one thing, whose card starts open
 	rows     []tooltipRow
 }
@@ -279,6 +280,16 @@ func tooltipLayoutForThings(
 			}
 			continue
 		}
+		if thing.Type == TypeSquad {
+			if _, ok := s.Buildings[thing.Ref]; ok &&
+				len(squadMembers(s, thing.Ref)) > 0 {
+				t.rows = append(t.rows, tooltipRow{
+					thing: thing, button: buttonOrder,
+					note: "[dim]a rival or the ground[/]",
+				})
+			}
+			continue
+		}
 		if thing.Type == TypeRobot {
 			if r, ok := s.Robots[thing.Ref]; ok && r.hasPost() {
 				t.rows = append(t.rows, tooltipRow{
@@ -376,25 +387,64 @@ func tooltipLayoutForThings(
 	sx, sy := project(float32(ux), float32(uy))
 	middle := camera.ToScreen(golib.Vector2{X: sx, Y: sy})
 	half := float32(buildingCell) * unitW / 2 * camera.Zoom
-	t.x = middle.X + half + tooltipGap
-	if t.x+t.w > screenWidth-tooltipMargin {
-		t.x = middle.X - half - tooltipGap - t.w
+	panelX := middle.X + half + tooltipGap
+	if panelX+t.w > screenWidth-tooltipMargin {
+		panelX = middle.X - half - tooltipGap - t.w
 	}
-	t.x = clampf(t.x, tooltipMargin, screenWidth-tooltipMargin-t.w)
-	t.y = clampf(middle.Y-titleRow/2, tooltipMargin, screenHeight-tooltipMargin-t.h)
-	for i := range t.rows {
-		t.rows[i].bx += t.x
-		t.rows[i].by += t.y
-		for j := range t.rows[i].portraits {
-			t.rows[i].portraits[j].area.X += t.x
-			t.rows[i].portraits[j].area.Y += t.y
-		}
-		t.rows[i].prevPage.X += t.x
-		t.rows[i].prevPage.Y += t.y
-		t.rows[i].nextPage.X += t.x
-		t.rows[i].nextPage.Y += t.y
-	}
+	panelX = clampf(panelX, tooltipMargin, screenWidth-tooltipMargin-t.w)
+	panelY := clampf(
+		middle.Y-titleRow/2, tooltipMargin, screenHeight-tooltipMargin-t.h,
+	)
+	t.moveTo(panelX, panelY)
 	return t
+}
+
+func tooltipLayoutForSquad(
+	scene *playScene,
+	home int64,
+) tooltip {
+	building, ok := scene.state.Buildings[home]
+	if !ok || len(squadMembers(scene.state, home)) == 0 {
+		return tooltip{}
+	}
+	thing := squadThing(scene.state, home)
+	t := tooltipLayoutForThings(
+		scene.state, scene.camera, building.Col, building.Row,
+		scene.expanded,
+		[]Thing{thing}, false, false, 0,
+	)
+	t.heading = "squad order"
+	anchor, ok := scene.squadMarkScreen(home)
+	if !ok {
+		return t
+	}
+	x := anchor.X + tooltipGap
+	if x+t.w > screenWidth-tooltipMargin {
+		x = anchor.X - tooltipGap - t.w
+	}
+	x = clampf(x, tooltipMargin, screenWidth-tooltipMargin-t.w)
+	y := clampf(
+		anchor.Y-titleRow/2, tooltipMargin, screenHeight-tooltipMargin-t.h,
+	)
+	t.moveTo(x, y)
+	return t
+}
+
+func (t *tooltip) moveTo(x, y float32) {
+	dx, dy := x-t.x, y-t.y
+	t.x, t.y = x, y
+	for i := range t.rows {
+		t.rows[i].bx += dx
+		t.rows[i].by += dy
+		for j := range t.rows[i].portraits {
+			t.rows[i].portraits[j].area.X += dx
+			t.rows[i].portraits[j].area.Y += dy
+		}
+		t.rows[i].prevPage.X += dx
+		t.rows[i].prevPage.Y += dy
+		t.rows[i].nextPage.X += dx
+		t.rows[i].nextPage.Y += dy
+	}
 }
 
 func productionButtonRow(
@@ -577,7 +627,11 @@ func drawTooltip(screen *golib.Screen, t tooltip, mx, my float32) {
 		case r.workers:
 			drawRobotPortraits(screen, *r, mx, my)
 		case r.header:
-			drawMarkup(screen, fmt.Sprintf("[dim]cell %d, %d[/]", t.col, t.row),
+			heading := t.heading
+			if heading == "" {
+				heading = fmt.Sprintf("cell %d, %d", t.col, t.row)
+			}
+			drawMarkup(screen, "[dim]"+heading+"[/]",
 				x, y, textSize, panelTextColor)
 		case r.title:
 			info := catalogInfo(r.thing.Type)

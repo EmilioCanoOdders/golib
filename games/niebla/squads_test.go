@@ -347,6 +347,119 @@ func TestASquadsMarkPicksItsSquad(t *testing.T) {
 	}
 }
 
+func TestSquadMarkOpensItsCardAndTheCardArmsOrdering(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	home := squadOfTroopers(t, s, 2)
+	scene := newPlayScene(s)
+
+	mark, ok := scene.squadMarkScreen(home.ID)
+	if !ok {
+		t.Fatal("the squad has no mark to select")
+	}
+	if got, found := scene.squadMarkAt(mark.X, mark.Y); !found ||
+		got != home.ID {
+		t.Fatalf("the mark selected squad %d, %v; want %d", got, found, home.ID)
+	}
+	scene.selectSquad(home.ID)
+	if !scene.picked || scene.pickedSquad != home.ID || scene.ordering != 0 {
+		t.Fatal("selecting the squad mark should open its card without arming an order")
+	}
+
+	panel := scene.inspectionPanel()
+	button := panel.findButton(buttonOrder)
+	if button == nil {
+		t.Fatal("the squad card has no give order button")
+	}
+	if panel.rows[1].thing.Type != TypeSquad ||
+		panel.rows[1].summary != "squad of 2, guarding" {
+		t.Fatalf("the squad card title is %+v", panel.rows[1])
+	}
+	if _, label, found := panel.buttonAt(
+		button.bx+button.bw/2, button.by+button.bh/2,
+	); !found || label != buttonOrder {
+		t.Fatalf("the squad button hit returned %q, %v", label, found)
+	}
+
+	scene.pressButton(*button)
+	if scene.ordering != home.ID {
+		t.Fatal("the give order button did not arm this squad")
+	}
+}
+
+func TestSquadCardFollowsItsAttackRing(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	home := squadOfTroopers(t, s, 2)
+	x, y := cellCenterUnits(home.Col, home.Row)
+	enemy := Enemy{
+		ID: s.NextID, Kind: EnemyScout, X: x + 400, Y: y + 200,
+	}
+	s.NextID++
+	s.Enemies[enemy.ID] = enemy
+	s.Squads[home.ID] = Squad{
+		Home: home.ID, Order: OrderAttack, Focus: enemy.ID,
+	}
+	scene := newPlayScene(s)
+	scene.selectSquad(home.ID)
+
+	first := scene.inspectionPanel()
+	enemy.X += 400
+	enemy.Y += 200
+	s.Enemies[enemy.ID] = enemy
+	second := scene.inspectionPanel()
+	if first.x == second.x && first.y == second.y {
+		t.Fatal("the squad card did not follow its moving attack ring")
+	}
+}
+
+func TestCellUnderGuardPennantSelectsInsteadOfOpeningBuildMenu(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	arriveAll(s)
+	home := squadOfTroopers(t, s, 2)
+	scene := newPlayScene(s)
+	markCol, markRow := -1, -1
+
+	for row := home.Row - 12; row <= home.Row+12 && markCol < 0; row++ {
+		for col := home.Col - 12; col <= home.Col+12; col++ {
+			if !scene.buildableCell(col, row) {
+				continue
+			}
+			scene.radialCol, scene.radialRow = col, row
+			if len(radialGroupLayout(scene)) == 0 {
+				continue
+			}
+			x, y := cellCenterUnits(col, row)
+			sx, sy := project(float32(x), float32(y))
+			pickedCol, pickedRow, inside := cellAtWorld(
+				float64(sx), float64(sy),
+			)
+			if !inside || pickedCol != col || pickedRow != row {
+				continue
+			}
+			markCol, markRow = col, row
+			break
+		}
+	}
+	if markCol < 0 {
+		t.Fatal("no buildable cell near the war factory for the pennant")
+	}
+	x, y := cellCenterUnits(markCol, markRow)
+	s.Squads[home.ID] = Squad{
+		Home: home.ID, Order: OrderGuard, X: x, Y: y,
+	}
+	if !scene.squadPennantInCell(markCol, markRow) {
+		t.Fatal("the cell did not detect the guard pennant")
+	}
+
+	scene.pickCellOrBuild(markCol, markRow, true)
+	if !scene.picked || scene.radial || scene.pickedCol != markCol ||
+		scene.pickedRow != markRow {
+		t.Fatal("clicking the pennant's cell should select it, not open construction")
+	}
+}
+
 func TestTheSquadsBoxesLieApartAndPickTheirSquad(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		rect := squadBoxRect(i)

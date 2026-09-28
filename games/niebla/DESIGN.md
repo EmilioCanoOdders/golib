@@ -444,6 +444,12 @@ static data generated from `State.Seed`, never state. `play.go` and
     show their remaining health and say mechanics can repair them; picked
     guard posts and artillery show their reach; bullets and shells fly
     with their light.
+   - A squad's pennant or attack ring opens its card beside the mark. It
+    shows the current order and troop count; `give order` arms the pointer.
+    Selecting the mark alone never enters order mode.
+    The ground cell under a guard pennant selects as though a building
+    occupied it, instead of opening the build menu; the pennant itself
+    remains clickable.
   - Esc saves and returns to the menu.
 The current rival HUD reports an approaching city crawler, construction,
 an assembling battalion or a force on the move. City-building reports
@@ -481,7 +487,7 @@ report may each have a guide at once, with all guides kept apart.
 | WASD or arrows | Pan the camera |
 | Mouse wheel | Zoom toward the cursor, gliding between whole stops, each twice the last (pixel art stays square at rest) |
 | Mouse right, held | Drag the view: grab the ground and move it |
-| Mouse left, on a free cell of ground | Open the build menu on that cell; picking a blueprint builds it there. Until the first schematics arrive, the click inspects the cell instead |
+| Mouse left, on a free cell of ground | Open the build menu on that cell; picking a blueprint builds it there. A guard pennant's cell selects instead. Until the first schematics arrive, the click inspects the cell |
 | Mouse left, on a building square in the schematics callout | Enter placement mode for that blueprint; a gray wireframe follows the pointer, snapped to the cell grid. Left-click valid ground to mark it; right-click cancels |
 | Mouse left, on the schematics badge over the core | Open the drop: the badge goes and the callout says what arrived. Each building square is usable once, then dims and disables; using the last building closes the callout. A click outside closes it and still acts on the region |
 | Mouse left | Select / inspect a cell, or click a robot or rival vehicle's body to open its individual card; expand cards, press buttons, send robots from deposits, or use portraits to open and recall an assigned robot |
@@ -489,9 +495,9 @@ report may each have a guide at once, with all guides kept apart.
 | Mouse left, on a robot in the roster | Select it; `assign deposit` arms an individual order, then click an oil pool or lilac vein to assign that robot |
 | Mouse right, after `assign deposit` | Cancel the individual assignment |
 | Mouse left, after a pump's `lay pipe` | On the ground: a bend of the pipe. On a ringed tank (silo, charger, core): the pipe's end, which marks it. On the pipe's last node: its menu (`connect` to the nearest store, `undo`, `cancel`). Right click: the menu away, the last bend back, or out of the mode |
-| Mouse left, after a war factory's `give order` | On a rival vehicle's body: the squad attacks its party, that vehicle first. On the ground: the squad guards that spot. A translucent pennant previews where the green guard pennant will stand. Right click cancels; the mode also expires after 20 seconds without an order |
+| Mouse left, after `give order` on a war factory or squad card | On a rival vehicle's body: the squad attacks its party, that vehicle first. On the ground: the squad guards that spot. A translucent pennant previews where the green guard pennant will stand. Right click cancels; the mode also expires after 20 seconds without an order |
 | 1-9 | Call a squad: 1 is the first war factory raised, 2 the next. The key arms the order the same way `give order` does (one click orders, right click puts it away, or wait 20 seconds); the same key again takes it back. A squad's box at the top right - tank icon, unit count, the key below - calls it too |
-| Mouse left, on a squad's pennant or ring | Call that squad, where it stands |
+| Mouse left, on a squad's pennant or ring | Open its card beside the mark; press `give order` there to choose a target or guard spot |
 | Mouse left, on a card's trash can | First press arms it (`demolish?`), the second orders the building taken down - a builder goes and works it - or cancels a site; a click anywhere else disarms |
 | Mouse right, clicked | Close the menu / deselect / close the schematics callout; during building placement, cancel and restore the callout |
 | Esc | In the region: save and return to the menu. In the menu: quit |
@@ -1002,6 +1008,16 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-28: a ground cell under a guard pennant now selects like an
+  occupied building cell instead of opening the build menu. The pennant's
+  icon still opens its squad card. Pinned by
+  `TestCellUnderGuardPennantSelectsInsteadOfOpeningBuildMenu`.
+- 2026-09-28: squad pennants and attack rings now open a tooltip anchored to
+  the mark, with the squad's count and current order. `give order` on that
+  card arms the existing pointer mode; selecting a mark no longer arms it.
+  The card follows a moving attack ring. Pinned by
+  `TestSquadMarkOpensItsCardAndTheCardArmsOrdering` and
+  `TestSquadCardFollowsItsAttackRing`.
 - 2026-09-28: protector upkeep is halved to 0.125 L/s and its floating cost
   now totals 0.5 L every four seconds per protector. The burn remains
   continuous, and other recurring costs still report every second. Pinned by

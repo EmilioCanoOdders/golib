@@ -171,6 +171,7 @@ func drawPipes(s *State, screen *golib.Screen, zoom float32, sheltered bool) {
 func (s *playScene) startLaying(from int64) {
 	s.laying = pipeLaying{on: true, from: from}
 	s.picked = false
+	s.pickedSquad = 0
 	s.pickedThing = ""
 	s.pickedRobot = 0
 	s.clearPickedUnit()

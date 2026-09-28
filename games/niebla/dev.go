@@ -176,6 +176,7 @@ func (d *devTools) resetWorld(s *playScene, seed int64) {
 	Apply(s.state, DevResetWorld{Seed: seed})
 	d.placing = false
 	s.picked, s.pickedThing, s.armed = false, "", ""
+	s.pickedSquad = 0
 	s.pickedRobot, s.robotPage = 0, 0
 	s.clearPickedUnit()
 	s.closeRadial()
