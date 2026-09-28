@@ -137,6 +137,32 @@ func TestContinuousCostsAppearAsOneSecondTotals(t *testing.T) {
 	}
 }
 
+func TestProtectorCostsAppearAsFourSecondTotals(t *testing.T) {
+	f := newSpendingField()
+	event := CostReceipt{
+		Source: costProtector, ID: 8, X: 20, Y: 30,
+		Oil: 0.125, Continuous: true,
+	}
+	for second := 0; second < 3; second++ {
+		f.update([]CostReceipt{event}, 1)
+		if len(f.numbers) != 0 {
+			t.Fatalf("second %d produced a floating cost", second+1)
+		}
+	}
+
+	f.update([]CostReceipt{event}, 1)
+	if len(f.numbers) != 1 {
+		t.Fatalf(
+			"four seconds produced %d floating costs, want one",
+			len(f.numbers),
+		)
+	}
+	if math.Abs(f.numbers[0].amount-0.5) > 1e-9 ||
+		f.numbers[0].unit != "L" {
+		t.Errorf("floating cost = %+v, want 0.5 L", f.numbers[0])
+	}
+}
+
 func TestSmallCostsKeepTheirPrecision(t *testing.T) {
 	if got, want := spendingWords(0.25, "L"), "-0.25 L"; got != want {
 		t.Errorf("small expense = %q, want %q", got, want)

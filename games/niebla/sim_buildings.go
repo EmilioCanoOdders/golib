@@ -47,7 +47,7 @@ const (
 	// blueprint's oil cost; capacity and upkeep are provisional dials.
 	protectorBubbleTiles     = 2.0   // tiles at full charge
 	protectorOilCap          = 200.0 // L in one protector
-	protectorOilPerSecond    = 0.25  // L/s; a provisional upkeep dial
+	protectorOilPerSecond    = 0.125 // L/s; a provisional upkeep dial
 	protectorRadiusFadeBelow = 0.05  // tank fraction where radius starts fading
 )
 
@@ -266,7 +266,7 @@ func stepProtectors(s *State) {
 		b.Oil = math.Max(0, b.Oil-spent)
 		s.Buildings[id] = b
 		x, y := cellCenterUnits(b.Col, b.Row)
-		s.recordCost(costBuilding, b.ID, x, y, 0, spent, true)
+		s.recordCost(costProtector, b.ID, x, y, 0, spent, true)
 	}
 }
 

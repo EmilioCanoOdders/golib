@@ -9,10 +9,11 @@ import (
 )
 
 const (
-	spendingPeriod   = 1.0
-	spendingLife     = 1.2
-	spendingRise     = 34.0
-	spendingTextSize = 14.0
+	spendingPeriod          = 1.0
+	protectorSpendingPeriod = 4.0
+	spendingLife            = 1.2
+	spendingRise            = 34.0
+	spendingTextSize        = 14.0
 )
 
 type spendingKey struct {
@@ -37,11 +38,14 @@ type spendingNumber struct {
 type spendingField struct {
 	pending map[spendingKey]spendingTotal
 	numbers []spendingNumber
-	elapsed float32
+	elapsed map[costSource]float32
 }
 
 func newSpendingField() *spendingField {
-	return &spendingField{pending: map[spendingKey]spendingTotal{}}
+	return &spendingField{
+		pending: map[spendingKey]spendingTotal{},
+		elapsed: map[costSource]float32{},
+	}
 }
 
 func (f *spendingField) update(receipts []CostReceipt, dt float32) {
@@ -53,15 +57,31 @@ func (f *spendingField) update(receipts []CostReceipt, dt float32) {
 			total.oil += receipt.Oil
 			total.lilac += receipt.Lilac
 			f.pending[key] = total
+			if _, ok := f.elapsed[receipt.Source]; !ok {
+				f.elapsed[receipt.Source] = 0
+			}
 			continue
 		}
 		f.addNumbers(receipt.X, receipt.Y, receipt.Lilac, receipt.Oil)
 	}
 
-	f.elapsed += dt
-	for f.elapsed >= spendingPeriod {
-		f.flush()
-		f.elapsed -= spendingPeriod
+	sources := make([]costSource, 0, len(f.elapsed))
+	for source := range f.elapsed {
+		sources = append(sources, source)
+	}
+	sort.Slice(sources, func(i, j int) bool {
+		return sources[i] < sources[j]
+	})
+	for _, source := range sources {
+		f.elapsed[source] += dt
+		period := spendingPeriod
+		if source == costProtector {
+			period = protectorSpendingPeriod
+		}
+		for f.elapsed[source] >= float32(period) {
+			f.flush(source)
+			f.elapsed[source] -= float32(period)
+		}
 	}
 
 	numbers := f.numbers[:0]
@@ -74,10 +94,12 @@ func (f *spendingField) update(receipts []CostReceipt, dt float32) {
 	f.numbers = numbers
 }
 
-func (f *spendingField) flush() {
+func (f *spendingField) flush(source costSource) {
 	keys := make([]spendingKey, 0, len(f.pending))
 	for key := range f.pending {
-		keys = append(keys, key)
+		if key.source == source {
+			keys = append(keys, key)
+		}
 	}
 	sort.Slice(keys, func(i, j int) bool {
 		if keys[i].source != keys[j].source {
@@ -88,8 +110,8 @@ func (f *spendingField) flush() {
 	for _, key := range keys {
 		total := f.pending[key]
 		f.addNumbers(total.x, total.y, total.lilac, total.oil)
+		delete(f.pending, key)
 	}
-	f.pending = map[spendingKey]spendingTotal{}
 }
 
 func (f *spendingField) addNumbers(x, y, lilac, oil float64) {

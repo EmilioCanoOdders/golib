@@ -5,6 +5,7 @@ type costSource uint8
 const (
 	costPlacement costSource = iota + 1
 	costBuilding
+	costProtector
 	costRobot
 	costPipe
 )

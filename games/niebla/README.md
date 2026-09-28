@@ -390,7 +390,7 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | `world_test.go` | The simulation driven directly: the starting builder, explicit individual assignment, worker-only auto-assignment, role-specific carrying, loot and construction priorities, migration, dry deposits, determinism and JSON round trip |
 | `economy_test.go` | The deterministic economy probe: four legal opening policies over three seeds, sampled each minute into an opt-in CSV with the scout's core crossing tick, protector fuel, party and city production, repair milestones, artillery's arrival tick, mechanic count and outstanding building damage |
 | `buildings_test.go` | The buildings driven directly: five-second marked construction, payment, fog placement, factory robots, refueling, digestion, full stores, silos and the protector's bubble |
-| `costs_test.go` | Placement and production receipts, mechanic repair oil, excluded robot fuel, one-second grouping of continuous costs, and the optional `NIEBLA_COST_SHOT_STATE` visual fixture |
+| `costs_test.go` | Placement and production receipts, mechanic repair oil, excluded robot fuel, one-second grouping of regular costs, four-second protector totals, and the optional `NIEBLA_COST_SHOT_STATE` visual fixture |
 | `pipes_test.go` | Pumps and pipes driven directly: oil-pool fog stops robot loading and pump flow without draining the pool, a protector restores extraction, exposed pumps wear down unless sheltered, laid pipe sections wear in exposed air, pipes are paid and laid by sections, robots claim one section each, tanks share their pipe-fill limit across inlets and pass excess through a chain, protectors keep their reserve and upkeep, source outlets share flow, blocked tanks throttle pumps, bands show offered versus actual flow, pipes move oil between tanks, workers haul and refuel, illegal pipe actions are refused, pipe removal drops its cost as a pile, curves follow bends, and saves resume deterministically; can write a pump/protector flow fixture with `NIEBLA_PIPE_FLOW_SHOT_STATE` |
 | `protector_test.go` | Protector fuel: upkeep drains its dedicated tank, radius fades below the configured threshold and vanishes empty, robots and pipes refill it, the reserve stays unavailable to other costs, old saves migrate once with starting charge, and an opt-in state fixture supports visual shots |
 | `mites_test.go` | The mites' view without a window: volume and exposure counts, doubled still and swell swarms, half strength in haze, the red halo, orbit, trail, fade and falloff |
@@ -544,9 +544,11 @@ and digested in 10 seconds unless a protector shelters it. The loss is
 reported and half the pump's cost falls as a pile. Other infrastructure
 must be marked under a bubble. A protector is a dedicated 200 L tank
 (`protectorOilCap`), initially charged with the 40 L paid for its blueprint;
-it burns `protectorOilPerSecond` every second. Its full 400 m radius starts
-fading below `protectorRadiusFadeBelow` (5% of capacity), reaches zero when
-empty, and returns as robots or pipes refill it. Protector oil is reserved:
+it burns `protectorOilPerSecond` 0.125 L/s continuously. Its initial 40 L
+lasts 5 min 20 s without a refill, and its floating cost totals 0.5 L every
+four seconds. Its full 400 m radius starts fading below
+`protectorRadiusFadeBelow` (5% of capacity), reaches zero when empty, and
+returns as robots or pipes refill it. Protector oil is reserved:
 `oilTotal`, costs, and rival raids exclude it. The bubbles also cancel the
 fog's drag, which slows every robot to half its pace deep in the mist.
 
@@ -614,8 +616,8 @@ Non-protector tanks can also feed their outlets from oil already stored in
 them. Pumps draw up to `pumpLitersPerSecond` from `State.Drain`. A protector
 passes only incoming oil beyond its fill amount, never its stored reserve.
 When full, it takes incoming oil to replace the
-`protectorOilPerSecond` that upkeep drains at the end of the tick, then
-shares any surplus equally among its outlets. A full protector with no
+`protectorOilPerSecond` 0.125 L/s that upkeep drains at the end of the tick,
+then shares any surplus equally among its outlets. A full protector with no
 outlet takes only its upkeep from its incoming pipe.
 
 `Pipe.Offered` records the source's share before the destination limits
@@ -626,7 +628,7 @@ colors each band by `Offered`: 2 L/s fills 90% of the gap, leaving 10%
 steel gray. Its phase follows `Moved`, so a destination that accepts less
 slows the band without a phase jump, and a blocked or dry pipe stays gray.
 Each full protector subtracts its upkeep from the offer to the next link;
-the eighth pipe in a chain gets 0.25 L/s, and the ninth gets none.
+the sixteenth pipe in a chain gets 0.125 L/s, and the seventeenth gets none.
 `Demolish` calls `takePipesOf`, so a pipe never outlives an end.
 
 To compare those two flow rates in consecutive shots:

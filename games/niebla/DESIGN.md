@@ -224,7 +224,7 @@ equally among outlets that can accept oil: a silo with two open pipes feeds
 both, and a pump divides its supply among its pipes. A
 protector never forwards its stored reserve: while it fills at the shared
 tank rate, it passes only the excess; when full, it retains
-`protectorOilPerSecond` 0.25 L/s to stay powered and shares the surplus
+`protectorOilPerSecond` 0.125 L/s to stay powered and shares the surplus
 equally among its outlets. A full protector without an outlet receives
 only its upkeep; nothing is lost.
 
@@ -239,7 +239,7 @@ what the source offers: at the pump's full `pumpLitersPerSecond` 2 L/s,
 orange fills 90% of each gap and leaves 10% steel gray to show motion. A
 band moves by the liters actually transferred, so a sink that accepts less
 slows it and a blocked or dry pipe stays gray. A protector passes only the
-excess beyond its fill rate; once full, it keeps 0.25 L/s for upkeep before
+excess beyond its fill rate; once full, it keeps 0.125 L/s for upkeep before
 sharing the rest onward. Each protector in a chain narrows the bands by its
 upkeep. Their phase follows the pipe's accumulated liters and survives
 saves.
@@ -362,8 +362,9 @@ Open: independent city choices and production strategies, pathfinding, cities se
 
 `UnitDeath` and `CostReceipt` receipts are transient reducer output for the
 view, excluded from JSON and cleared by the next tick. Continuous expenses
-are grouped by their source and shown once per simulated second; their
-animation is never saved.
+are grouped by their source and shown once per simulated second, except
+protector upkeep, which is totaled once per four seconds. Their animation
+is never saved.
 
 The game is a deterministic simulation first, and a picture of it second. These rules are law; every feature bends around them.
 
@@ -767,6 +768,7 @@ Landed (2026-09-22), in `audio.go`, all of it view: the world speaks where it ha
 
 ## Tuning
 In `spending.go`, `spendingPeriod` 1 s groups recurring costs and
+`protectorSpendingPeriod` 4 s groups each protector's upkeep;
 `spendingLife` 1.2 s sets how long their floating numbers remain visible;
 `spendingRise` is 34 screen px/s. One-time costs appear at once. Robot
 carrying/fog fuel burn and refills produce no cost receipts.
@@ -830,7 +832,7 @@ side edges, 78 px below the top and 52 px above the bottom, clear of the
 HUD and the bottom help line.
 
 Protector fuel, in `sim_buildings.go`: `protectorOilCap` 200 L,
-`protectorCostOil` 40 L of initial charge, `protectorOilPerSecond` 0.25 L/s
+`protectorCostOil` 40 L of initial charge, `protectorOilPerSecond` 0.125 L/s
 and `protectorRadiusFadeBelow` 5%. These are provisional economy dials.
 The radius fades linearly below the threshold and is zero with an empty tank.
 
@@ -892,7 +894,7 @@ digestion.
 
 A protector has its own `protectorOilCap` 200 L reserve, including the
 40 L charge paid with its blueprint. It uses `protectorOilPerSecond`
-0.25 L/s, a provisional dial, and protects a `protectorBubbleTiles` 2-tile
+0.125 L/s, a provisional dial, and protects a `protectorBubbleTiles` 2-tile
 (400 m) radius. The radius fades below `protectorRadiusFadeBelow` 5% fuel
 and reaches zero when empty. Robots and pipes refill it; this reserve
 cannot pay other costs or be stolen. Old saves receive the initial charge
@@ -1000,6 +1002,10 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-28: protector upkeep is halved to 0.125 L/s and its floating cost
+  now totals 0.5 L every four seconds per protector. The burn remains
+  continuous, and other recurring costs still report every second. Pinned by
+  `protector_test.go`, `pipes_test.go` and `costs_test.go`.
 - 2026-09-28: robot- and war-factory cards keep unlocked production buttons
   visible while busy, out of capacity or short on resources. Disabled orders
   are gray and cannot be clicked; lilac and oil prices are individually

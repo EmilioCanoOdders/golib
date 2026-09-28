@@ -52,9 +52,14 @@ func TestProtectorUpkeepAndRadiusFade(t *testing.T) {
 	b.Oil = 30
 	s.Buildings[b.ID] = b
 	Apply(s, Tick{})
-	if got := s.Buildings[b.ID].Oil; math.Abs(got-(30-protectorOilPerSecond/60)) > 1e-9 {
+	if got := s.Buildings[b.ID].Oil;
+		math.Abs(got-(30-protectorOilPerSecond/60)) > 1e-9 {
 		t.Errorf("one tick leaves %v L, want %v", got,
 			30-protectorOilPerSecond/60)
+	}
+	if len(s.Costs) != 1 || s.Costs[0].Source != costProtector ||
+		math.Abs(s.Costs[0].Oil-protectorOilPerSecond/60) > 1e-9 {
+		t.Errorf("protector cost receipts = %+v", s.Costs)
 	}
 }
 

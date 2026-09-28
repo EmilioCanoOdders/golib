@@ -781,9 +781,6 @@ func TestProtectorChainConsumesUpkeepBeforeEachOutlet(t *testing.T) {
 	for i, p := range pipes {
 		wantRate := pumpLitersPerSecond -
 			float64(i)*protectorOilPerSecond
-		if i == len(protectors) {
-			wantRate = 0
-		}
 		gotRate := s.Pipes[p.ID].Flow * 60
 		if math.Abs(gotRate-wantRate) > 1e-8 {
 			t.Errorf("pipe %d moves %v L/s, want %v", i+1, gotRate, wantRate)
