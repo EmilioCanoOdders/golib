@@ -855,14 +855,29 @@ func TestCardButtonsWaitForTheirSchematics(t *testing.T) {
 	if panel.findButton(buttonLayPipe) == nil {
 		t.Error("lay pipe is still missing once the frontier kit arrived")
 	}
-	// An unaffordable option is not offered either.
-	lilac := s.Stock.Lilac
+	// An unlocked pump stays visible while its cost is out of reach.
 	s.Stock.Lilac = 0
 	panel = tooltipLayout(s, camera, dc, dr, map[string]bool{})
-	if panel.findButton(buttonBuildPump) != nil {
-		t.Error("build pump is offered on stores that can't pay it")
+	pump := panel.findButton(buttonBuildPump)
+	if pump == nil || !pump.disabled {
+		t.Fatal("the unaffordable pump isn't visible and disabled")
 	}
-	s.Stock.Lilac = lilac
+	if len(pump.costs) != 1 || !pump.costs[0].missing {
+		t.Fatal("the pump cost doesn't mark its missing lilac")
+	}
+	if panel.buttonRowAt(
+		pump.bx+pump.bw/2,
+		pump.by+pump.bh/2,
+	) != nil {
+		t.Fatal("the unaffordable pump button still accepts clicks")
+	}
+	s.Stock.Lilac = pumpCostLilac
+	panel = tooltipLayout(s, camera, dc, dr, map[string]bool{})
+	pump = panel.findButton(buttonBuildPump)
+	if pump == nil || pump.disabled || len(pump.costs) != 1 ||
+		pump.costs[0].missing {
+		t.Error("the pump didn't enable when its lilac cost became affordable")
+	}
 }
 
 func TestTheTechSurvivesARoundTrip(t *testing.T) {

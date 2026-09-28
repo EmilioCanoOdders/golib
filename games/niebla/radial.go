@@ -354,14 +354,6 @@ func drawRadialLeaves(
 	}
 }
 
-// costPart is one resource a blueprint or production order asks for.
-type costPart struct {
-	name    string // "lilac" or "oil", for the tip's short line
-	words   string // the amount with its unit, e.g. "180 kg"
-	color   golib.Color
-	missing bool // the stores fall short of it
-}
-
 // radialTip is what hovering a blueprint on the ring says: its name and
 // its cost, each part marked when the stores fall short of it.
 type radialTip struct {
@@ -394,24 +386,6 @@ func radialTipOf(s *State, kind BuildingKind) radialTip {
 	return tip
 }
 
-func resourceCosts(s *State, lilac, oil float64) []costPart {
-	parts := []costPart{{
-		name:    "lilac",
-		words:   si(lilac, "kg"),
-		color:   lilacColor,
-		missing: s.Stock.Lilac < lilac,
-	}}
-	if oil > 0 {
-		parts = append(parts, costPart{
-			name:    "oil",
-			words:   si(oil, "L"),
-			color:   oilColor,
-			missing: oilTotal(s) < oil,
-		})
-	}
-	return parts
-}
-
 // drawRadialTip paints the tip beside the option under the pointer: a
 // small plate naming the blueprint and pricing it, a red box around each
 // resource's value that the stores fall short of, and a line saying so.
@@ -422,20 +396,12 @@ func drawRadialTip(screen *golib.Screen, item radialLeafItem, tip radialTip) {
 		pad    = 10 // air inside the plate
 		row    = 17 // line height
 		size   = 12 // text size
-		slack  = 2  // air between a box and the value it frames
 		offset = 10 // from the option's rim to the plate
 	)
 	const label = "costs "
 	nameW := screen.TextWidth(tip.name, size, uiText)
 	labelW := screen.TextWidth(label, size, uiText)
-	plusW := screen.TextWidth(" + ", size, uiText)
-	partsW := float32(0)
-	for i, part := range tip.parts {
-		if i > 0 {
-			partsW += plusW
-		}
-		partsW += screen.TextWidth(part.words, size, uiText)
-	}
+	partsW := costPartsWidth(screen, tip.parts, size)
 	w := nameW
 	if w < labelW+partsW {
 		w = labelW + partsW
@@ -459,21 +425,7 @@ func drawRadialTip(screen *golib.Screen, item radialLeafItem, tip radialTip) {
 		panelTextColor)
 	cx := x + pad + labelW + 4
 	cy := y + pad + row
-	for i, part := range tip.parts {
-		if i > 0 {
-			screen.DrawText(" + ", cx, cy, size, panelDimColor, uiText)
-			cx += plusW
-		}
-		words := screen.TextWidth(part.words, size, uiText)
-		screen.DrawText(part.words, cx, cy, size, part.color, uiText)
-		if part.missing {
-			screen.DrawRectangleOutline(golib.Rectangle{
-				X: cx - slack, Y: cy - slack,
-				Width: words + 2*slack, Height: size + 2*slack,
-			}, 1, dangerColor)
-		}
-		cx += words
-	}
+	drawCostParts(screen, tip.parts, cx, cy, size)
 	if tip.shorts() != "" {
 		drawMarkup(screen, "[danger]"+tip.shorts()+"[/]",
 			x+pad, y+pad+2*row, size, panelTextColor)

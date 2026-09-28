@@ -360,7 +360,8 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | `things.go` | What a cell holds, the unit the player picks by: `Thing` snapshots out of layout plus state (a deposit's card spans its patch, while buildings and sites stay on their own cell; rival vehicles and bases standing on the cell have cards too), builders', workers', troopers' and mechanics' captions, `tileAtWorld`, the SI quantities; pure Go, no drawing |
 | `catalog.go` | The entity database: per thing type its name, color, unit and card lines, plus the stable-color fallback |
 | `markup.go` | The `[name]...[/]` colored-text markup: parser and drawer |
-| `inspect.go` | The inspection panel: layout, hit testing, painting, clickable paginated worker portraits, remotely opened robot cards, squad cards anchored to their marks, individual recall and return buttons, other card actions and the integrity line of a damaged building; unlocked factory orders stay visible but dim and unclickable while unavailable, with each resource price outlined and shortfalls red; the cell's outline (`cellDiamond`) |
+| `cost_view.go` | Shared resource price parts and drawing: resource colors, amounts, and red boxes only around unaffordable resources in radial tips and panel actions |
+| `inspect.go` | The inspection panel: layout, hit testing, painting, clickable paginated worker portraits, remotely opened robot cards, squad cards anchored to their marks, individual recall and return buttons, other card actions and the integrity line of a damaged building; unlocked production and pump actions stay visible but dim and unclickable when unaffordable, with only short resource prices boxed in red; the cell's outline (`cellDiamond`) |
 | `robots_panel.go` | The fixed colony roster under the squad strip: builders, available workers, workers grouped by deposit and mechanics; current activity, paging, individual deposit assignment and recall |
 | `sim_mites.go` | Deterministic mite exposure and wear: common unit damage, colony and rival building sites, buildings, piles that lose material over three minutes at full exposure, and laid pipe sections that wear only where exposed; active repulsors shelter their bubbles |
 | `mites.go` | The mites' view: volume- and exposure-scaled swarms around robots, rivals, buildings, sites, piles and laid pipe sections; city-owned hosts animate 60% of the usual particles, without changing damage; swarms double when stationary and again in a full swell, with a red halo around still hosts |
@@ -576,10 +577,12 @@ instead of ground: on a pool with oil left and no pump yet
 a pool inspects it - so the pool's card carries `build pump`, which marks
 it on `pumpCell`, the patch's middle. The pump and its site appear only on
 that cell; the rest of the pool keeps its deposit card. The patch still
-owns the pump for placement and extraction, so it takes only one. Both the
-pump's button and `lay pipe` stay off the cards until they would work -
-their schematics arrived and the stores can pay (`kindUnlocked`, and
-`LayPipe`'s frontier-kit guard).
+owns the pump for placement and extraction, so it takes only one. Once its
+schematic has arrived, `build pump` remains visible on a placeable pool
+even when the stores cannot pay; the button is gray, and only a missing
+resource amount is boxed in red, like an unaffordable radial blueprint.
+`lay pipe` appears when a pipe port is free and its schematic has arrived
+(`LayPipe`'s frontier-kit guard); its changing total is shown while drawing.
 
 A **pipe** (`State.Pipes`, by ID) carries oil one way, `From` a pump or
 a tank `To` a tank, including a protector's dedicated tank, through the

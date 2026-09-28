@@ -337,6 +337,15 @@ func TestWarFactoryCardWaitsForRepairProtocolBeforeOfferingMechanic(t *testing.T
 		trooper.disabled {
 		t.Fatal("a full mechanic slot should not disable trooper production")
 	}
+	stock := s.Stock
+	s.Stock = Stock{}
+	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
+	trooper := panel.findButton(buttonTrooper)
+	if trooper == nil || !trooper.disabled || len(trooper.costs) != 2 ||
+		!trooper.costs[0].missing || !trooper.costs[1].missing {
+		t.Fatal("the unaffordable trooper doesn't show both shortfalls")
+	}
+	s.Stock = stock
 	for i := 0; i < squadSize; i++ {
 		id := s.spawnRobot(RobotCombat, 0, 0)
 		trooper := s.Robots[id]
@@ -344,7 +353,7 @@ func TestWarFactoryCardWaitsForRepairProtocolBeforeOfferingMechanic(t *testing.T
 		s.Robots[id] = trooper
 	}
 	panel = tooltipLayout(s, camera, col, row, map[string]bool{})
-	trooper := panel.findButton(buttonTrooper)
+	trooper = panel.findButton(buttonTrooper)
 	if trooper == nil || !trooper.disabled {
 		t.Fatal("the full squad's trooper button is missing or enabled")
 	}

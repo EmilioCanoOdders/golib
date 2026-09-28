@@ -331,12 +331,13 @@ func tooltipLayoutForThings(
 		}
 		if d, ok := depositAt(tcol, trow); ok && thing.Type == TypeOil {
 			if pc, pr := pumpCell(d); canPlace(s, BuildingPump, pc, pr) &&
-				kindUnlocked(s, BuildingPump) && canAfford(s, BuildingPump) {
+				kindUnlocked(s, BuildingPump) {
 				lilac, oil := buildingCost(BuildingPump)
 				t.rows = append(t.rows, tooltipRow{
-					thing:  thing,
-					button: buttonBuildPump,
-					note:   "[dim]" + costWords(lilac, oil) + "[/]",
+					thing:    thing,
+					button:   buttonBuildPump,
+					costs:    resourceCosts(s, lilac, oil),
+					disabled: !canAfford(s, BuildingPump),
 				})
 			}
 		}
@@ -679,7 +680,8 @@ func drawTooltip(screen *golib.Screen, t tooltip, mx, my float32) {
 			screen.DrawRectangleOutline(rect, 1, edge)
 			screen.DrawText(r.button, r.bx+8, r.by+4, textSize, ink, uiText)
 			if len(r.costs) > 0 {
-				drawProductionCost(screen, *r)
+				drawCostParts(screen, r.costs,
+					r.bx+r.bw+10, r.by+4, textSize)
 			} else if r.note != "" {
 				drawMarkup(screen, r.note, r.bx+r.bw+10, r.by+4,
 					textSize, panelTextColor)
@@ -690,29 +692,6 @@ func drawTooltip(screen *golib.Screen, t tooltip, mx, my float32) {
 				textSize, panelTextColor)
 		}
 		y += rowHeight(r)
-	}
-}
-
-func drawProductionCost(screen *golib.Screen, row tooltipRow) {
-	const slack = 2
-	x := row.bx + row.bw + 10
-	y := row.by + 4
-	for i, part := range row.costs {
-		if i > 0 {
-			screen.DrawText("+", x, y, textSize, panelDimColor, uiText)
-			x += screen.TextWidth("+", textSize, uiText) + 4
-		}
-		width := screen.TextWidth(part.words, textSize, uiText)
-		screen.DrawText(part.words, x, y, textSize, part.color, uiText)
-		border := buttonEdgeColor
-		if part.missing {
-			border = dangerColor
-		}
-		screen.DrawRectangleOutline(golib.Rectangle{
-			X: x - slack, Y: y - slack,
-			Width: width + 2*slack, Height: textSize + 2*slack,
-		}, 1, border)
-		x += width + 6
 	}
 }
 

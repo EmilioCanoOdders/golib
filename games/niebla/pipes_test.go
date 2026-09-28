@@ -234,9 +234,19 @@ func TestExternalPumpIsEatenUnlessProtected(t *testing.T) {
 	col, row := pumpCell(far)
 	panel := tooltipLayout(s, newPlayScene(s).camera,
 		col, row, map[string]bool{})
-	if panel.findButton(buttonBuildPump) == nil {
-		t.Fatal("the outside pool doesn't offer its pump")
+	pumpButton := panel.findButton(buttonBuildPump)
+	if pumpButton == nil || pumpButton.disabled {
+		t.Fatal("the affordable outside pool doesn't offer an active pump")
 	}
+	s.Stock.Lilac = 0
+	panel = tooltipLayout(s, newPlayScene(s).camera,
+		col, row, map[string]bool{})
+	pumpButton = panel.findButton(buttonBuildPump)
+	if pumpButton == nil || !pumpButton.disabled ||
+		len(pumpButton.costs) != 1 || !pumpButton.costs[0].missing {
+		t.Fatal("the fog-covered pool hides its unaffordable pump")
+	}
+	seedStock(s)
 	Apply(s, MarkBuilding{Kind: BuildingPump, Col: col, Row: row})
 	if len(s.Jobs) != 1 {
 		t.Fatal("the outside pool refused its pump site")
@@ -1094,8 +1104,12 @@ func TestAPumpAndItsSiteBelongOnlyToTheirCell(t *testing.T) {
 	}
 	s.Stock.Lilac = 0
 	panel = tooltipLayout(s, camera, dc, dr, map[string]bool{})
-	if panel.findButton(buttonBuildPump) != nil {
-		t.Error("empty stores still offer the pump")
+	pumpButton := panel.findButton(buttonBuildPump)
+	if pumpButton == nil || !pumpButton.disabled {
+		t.Fatal("the unaffordable pump isn't visible and disabled")
+	}
+	if len(pumpButton.costs) != 1 || !pumpButton.costs[0].missing {
+		t.Fatal("the pump cost doesn't mark its missing lilac")
 	}
 	seedStock(s)
 	pump := pumpOn(t, s, d)
