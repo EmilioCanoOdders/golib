@@ -87,12 +87,12 @@ swarm doubles as it stands still and doubles again in a full swell. Counts
 scale by body volume
 (`mitesPerCubicUnit`) and exposure. The same black heart and fading halo remain:
 the heart is opaque, and the round rings ease from `miteHaloOpacity` 0.2 to
-nothing at the rim (`miteFalloff`). A stopped host's halo turns red while its
-square heart stays black. Mites orbit their host and chase that orbit late
-(`miteLagSeconds`), so a walker drags its swarm behind it, never quite caught;
-when it stops - to load, build or wait - the orbit tightens onto the body
-(`miteGripSeconds`). When a host is gone, its swarm closes on the empty spot
-and fades.
+nothing at the rim (`miteFalloff`). A stopped host's halo turns a near-black
+red (`miteStationaryHaloRed` 60) at full grip while its square heart stays
+black. Mites orbit their host and chase that orbit late (`miteLagSeconds`), so
+a walker drags its swarm behind it, never quite caught; when it stops - to
+load, build or wait - the orbit tightens onto the body (`miteGripSeconds`).
+When a host is gone, its swarm closes on the empty spot and fades.
 
 The simulation shares one damage rate across all units: after two stationary
 seconds, hull falls at 2 points/s at full exposure, half that in the haze,
@@ -819,7 +819,7 @@ Mites use `miteDamagePerSecond` for units and structures. Piles track
 exposure-weighted time against `mitePileLifetimeTicks` (three minutes at full
 exposure). Pipe integrity uses the ordinary building health limit; only laid
 sections in exposed air add to its damage. Visual counts, orbit, fade and the
-red stationary halo are tuned in `mites.go`. Rival city hosts draw
+near-black red stationary halo are tuned in `mites.go`. Rival city hosts draw
 `cityMiteParticleFactor` (60%) of the normal animated mite count; their
 simulation damage is unchanged.
 
@@ -1017,6 +1017,9 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-28: stationary mite halos now turn a near-black red, with their
+  full-grip red channel reduced from 180 to 60. Pinned by
+  `TestMiteHalosTurnRedWhenHostsStop`.
 - 2026-09-28: a ground cell under a guard pennant now selects like an
   occupied building cell instead of opening the build menu. The pennant's
   icon still opens its squad card. Pinned by

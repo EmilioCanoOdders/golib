@@ -29,8 +29,9 @@ const (
 	miteTurnsPerSecond = 0.25 // a mite's mean turning rate around its host
 	miteSizeUnits      = 0.3  // the dark center's side; never under a pixel
 
-	miteRings       = 6   // the heart and the rings of halo around it
-	miteHaloOpacity = 0.2 // the halo's darkness right beside the heart
+	miteRings             = 6   // the heart and the rings of halo around it
+	miteHaloOpacity       = 0.2 // the halo's darkness right beside the heart
+	miteStationaryHaloRed = 60  // red channel at full grip
 
 	robotBodyAcross = 6.0 // u, the robot's body for the mites' count
 	robotBodyHeight = 5.0
@@ -337,7 +338,9 @@ func miteLayers(falloff []float32) []float32 {
 
 func miteHaloColor(grip float32) golib.Color {
 	grip = golib.Clamp(grip, 0, 1)
-	return golib.Color{R: uint8(180 * grip), A: 255}
+	return golib.Color{
+		R: uint8(float32(miteStationaryHaloRed) * grip), A: 255,
+	}
 }
 
 // draw paints the mites over the fog. Black under normal blending takes

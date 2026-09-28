@@ -299,8 +299,9 @@ func TestExposedPipesWearDownAndCarryVisibleMites(t *testing.T) {
 func TestMiteHalosTurnRedWhenHostsStop(t *testing.T) {
 	moving := miteHaloColor(0)
 	still := miteHaloColor(1)
-	if moving.R != 0 || still.R == 0 || still.G != 0 || still.B != 0 {
-		t.Fatalf("mite halos are moving=%+v, still=%+v; want black and red",
+	if moving.R != 0 || still.R != miteStationaryHaloRed ||
+		still.G != 0 || still.B != 0 {
+		t.Fatalf("mite halos are moving=%+v, still=%+v; want black and dark red",
 			moving, still)
 	}
 }
