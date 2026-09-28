@@ -277,8 +277,8 @@ or `replay seed` at `460,77`.
 `rivals: next visit` brings the next scheduled arrival in immediately
 (`DevNextVisit`): the scout, an intro/construction attack, or a later city
 crawler. It waits while a non-settled party is active. `rivals: stop
-waiting` ends the preparation of a camped party or a city force's regroup
-or replacement wait (`DevHurryRivals`). `rivals: new city`
+waiting` ends the preparation of a camped party or a city's current unit
+build, force replacement or regroup wait (`DevHurryRivals`). `rivals: new city`
 establishes a city now (`DevNewCity`). The next three buttons each act
 on the oldest city: finish exactly one building
 (`DevFinishCityBuilding`), create and launch its next complete battalion
@@ -287,7 +287,18 @@ or a full force's regroup wait (`DevSendCityBattalion`). `fast forward x8`
 sends `devFastTicks` ticks an update instead of one until pressed again;
 the simulation advances identically, only sooner.
 
-`cities_test.go` can write a save with a complete city and its artillery
+To inspect a city assembling its first battalion, with one vehicle built and
+the next taking 30 seconds:
+
+```text
+NIEBLA_CITY_ASSEMBLY_SHOT_STATE=../../build/niebla/city-assembly.json \
+  ./golib go -C games/niebla test \
+  -run TestWriteCityAssemblyShotState
+./golib shot niebla 60 --save build/niebla/city-assembly.json \
+  --input "Enter@1"
+```
+
+`cities_test.go` can also write a save with a complete city and its artillery
 battalion for inspecting the visuals:
 
 ```text
@@ -343,7 +354,7 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus`; fog-covered oil pools stop pumps without losing oil, protectors clear them, tanks fill from pipes at a shared 1.6 L/s limit and pass excess onward, while protectors keep their reserve and upkeep; each pipe records offered, moved and cumulative liters for the view |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, local exposure (`fogExposureAt`), oil pools covered outside bubbles, where the line stands now (`fogLineNow`), and the drag a walker keeps (`fogDrag`) |
 | `sim_enemies.go` | The rivals' timing and movement: `Enemy` with its saved facing octant and mite-stillness ticks, `Party`, `Raids`, `Mark` and `Report`; the one-minute scout and follow-up clocks, the first no-camp attack, raider growth by visit up to four, city arrivals, party stages, siphoning and return, the first scout's saved outward crossing tick of the core bubble, mite damage and wrecks, guard posts whose shots report oil costs, the shared 130 m small-arms reach, repair-protocol battle markers and legacy trigger migration |
-| `sim_cities.go` | Rival cities: serializable production, sequential rebuilding and refounding, construction-site mite damage, deterministic 45-second building steps, finite local oil/mineral reserves, city arrival and old-save migration, city battalions that grow to five vehicles before artillery replaces the crawler, antimist replacement, unloading, 90-second rests and squad replacement; records the pressure city's first sortie |
+| `sim_cities.go` | Rival cities: serializable production, sequential rebuilding and refounding, construction-site mite damage, deterministic 45-second building steps and 30-second vehicle steps, finite local oil/mineral reserves, city arrival and old-save migration, city battalions assembled one vehicle at a time to five before artillery replaces the crawler, antimist replacement, unloading, 90-second rests and squad replacement; records the pressure city's first sortie |
 | `sim_tech.go` | The schematics: the robot factory is the opening drop, first delivery unlocks infrastructure, the guard post follows the first scout's return past the core bubble, and the frontier kit follows one minute after that crossing (old saves keep the 5:30 trigger); the war factory follows the first-city founding; artillery follows three ended normal attacks (old saves keep the rival-factory trigger); the repair protocol waits for rival building damage and a city-force lull (minute 12 if no first force is produced); `stepTech`, `kindUnlocked`, `dropArrived` and `techPending` derive arrivals and `State.Tech` keeps which drops were opened |
 | `sim_squads.go` | The military units' law and tuning: troopers (`RobotCombat`) and mechanics (`RobotRepair`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), which reports ammunition oil costs, the shared 130 m small-arms reach, the war factory's capacity (`squadRoom`, `mechanicRoom`), and rivals targeting defenders (`stepEnemyGuns`) |
 | `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right with a trooper icon, unit count and key (`drawSquadStrip`, `drawTrooperIcon`, `squadBoxRect`, `squadBoxAt`), selection of the pennant or target ring and the squad card's `give order` button (`selectSquad`, `squadMarkAt`, `squadMarkScreen`), guard-pennant cell hit-testing (`squadPennantInCell`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
@@ -397,7 +408,7 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | `mites_test.go` | The mites' view without a window: volume and exposure counts, doubled still and swell swarms, half strength in haze, the red halo, orbit, trail, fade and falloff |
 | `sim_mites_test.go` | Mite simulation rules: the same stationary unit damage across roles and rivals, no damage while moving, doubled swell damage, charged pylon immunity, colony and rival site wear, reduced city particle counts, pile lifetime, and exposed pipe wear |
 | `dev_test.go` | The dev actions: a held swell stays up and doesn't count, a placed robot is built, rival camp/regroup/rebuild waits can be hurried, the city tool buttons have separate hit boxes, `unitsAtWorld` undoes `project` |
-| `cities_test.go` | City founding beyond artillery range and on the scout's bearing, 45-second building steps, pylon-first construction, finite local economy, sorties, unloading/reuse, the full-squad rest, replacement and rebuild timing, dev actions, replay and JSON persistence |
+| `cities_test.go` | City founding beyond artillery range and on the scout's bearing, 45-second building steps, pylon-first construction, finite local economy, unit-by-unit 30-second sortie assembly and replacement, unloading/reuse, the full-squad rest, destroyed-force rebuild timing, dev actions, replay and JSON persistence |
 | `fog_test.go` | The fog driven directly: cycles, swell timing, line and bubble margin, pushed-band drag, stationary wear by exposure and swell, movement and bubble resets, saved wear and the HUD forecast |
 | `identity_test.go` | The identity derived from a machine ID: stable, distinct, and the parsers of what `reg query`, `ioreg` and the machine-id files say |
 | `store_test.go` | The database driven directly: an identity kept across runs, the fallback one too, the token column waiting empty, a base saved and loaded back whole, a second save replacing the first, one player's save invisible to another, the DB path's rules |
@@ -815,15 +826,19 @@ raider per visit, up to four. A raid chooses the nearest colony tank with oil
 (`raidTarget`), moves to `siphonReachUnits`, draws
 `siphonLitersPerSecond` from it until full/no oil/`raidSiphonTicks`, then
 leaves for the entry point. City sorties use the same raid and return
-rules, but their entry point is the city. Each newly produced battalion
-starts with a crawler and one raider, adding a raider per new battalion up to
-four. Once the force reaches five vehicles, later battalions replace the
-crawler with artillery and remain at five. A force that returns with oil
-unloads at `cityUnloadPerSecond` 3 L/s per living vehicle. A full squad waits
-`citySortieCooldownTicks` 90 seconds before its next raid. A damaged squad
-waits a minute and buys replacements; an empty or destroyed force is rebuilt
-after a minute. `movingParty` permits one active party region-wide;
-other cities wait for it to return, unload or be lost.
+rules, but their entry point is the city. The factory builds one vehicle
+every `cityUnitBuildTicks` 1800 ticks (30 seconds), paying that vehicle's
+share of the full sortie cost as it completes. The battalion stays at the
+city until every vehicle is built, then attacks together. It starts with a
+crawler and one raider, adding a raider per new battalion up to four. Once
+the force reaches five vehicles, later battalions replace the crawler with
+artillery and remain at five. A force that returns with oil unloads at
+`cityUnloadPerSecond` 3 L/s per living vehicle. A full squad waits
+`citySortieCooldownTicks` 90 seconds before the city starts its next
+assembly. A damaged squad builds one replacement every 30 seconds; an empty
+or destroyed force waits a minute before assembling its replacement.
+`movingParty` permits one active party region-wide; other cities wait for it
+to return, unload or be lost.
 
 Each newly founded city saves an `AnnounceUntil` tick one minute ahead.
 Until then, `threatWords` may show its status in the HUD. Its `ReportSettled`
@@ -859,17 +874,20 @@ system.
 
 The city progression (`sim_cities.go`) is stored in each `City`: stage,
 construction timer, finite oil and lilac reserves, city stores, building
-IDs, next production tick and new squads completed. The first city starts
+IDs, next production tick and completed sorties. The first city starts
 on the scout's bearing at the second attack; its crawler is the initial
 rig. Later crawlers arrive from the region edge. Every city builds a pylon
 first, then a Nexus, oil extractor, lilac mine and war factory. Each step
 takes `cityBuildTicks`; completed structures are city-owned `Enemy`
 records. Oil and mineral extraction stop if their building is destroyed.
-The war factory makes a squad when it exists and city stores can pay.
-Intact returning squads are reused after unloading; a missing unit, including
-the antimist crawler, is bought back after a minute. Empty or destroyed
-squads are recreated after a minute. The city repulsor shelters nearby city
-units; a sortie's crawler or mobile artillery carries its own bubble.
+The war factory assembles a sortie as a saved `StageBuild` party, producing
+and charging for one vehicle every 30 seconds; the party attacks only when
+its full composition is ready. Intact returning squads are reused after
+unloading; a missing unit, including the antimist crawler, is rebuilt one at
+a time, 30 seconds per vehicle. Empty or destroyed squads wait one minute,
+then assemble their replacement the same way. The city repulsor shelters
+nearby city units; a sortie's crawler or mobile artillery carries its own
+bubble.
 
 A guard post (`BuildingGuard`, in the build menu) reloads in
 `Building.Reload` and shoots the nearest vehicle within

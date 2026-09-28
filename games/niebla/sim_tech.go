@@ -103,7 +103,7 @@ func repairProtocolUnlocked(s *State) bool {
 func rivalForcesInLull(s *State) bool {
 	for _, id := range sortedPartyIDs(s) {
 		switch s.Parties[id].Stage {
-		case StageApproach, StageCamp, StageRaid, StageLeave:
+		case StageApproach, StageBuild, StageCamp, StageRaid, StageLeave:
 			return false
 		}
 	}
@@ -112,8 +112,16 @@ func rivalForcesInLull(s *State) bool {
 
 func pressureCitySortieReady(s *State) bool {
 	city, exists := s.Cities[s.Raids.PressureCity]
-	if !exists || city.Ruined || s.Raids.PressureSortieStarted ||
-		movingParty(s) {
+	if !exists || city.Ruined || s.Raids.PressureSortieStarted {
+		return false
+	}
+	for _, id := range sortedPartyIDs(s) {
+		party := s.Parties[id]
+		if party.City == city.ID && party.Stage == StageBuild {
+			return true
+		}
+	}
+	if movingParty(s) {
 		return false
 	}
 	stage, needsConstruction := cityNextBuildingStage(s, city)

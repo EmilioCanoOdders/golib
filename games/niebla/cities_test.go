@@ -245,8 +245,7 @@ func TestRazedCityRefoundsWithACrawlerAtANewSite(t *testing.T) {
 	for _, id := range structureIDs {
 		s.killEnemy(id)
 	}
-	if got, want := len(s.BuildingDeaths), len(structureIDs)+1;
-		got != want {
+	if got, want := len(s.BuildingDeaths), len(structureIDs)+1; got != want {
 		t.Fatalf("the razed city made %d collapse events, want %d",
 			got, want)
 	}
@@ -478,8 +477,9 @@ func TestVersionThreeCitySaveMigratesItsPressureCityAndPartySize(t *testing.T) {
 	}
 }
 
-func TestCityBattalionsGrowBeforeArtilleryReplacesAntimist(t *testing.T) {
+func TestCityBattalionsAssembleOneUnitAtATime(t *testing.T) {
 	s := newGame()
+	noRivals(s)
 	cityID := s.foundCity(3500, 3200, 0.4)
 	city := s.Cities[cityID]
 	for range cityBuildOrder {
@@ -511,6 +511,7 @@ func TestCityBattalionsGrowBeforeArtilleryReplacesAntimist(t *testing.T) {
 	}
 	city.Oil, city.Lilac, city.NextSortie = citySortieOil*6,
 		citySortieLilac*6, s.Ticks
+	city.OilDeposit, city.LilacDeposit = 0, 0
 	s.Cities[cityID] = city
 	for sortie := int64(1); sortie <= 6; sortie++ {
 		city = s.Cities[cityID]
@@ -518,12 +519,14 @@ func TestCityBattalionsGrowBeforeArtilleryReplacesAntimist(t *testing.T) {
 		s.Cities[cityID] = city
 		stepCity(s, &city)
 		s.Cities[cityID] = city
-		if len(s.Parties) != 1 {
-			t.Fatalf("sortie %d created %d parties, want one", sortie,
-				len(s.Parties))
-		}
+		startingOil, startingLilac := city.Oil, city.Lilac
 		partyID := sortedPartyIDs(s)[0]
 		party := s.Parties[partyID]
+		if party.Stage != StageBuild || party.Wait != cityUnitBuildTicks ||
+			len(partyMembers(s, partyID)) != 0 {
+			t.Fatalf("sortie %d started as %+v with %d vehicles", sortie,
+				party, len(partyMembers(s, partyID)))
+		}
 		wantRaiders := int(sortie)
 		if wantRaiders > raidMaxRaiders {
 			wantRaiders = raidMaxRaiders
@@ -533,6 +536,41 @@ func TestCityBattalionsGrowBeforeArtilleryReplacesAntimist(t *testing.T) {
 		if sortie > int64(raidMaxRaiders) {
 			wantCrawler = 0
 			wantArtillery = 1
+		}
+		wantSize := wantRaiders + wantCrawler + wantArtillery
+		for unit := 1; unit <= wantSize; unit++ {
+			if unit == 1 {
+				runTicks(s, int(cityUnitBuildTicks)-1)
+				if got := len(partyMembers(s, partyID)); got != 0 {
+					t.Fatalf("sortie %d built a vehicle early", sortie)
+				}
+				runTicks(s, 1)
+			} else {
+				runTicks(s, int(cityUnitBuildTicks))
+			}
+			party = s.Parties[partyID]
+			if got := len(partyMembers(s, partyID)); got != unit {
+				t.Fatalf("sortie %d built %d vehicles after unit %d",
+					sortie, got, unit)
+			}
+			city = s.Cities[cityID]
+			spentOil := citySortieOil * float64(unit) / float64(wantSize)
+			spentLilac := citySortieLilac * float64(unit) /
+				float64(wantSize)
+			if math.Abs(city.Oil-(startingOil-spentOil)) > 0.001 ||
+				math.Abs(city.Lilac-(startingLilac-spentLilac)) > 0.001 {
+				t.Fatalf("sortie %d spent %.3f L and %.3f kg after unit %d",
+					sortie, startingOil-city.Oil,
+					startingLilac-city.Lilac, unit)
+			}
+			if unit < wantSize && party.Stage != StageBuild {
+				t.Fatalf("sortie %d launched before unit %d of %d",
+					sortie, unit, wantSize)
+			}
+		}
+		if party.Stage != StageRaid {
+			t.Fatalf("sortie %d finished assembly in stage %q",
+				sortie, party.Stage)
 		}
 		raiders, crawlers, artillery, bubbles := 0, 0, 0, 0
 		for _, member := range partyMembers(s, partyID) {
@@ -548,8 +586,7 @@ func TestCityBattalionsGrowBeforeArtilleryReplacesAntimist(t *testing.T) {
 				bubbles++
 			}
 		}
-		wantSize := wantRaiders + wantCrawler + wantArtillery
-		if party.Stage != StageRaid || party.Size != wantSize ||
+		if party.Size != wantSize ||
 			party.Artillery != (wantArtillery == 1) ||
 			raiders != wantRaiders || crawlers != wantCrawler ||
 			artillery != wantArtillery || bubbles != 1 {
@@ -562,6 +599,13 @@ func TestCityBattalionsGrowBeforeArtilleryReplacesAntimist(t *testing.T) {
 			if s.Enemies[id].Party == partyID {
 				delete(s.Enemies, id)
 			}
+		}
+		city = s.Cities[cityID]
+		if math.Abs(city.Oil-(citySortieOil*float64(6-sortie))) > 0.001 ||
+			math.Abs(city.Lilac-
+				citySortieLilac*float64(6-sortie)) > 0.001 {
+			t.Fatalf("sortie %d left city stores at %.3f L and %.3f kg",
+				sortie, city.Oil, city.Lilac)
 		}
 	}
 }
@@ -730,10 +774,10 @@ func TestDamagedCityForceUnloadsThenCompletesItsSquad(t *testing.T) {
 		t.Fatalf("the damaged force did not enter squad completion: %+v, %d members",
 			s.Parties[partyID], len(partyMembers(s, partyID)))
 	}
-	runTicks(s, int(cityRebuildTicks)-1)
+	runTicks(s, int(cityUnitBuildTicks)-1)
 	if s.Parties[partyID].Stage != StageRebuild ||
 		len(partyMembers(s, partyID)) != raidMaxRaiders {
-		t.Fatal("the missing vehicle was restored before the one-minute wait")
+		t.Fatal("the missing vehicle was restored before its build time")
 	}
 	runTicks(s, 1)
 	if s.Parties[partyID].Stage != StageRaid ||
@@ -767,7 +811,7 @@ func TestDamagedCityForceRebuildsItsAntimistCrawler(t *testing.T) {
 		t.Fatal("the city force has no antimist crawler to lose")
 	}
 	delete(s.Enemies, crawlerID)
-	if !s.completeCityParty(&party) {
+	if !s.buildCityPartyUnit(&party) {
 		t.Fatal("the city could not replace its lost antimist crawler")
 	}
 	crawlers, bubbles := 0, 0
@@ -796,7 +840,7 @@ func TestDestroyedCityForceWaitsOneMinuteBeforeRebuilding(t *testing.T) {
 	}
 	city.Oil, city.Lilac = 500, 1000
 	s.Cities[cityID] = city
-	stepCity(s, &city)
+	s.finishCitySortie(&city)
 	s.Cities[cityID] = city
 	partyID := sortedPartyIDs(s)[0]
 	for _, id := range sortedEnemyIDs(s) {
@@ -818,7 +862,27 @@ func TestDestroyedCityForceWaitsOneMinuteBeforeRebuilding(t *testing.T) {
 	}
 	runTicks(s, 1)
 	if len(s.Parties) != 1 {
-		t.Fatal("the city did not rebuild a force after one minute")
+		t.Fatal("the city did not start rebuilding its force after one minute")
+	}
+	partyID = sortedPartyIDs(s)[0]
+	if s.Parties[partyID].Stage != StageBuild ||
+		len(partyMembers(s, partyID)) != 0 {
+		t.Fatalf("the city started the rebuild as %+v",
+			s.Parties[partyID])
+	}
+	runTicks(s, int(cityUnitBuildTicks)-1)
+	if len(partyMembers(s, partyID)) != 1 {
+		t.Fatal("the city did not build its first replacement unit")
+	}
+	runTicks(s, int(cityUnitBuildTicks))
+	if s.Parties[partyID].Stage != StageBuild ||
+		len(partyMembers(s, partyID)) != 2 {
+		t.Fatal("the city did not build its second replacement unit")
+	}
+	runTicks(s, int(cityUnitBuildTicks))
+	if s.Parties[partyID].Stage != StageRaid ||
+		len(partyMembers(s, partyID)) != 3 {
+		t.Fatal("the city did not launch the rebuilt force")
 	}
 }
 
@@ -832,10 +896,15 @@ func TestCityDevelopmentAndSortiesSurviveJSONDeterministically(t *testing.T) {
 		}
 		city.Oil, city.Lilac, city.NextSortie = 500, 1000, 0
 		s.Cities[cityID] = city
-		runTicks(s, 8)
+		runTicks(s, int(cityUnitBuildTicks)+8)
 		return s
 	}
 	s := play()
+	party := s.Parties[sortedPartyIDs(s)[0]]
+	if party.Stage != StageBuild || len(partyMembers(s, party.ID)) != 1 {
+		t.Fatalf("the saved force was not partway through assembly: %+v",
+			party)
+	}
 	if !reflect.DeepEqual(s, play()) {
 		t.Fatal("identical city states produced different futures")
 	}
@@ -935,6 +1004,29 @@ func TestWriteCityShotState(t *testing.T) {
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("writing %s: %v", path, err)
 	}
+}
+
+func TestWriteCityAssemblyShotState(t *testing.T) {
+	path := os.Getenv("NIEBLA_CITY_ASSEMBLY_SHOT_STATE")
+	if path == "" {
+		t.Skip("set NIEBLA_CITY_ASSEMBLY_SHOT_STATE to write " +
+			"an assembly state")
+	}
+	s := newGame()
+	noRivals(s)
+	cx, cy := tileCenterUnits(coreCol, coreRow)
+	cityID := s.foundCity(cx+900, cy, 0)
+	city := s.Cities[cityID]
+	for range cityBuildOrder {
+		s.finishCityBuilding(&city)
+	}
+	city.Oil, city.Lilac = citySortieOil, citySortieLilac
+	city.OilDeposit, city.LilacDeposit = 0, 0
+	s.Cities[cityID] = city
+	stepCity(s, &city)
+	s.Cities[cityID] = city
+	runTicks(s, int(cityUnitBuildTicks))
+	writeCityShotState(t, path, s)
 }
 
 func TestWriteCityConstructionShotState(t *testing.T) {

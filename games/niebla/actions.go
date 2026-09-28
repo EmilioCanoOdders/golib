@@ -385,7 +385,7 @@ func (DevHurryRivals) apply(s *State) {
 	for _, id := range sortedPartyIDs(s) {
 		p := s.Parties[id]
 		switch p.Stage {
-		case StageCamp, StageRebuild, StageRegroup:
+		case StageBuild, StageCamp, StageRebuild, StageRegroup:
 			p.Wait = 0
 		}
 		s.Parties[id] = p

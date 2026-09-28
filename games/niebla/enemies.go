@@ -258,11 +258,21 @@ func threatWords(s *State) string {
 	for _, id := range sortedPartyIDs(s) {
 		p := s.Parties[id]
 		members := partyMembers(s, id)
+		where := ""
+		lead := Enemy{}
 		if len(members) == 0 {
-			continue
+			if p.Stage != StageBuild {
+				continue
+			}
+			city, exists := s.Cities[p.City]
+			if !exists {
+				continue
+			}
+			where = compassWord(city.X, city.Y)
+		} else {
+			lead = members[0]
+			where = compassWord(lead.X, lead.Y)
 		}
-		lead := members[0]
-		where := compassWord(lead.X, lead.Y)
 		switch p.Stage {
 		case StageApproach:
 			return "something moves in the mist, " + where
@@ -277,6 +287,12 @@ func threatWords(s *State) string {
 			return "raid under way, " + where
 		case StageUnload:
 			return "rival force unloading at its city, " + where
+		case StageBuild:
+			left := (p.Wait + 59) / 60
+			return fmt.Sprintf(
+				"rival city assembling a force, %s, next unit in %d:%02d",
+				where, left/60, left%60,
+			)
 		case StageRebuild:
 			left := (p.Wait + 59) / 60
 			return fmt.Sprintf("rival force completing its ranks, %s, %d:%02d",

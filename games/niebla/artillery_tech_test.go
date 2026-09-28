@@ -74,6 +74,7 @@ func TestArtilleryArrivesAfterThreeNormalAttacksEnd(t *testing.T) {
 
 func TestCityFactoryCompletionAndSortiesDoNotUnlockArtillery(t *testing.T) {
 	s := artilleryTechTestState()
+	noRivals(s)
 	s.Raids.Visits = 3
 	city := City{ID: 90, Oil: 1000, Lilac: 2000}
 	for range len(cityBuildOrder) - 1 {
@@ -102,6 +103,8 @@ func TestCityFactoryCompletionAndSortiesDoNotUnlockArtillery(t *testing.T) {
 
 		partyID := sortedPartyIDs(s)[0]
 		party := s.Parties[partyID]
+		runTicks(s, party.Size*int(cityUnitBuildTicks))
+		party = s.Parties[partyID]
 		if party.City != city.ID ||
 			party.Artillery != (sortie > int64(raidMaxRaiders)) {
 			t.Fatalf("city sortie %d is %+v", sortie, party)

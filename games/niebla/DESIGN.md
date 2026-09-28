@@ -326,22 +326,25 @@ stays reserved until the crawler settles; the new base starts with its
 original reserves and build order. Saves keep this wait and the crawler's
 route deterministic.
 
-Once the factory and stores are ready, the first city battalion attacks
-immediately with a crawler and one raider. Each new battalion adds one
-raider until it has four raiders and five vehicles total. Only the next
+Once the factory and stores are ready, the city builds its next battalion
+one vehicle at a time, taking `cityUnitBuildTicks` 30 s per vehicle and
+paying each vehicle's share of the sortie cost as it completes. It waits at
+the city until every vehicle is ready, then attacks with the whole force.
+The first battalion has a crawler and one raider. Each new battalion adds
+one raider until it has four raiders and five vehicles total. Only the next
 battalions replace the crawler with mobile artillery, keeping the total at
 five. The crawler's bubble is 120 m; artillery's is 170 m. The force walks
 directly to the nearest colony oil tank, siphons and returns to its city.
 Mobile artillery shells colony buildings on the way in; a shot cannot damage
 the core. A force that returns with stolen oil unloads
 at `cityUnloadPerSecond` 3 L/s per vehicle. A complete force then rests
-for `citySortieCooldownTicks` 90 s before attacking again. A damaged force
-waits one minute and replaces missing vehicles; an empty or destroyed
-force is rebuilt after one minute. Only one moving party can be in the
-region at a time; other cities wait their turn. The first force can make
-the trip in calm weather while it is within the fog line; artillery keeps
-the formation repulsed through swells. The route is a straight line for
-now.
+for `citySortieCooldownTicks` 90 s before the city starts assembling its
+next one. A damaged force builds each missing vehicle in 30 s; an empty or
+destroyed force waits one minute before assembling its next force the same
+way. Only one moving party can be in the region at a time; other cities
+wait their turn. The first force can make the trip in calm weather while it
+is within the fog line; artillery keeps the formation repulsed through
+swells. The route is a straight line for now.
 
 The scout, the repeated attacks during the first city's construction, and
 later city arrivals are scheduled by the rival clock. Once a city is
@@ -529,7 +532,7 @@ For whoever works on the game, not for the player: in the region, hold Control a
   the scout, an intro/construction attack, or a later city crawler. It waits
   while a non-settled party is active.
 - **rivals: stop waiting** (`DevHurryRivals`): ends a camped party's wait or
-  a city force's regroup or squad-completion wait.
+  a city unit's build, a force's replacement wait, or its regroup.
 - **rivals: new city** (`DevNewCity`): establishes a city now, up to `cityLimit` 3.
 - **finish city build** (`DevFinishCityBuilding`): completes one next building in the oldest city.
 - **finish battalion** (`DevFinishCityBattalion`): creates the oldest city's next complete force and starts its attack.
@@ -606,12 +609,14 @@ For whoever works on the game, not for the player: in the region, hold Control a
   During construction, later attacks follow one minute after the previous
   party ends. They camp first and add one raider per visit, from one to four;
   each has a crawler antimist vehicle. Each city building takes 45 seconds.
-  City battalions start with a crawler and one raider, adding raiders up to
-  four. Once they reach five vehicles, later battalions replace the crawler
-  with mobile artillery. Full forces rest 90 seconds after unloading before
-  attacking again. Damaged forces replace losses after a minute; empty or
-  destroyed forces rebuild after a minute. Later cities arrive on the
-  city clock. Structures can be destroyed, wrecks drop loot, and the
+  City battalions take 30 seconds per vehicle to assemble, one at a time;
+  the complete force waits at the city before attacking. They start with a
+  crawler and one raider, adding raiders up to four. Once they reach five
+  vehicles, later battalions replace the crawler with mobile artillery.
+  Full forces rest 90 seconds after unloading before the next assembly.
+  Damaged forces replace one vehicle every 30 seconds; empty or destroyed
+  forces wait a minute before assembly. Later cities arrive on the city
+  clock. Structures can be destroyed, wrecks drop loot, and the
   colony's artillery shells visible rival targets for lilac and oil (see
   [The rivals](#the-rivals)).
 - A war factory builds troopers, up to six, and they are its squad: one
@@ -841,8 +846,9 @@ from the state's tick), `techCalloutW` is 280 px and `techUsedVeil` is
 0.72, the dark overlay on a building square used from its drop.
 
 In `sim_cities.go`, `cityBuildTicks` is 2700 ticks (45 s) per building,
-and `citySortieCooldownTicks` is 5400 ticks (90 s) after a full force
-returns. `cityAnnouncementTicks` is 3600 ticks (one minute); the city
+`cityUnitBuildTicks` is 1800 ticks (30 s) per vehicle and
+`citySortieCooldownTicks` is 5400 ticks (90 s) after a full force returns.
+`cityAnnouncementTicks` is 3600 ticks (one minute); the city
 status, founding report and offscreen arrow share that deadline. Other
 reports last `reportShowTicks` 900 ticks (15 s). In `guides.go`, offscreen
 arrows sit `guideEdgeInset` 28 px from the
@@ -954,7 +960,7 @@ history. Its current unlock order is in [Rules (MVP)](#rules-mvp), and its
 current economic measurements are in [Economy balance plan](#economy-balance-plan).
 
 - **Enemies and battles.** The swell is pressure, but it is only weather: resources should also buy war. The rules and the current tuning are in [The rivals](#the-rivals). The design has no walls; rivals steal and later destroy; they ride vehicles under a crawler's mobile repulsor, which is never usable loot; wrecks drop loot; positioning stays coarse - posts and small squads, never units placed by hand one by one. Landed: the scout and its mark, camped raids, the fog's due, the guard post, the war factory and squads, rivals that shoot back, the settled city, artillery, building damage and repair, bullets and shells.
-- **Economy analysis and balance.** The opt-in `economy_test.go` probe now plays four deterministic policies over seeds 0, 1 and 2 for an hour, using only schematics that have actually arrived: safe harvest, worker growth, a protected oil outpost, and a guard plus a two-trooper defense. It records stores, extraction, protectors, pipes, party size and city production each minute. In all three defense runs, the guard is built by minute 3-4 and two troopers by minute 7; the first city sortie is minute 9-11 and its next produced force minute 11-14. Without defense, the growth policy fills its lilac store by minute 60; the outpost policy raises a protector by minute 7 and lays its first pipe by minute 10-11, but has no military and the protector is gone by minute 60. The defense test loses its first two troopers by minute 15 on two seeds. The next balance pass should make that second battle a recoverable new tooth: test defending orders and artillery placement before changing costs or yields, then rerun the same policies and compare losses, reserves and replacement times. The probe measures scripted decisions, not whether a human finds the choices clear. The difficulty-saw reference is [Dave Tech](https://www.davetech.co.uk/difficultycurves): introduce one mechanic, give room to learn it, then call it back as a foundation for the next.
+- **Economy analysis and balance.** The opt-in `economy_test.go` probe plays four deterministic policies over seeds 0, 1 and 2 for an hour, using only schematics that have actually arrived: safe harvest, worker growth, a protected oil outpost, and a guard plus a two-trooper defense. It records stores, extraction, protectors, pipes, party size and city production each minute. The defense plan still raises a guard by minute 3-4 and two troopers by minute 7. With one vehicle built every 30 seconds, the first city force launches at minute 11.25 on seed 0 and 13.56 on seeds 1 and 2; a second new force launches at minute 17 on seed 0, minute 33 on seed 1, and not within the hour on seed 2. All three keep both troopers through minute 60. Without defense, the growth policy fills its lilac store by minute 60; the outpost policy raises a protector by minute 7 and lays its first pipe by minute 10-11, and still has a fully fueled protector and two pipes at minute 60, with only 1.4-26.8 kg of lilac left. The defense plan produces a mechanic by minutes 20 and 25 on two seeds; the third has no rival building damage by minute 60. The probe measures scripted decisions, not whether a human finds the choices clear. The next balance pass should test defending orders and artillery placement before changing costs or yields, then rerun the same policies and compare losses, reserves and replacement times. The difficulty-saw reference is [Dave Tech](https://www.davetech.co.uk/difficultycurves): introduce one mechanic, give room to learn it, then call it back as a foundation for the next.
 - **Introduction to the game.** The player gets the elements little by little, so there is always one more thing they can do and never ten at once: the tutorial is the unlocking. The colony's buildings arrive as **remote schematics** the core receives: a drop of the ladder (`sim_tech.go`) lights a pulsing badge over the monolith, its click opens a callout that says what came in and how it is used, and the blueprints join the build menu - before the first drop the menu doesn't open at all, so the callout's "click empty ground" is true the day it is said. The first ladder, landed 2026-09-22 and tuned by the first play the same day: the first delivery of a haul home brings the **infrastructure** in (silo, warehouse, charger) - farming alone until then, no dead minutes on a clock; the guard post comes when the scout's drawing has become **inevitable** - a rival drinking at the tanks (`Enemy.Oil` over zero), or the mark already on the ground - and it comes **alone**, too late to stop the drawing, in time for the next visit; at 5:30 the **frontier kit** (protector, pump, and with them the pipes); at 7:00 the **robot factory**; after the first raid leaves, the **war factory**; when a base settles, **artillery**. The order is the difficulty saw (Dave Tech, above): a drop per valley, none in the middle of a peak, a war tool only once its lesson is on the road (the guard while the scout steals, the squads after the first raid, the artillery after the base digs in), three blueprints to a drop at the most. Two teeth still run on the clock on purpose - they hold the long calm between the scout and the first raid; the rest answer events the player has seen or caused. Candidate for the measured loop: the storage drops answering the roofs ("at 80% of an oil roof, the silo") instead of the clock. Plain milestone unlocks win for the prototype; a research center or choices between technologies wait until the measured loop says they need a resource sink or a strategic fork. A factory's extra workers still cannot raise the safe harvest while a deposit takes one robot - the multi-worker design under [Later](#later) comes first; until then the factory's callout promises hands, never ore. And nothing unavailable is ever shown: the menu offers only what the colony could raise right now (see [Construction model](#construction-model)), so the game gives itself away option by option and never spoils what it hasn't given yet.
 - **Humans.** No walkers on the ground - the technology could draw them, the design doesn't want them - but buildings of theirs: housing, and whatever follows. To study whether to do it at all, because the next steps are food, waste and the rest, and the question is whether this game wants to be the next Ixion. What is decided is smaller: the colony gets **at least one more resource**, and people are one candidate for what needs it, not the only one. They are also the voices the mites' nickname already owes the game.
 - **Electricity and connection.** Generators - oil-burning, wind, geothermal and the like - and a grid the buildings hang from. And **wireless points** that let robots coordinate: inside the grid's coverage a robot knows what the others are doing; outside it, it knows only what it is doing itself and where the stores are, so two robots out of coverage may walk to the same job or the same pile. The risk is teaching it, since it has little precedent as a rule about *knowledge*; the picture has plenty (StarCraft's pylon fields, Factorio's roboport ranges, Creeper World's network), so coverage drawn on the ground while placing, and a mark on a robot that has lost the grid, are where to start.
@@ -968,12 +974,13 @@ option at once; save for the next known threat.
    three workers, assigning several robots to the two safe patches instead
    of making six workers that have no active deposit.
 2. After the scout returns beyond the core bubble, build the guard post.
-   One minute later, the frontier kit brings the protector, pump and pipes.
-   In the three-seed probe, the defense plan raises a guard by minute 3-4.
+    One minute later, the frontier kit brings the protector, pump and pipes.
+    In the three-seed probe, the defense plan raises a guard by minute 3-4.
 3. When the first city appears, mark the war factory and build two troopers.
-   The probe has both by minute 7, before the first city sortie at minute
-   9-11. Send the squad against an approaching party or keep it where it can
-   protect the oil tank; do not leave the defense without orders by habit.
+    The probe has both by minute 7, before the first city sortie at minute
+    11-14. Send the squad against an approaching party or keep it where it
+    can protect the oil tank; do not leave the defense without orders by
+    habit.
 4. When the repair protocol arrives, build a mechanic if rival fire has
    damaged a building and the war factory still stands. The drop waits for
    the first city force's lull (or minute 12 if it was never produced).
@@ -985,29 +992,28 @@ option at once; save for the next known threat.
    A surviving city force rests 90 seconds after unloading; use that valley
    to rebuild the guard, refill the squad and save for the next new threat.
 
-The tested defense opening builds its first two troopers in time, but two
-of the three seeded runs have lost them by minute 15. The repair probe
-records these defense milestones over seeds 0, 1 and 2:
+The tested defense opening builds its first two troopers in time, and all
+three seeds keep them through minute 60. Vehicle-by-vehicle assembly moves
+the first city force later and gives the defense a longer quiet interval.
+The repair probe records these defense milestones over seeds 0, 1 and 2:
 
 | Seed | Rival building hit | First attack ended | First city force | First lull | Repair protocol |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 0 | 47,705 | 31,079 | 36,902 | 42,156 | 66,558 |
-| 1 | 30,821 | 45,206 | 45,207 | 58,232 | 58,232 |
-| 2 | 122,900 | 45,203 | 45,204 | 58,165 | 140,101 |
+| 0 | 67,243 | 31,079 | 40,501 | 49,479 | 67,995 |
+| 1 | 30,821 | 45,206 | 48,806 | 69,611 | 69,611 |
+| 2 | — | 45,203 | 48,803 | 69,605 | — |
 
-All values are simulation ticks. Seed 1 produces a mechanic by minute 17,
-with 864.5 L and 306.3 kg left after the build. Seed 0's scripted war
-factory is gone at the protocol's arrival and the policy rebuilds it much
-later; seed 2 has no mechanic by minute 60. The probe separates the
-schematic gate from whether the scripted colony can keep a factory and
-stores through the battle. The report also records mechanics and remaining
-building damage. The tested outpost
-opening has a protector by minute 7 and its first pipe by minute 10-11,
-but it has no guard and no troopers; its protector is gone by minute 60 in
-all three runs. Keep unit costs and extraction rates unchanged for the next
-pass. First test whether defending the outpost and ordering the squad makes
-the second attack survivable; if it does not, change one economic dial at a
-time and rerun all four probe policies.
+All values are simulation ticks; a dash means the event did not occur in the
+hour. Seeds 0 and 1 produce a mechanic by minute 20 and 25, respectively;
+seed 2 has neither building damage nor a mechanic by minute 60. The report
+also records mechanics and remaining building damage. The tested outpost
+opening has a protector by minute 7 and its first pipe by minute 10-11, but
+no guard or troopers; at minute 60 its protector is still fully fueled and
+two pipes are laid, while lilac has fallen to 1.4-26.8 kg. Keep unit costs
+and extraction rates unchanged for the next pass. Test whether the defense
+still holds when artillery arrives and whether an outpost can replenish its
+nearly empty lilac stock, then change one economic dial at a time and rerun
+all four probe policies.
 
 ## Later
 - **Debt - the relief doesn't slow anybody** (2026-09-21): the generated ground is looks and building ground only, and robots walk it at their one speed. A robot should go slower uphill (and perhaps no faster downhill), by the slope under it along its way: `Region.heightAt` gives the height at both ends of a step, and `walkTowards` in `sim_robots.go` is where the factor goes, beside the fog's drag. It moves hauls' timings, so the tests that count ticks on seed 0 will need a look.
@@ -1020,6 +1026,10 @@ time and rerun all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-28: rival cities now assemble forces one vehicle at a time, 30
+  seconds per vehicle. Complete battalions wait at the city before attacking;
+  damaged forces use the same per-vehicle build time. Pinned by
+  `TestCityBattalionsAssembleOneUnitAtATime` and the city rebuild tests.
 - 2026-09-28: stationary mite halos now turn a near-black red, with their
   full-grip red channel reduced from 180 to 60. Pinned by
   `TestMiteHalosTurnRedWhenHostsStop`.

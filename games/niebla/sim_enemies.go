@@ -119,6 +119,7 @@ const (
 	StageRaid     PartyStage = "raid"     // driving to a tank and siphoning it
 	StageLeave    PartyStage = "leave"    // driving back out
 	StageUnload   PartyStage = "unload"   // unloading at the city
+	StageBuild    PartyStage = "build"    // assembling a city force
 	StageRebuild  PartyStage = "rebuild"  // completing a damaged city force
 	StageRegroup  PartyStage = "regroup"  // full force resting before its next raid
 	StageSettled  PartyStage = "settled"
@@ -419,18 +420,25 @@ func formationOffset(place int) (dx, dy float64) {
 // stepParty gives a party its tick, by its stage.
 func stepParty(s *State, p Party) {
 	members := partyMembers(s, p.ID)
-	if len(members) == 0 {
+	if len(members) == 0 && p.Stage != StageBuild {
 		s.endParty(p, ReportDestroyed, 0, p.CampX, p.CampY)
 		return
 	}
-	lead := members[0]
+	lead := Enemy{}
+	if len(members) > 0 {
+		lead = members[0]
+	}
 	if city, ok := s.Cities[p.City]; p.City != 0 && ok &&
 		city.Ruined && !p.CityArrives {
 		p.Stage = StageLeave
 		p.EntryX, p.EntryY = city.X, city.Y
 	}
+	if len(members) == 0 && p.Stage != StageBuild {
+		s.endParty(p, ReportDestroyed, 0, p.CampX, p.CampY)
+		return
+	}
 	// With its repulsor gone a party has nothing left to do but run.
-	if enemySpecOf(lead.Kind).bubble <= 0 &&
+	if len(members) > 0 && enemySpecOf(lead.Kind).bubble <= 0 &&
 		(p.City == 0 ||
 			(p.Stage == StageSettled && lead.Kind != EnemyBase)) {
 		p.Stage = StageLeave
@@ -486,6 +494,31 @@ func stepParty(s *State, p Party) {
 			return
 		}
 		s.unloadCityParty(&p, members)
+	case StageBuild:
+		city, exists := s.Cities[p.City]
+		if !exists || city.Ruined {
+			p.Stage = StageLeave
+			p.EntryX, p.EntryY = p.CampX, p.CampY
+			if len(members) == 0 {
+				s.endParty(p, ReportDestroyed, 0, p.CampX, p.CampY)
+				return
+			}
+			break
+		}
+		if !cityHasBuilding(s, city, EnemyCityFactory) ||
+			cityNeedsConstruction(s, city) {
+			break
+		}
+		p.Wait--
+		if p.Wait <= 0 {
+			if !s.buildCityPartyUnit(&p) {
+				p.Wait = 60
+			} else if _, needed := cityPartyUnitNeeded(s, p); !needed {
+				s.launchCitySortie(&p)
+			} else {
+				p.Wait = cityUnitBuildTicks
+			}
+		}
 	case StageRebuild:
 		if _, ok := s.Cities[p.City]; !ok {
 			for _, e := range members {
@@ -494,13 +527,20 @@ func stepParty(s *State, p Party) {
 			s.endParty(p, ReportDestroyed, 0, p.CampX, p.CampY)
 			return
 		}
+		city := s.Cities[p.City]
+		if !cityHasBuilding(s, city, EnemyCityFactory) ||
+			cityNeedsConstruction(s, city) {
+			break
+		}
 		p.Wait--
 		if p.Wait <= 0 {
-			if !s.completeCityParty(&p) {
+			if !s.buildCityPartyUnit(&p) {
 				p.Wait = 60
-			} else {
+			} else if _, needed := cityPartyUnitNeeded(s, p); !needed {
 				p.Stage = StageRaid
 				p.Siphon = raidSiphonTicks
+			} else {
+				p.Wait = cityUnitBuildTicks
 			}
 		}
 	case StageRegroup:
