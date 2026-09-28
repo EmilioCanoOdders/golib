@@ -229,11 +229,11 @@ func TestWriteFirstRaidShotState(t *testing.T) {
 	}
 }
 
-func TestRaiderBattalionsGrowSlowlyAndStopAtFour(t *testing.T) {
+func TestRaiderBattalionsGrowByVisitAndStopAtFour(t *testing.T) {
 	for _, test := range []struct {
 		visit int64
 		want  int
-	}{{1, 1}, {2, 1}, {3, 2}, {4, 3}, {5, 4}, {10, 4}} {
+	}{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 4}, {10, 4}} {
 		if got := raidersOf(test.visit); got != test.want {
 			t.Errorf("visit %d brings %d raiders, want %d",
 				test.visit, got, test.want)
@@ -250,8 +250,12 @@ func TestARaidCampsGetsReadyStealsAndLeaves(t *testing.T) {
 	visitNow(s)
 	party := s.Parties[sortedPartyIDs(s)[0]]
 	if got, want := len(partyMembers(s, party.ID)),
-		1+raidFirstRaiders; got != want {
+		1+raidersOf(2); got != want {
 		t.Fatalf("the first raid brings %d vehicles, want %d", got, want)
+	}
+	if party.Artillery || len(partyMembers(s, party.ID)) == 0 ||
+		enemySpecOf(partyMembers(s, party.ID)[0].Kind).bubble == 0 {
+		t.Fatal("the first raid has no antimist vehicle")
 	}
 	if party.Stage != StageApproach {
 		t.Fatalf("the raid comes in at stage %q, want approach", party.Stage)
@@ -284,7 +288,7 @@ func TestARaidCampsGetsReadyStealsAndLeaves(t *testing.T) {
 	if !tickUntil(s, 60*600, func() bool { return len(s.Parties) == 0 }) {
 		t.Fatalf("the raid never left")
 	}
-	want := raidFirstRaiders * enemySpecOf(EnemyRaider).oilCap
+	want := float64(raidersOf(2)) * enemySpecOf(EnemyRaider).oilCap
 	if got := oil - oilTotal(s); math.Abs(got-want) > 0.001 {
 		t.Errorf("the raid took %v L, want every raider full: %v", got, want)
 	}

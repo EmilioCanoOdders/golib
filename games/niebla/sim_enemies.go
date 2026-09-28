@@ -27,7 +27,6 @@ const (
 
 	raidFirstRaiders = 1 // raiders of the first intro attack
 	raidMaxRaiders   = 4 // raiders of a raid at the most
-	cityFirstRaiders = 2 // raiders of a city's first battalion
 
 	siphonReachUnits      = 40.0    // u from a tank's middle to a party siphoning it
 	siphonLitersPerSecond = 3.0     // L/s each vehicle draws
@@ -332,14 +331,13 @@ func settled(s *State) bool {
 
 // raidersOf returns how many raiders a visit brings.
 func raidersOf(visit int64) int {
-	count := raidFirstRaiders
-	if visit > 2 {
-		count += int(visit - 2)
+	if visit < raidFirstRaiders {
+		return raidFirstRaiders
 	}
-	if count > raidMaxRaiders {
+	if visit > raidMaxRaiders {
 		return raidMaxRaiders
 	}
-	return count
+	return int(visit)
 }
 
 // prepareTicks returns how long a visit camps before it moves.

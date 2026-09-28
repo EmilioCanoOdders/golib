@@ -102,7 +102,7 @@ func (s *State) recordRivalBuildingDeath(e Enemy) {
 	})
 }
 
-const stateVersion = 10
+const stateVersion = 11
 
 // Fog is the region's weather, where the fog's breath has got to. The
 // swell rises at a cycle's end and drains tick by tick; NextIn counts
@@ -398,7 +398,47 @@ func (s *State) migrateState() {
 			s.Cities[id] = city
 		}
 	}
+	if s.Version < 11 {
+		s.migrateCityAntimist()
+	}
 	s.Version = stateVersion
+}
+
+func (s *State) migrateCityAntimist() {
+	for _, id := range sortedPartyIDs(s) {
+		party := s.Parties[id]
+		if party.City == 0 || party.CityArrives {
+			continue
+		}
+		members := partyMembers(s, party.ID)
+		if len(members) == 0 {
+			continue
+		}
+		protected := false
+		for _, member := range members {
+			if enemySpecOf(member.Kind).bubble > 0 {
+				protected = true
+				break
+			}
+		}
+		if protected {
+			continue
+		}
+		id := s.NextID
+		s.NextID++
+		leader := members[0]
+		s.Enemies[id] = Enemy{
+			ID: id, Kind: EnemyCrawler, Party: party.ID, City: party.City,
+			X: leader.X, Y: leader.Y,
+			Health: enemySpecOf(EnemyCrawler).health,
+		}
+		if party.Size > 0 {
+			party.Size++
+		} else {
+			party.Size = len(members) + 1
+		}
+		s.Parties[party.ID] = party
+	}
 }
 
 func (s *State) legacyRepairWasAvailable() bool {

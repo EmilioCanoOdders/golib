@@ -269,11 +269,12 @@ It goes straight from its entry point to the nearest oil tank: it does not
 stop to camp. The crawler serves as the city's construction rig. The Nexus
 comes after the pylon. While that city is being built, another attack
 arrives one minute after the previous party leaves or is destroyed. Those
-later parties camp before attacking and grow slowly from one raider to a
-maximum of four. Only one party moves at a time. Later cities arrive no
-sooner than 30 cycles apart, up to three; each city is part of the saved
-state. The city has a fixed 170 m repulsor post. The colony is told when
-the first city establishes and when later crawlers approach.
+later parties camp before attacking and add one raider per visit, up to
+four. Each includes a crawler with an antimist bubble. Only one party moves
+at a time. Later cities arrive at least 30 cycles apart, up to three; each city
+is part of the saved state. The city has a fixed 170 m repulsor post. The
+colony is told when the first city establishes and when later crawlers
+approach.
 
 The guard-post schematic arrives when the first scout, returning after its
 theft, crosses outward past the core's fixed 800 m bubble. Its oil and mark
@@ -326,12 +327,13 @@ original reserves and build order. Saves keep this wait and the crawler's
 route deterministic.
 
 Once the factory and stores are ready, the first city battalion attacks
-immediately. It has two raiders and no mobile artillery, walks directly to
-the nearest colony oil tank, siphons and returns to its city. Its next
-replacement keeps the two raiders and adds mobile artillery; later
-replacements grow to four raiders at most. Mobile artillery carries its
-own 170 m antimist bubble and shells colony buildings on the way in. A
-shot cannot damage the core. A force that returns with stolen oil unloads
+immediately with a crawler and one raider. Each new battalion adds one
+raider until it has four raiders and five vehicles total. Only the next
+battalions replace the crawler with mobile artillery, keeping the total at
+five. The crawler's bubble is 120 m; artillery's is 170 m. The force walks
+directly to the nearest colony oil tank, siphons and returns to its city.
+Mobile artillery shells colony buildings on the way in; a shot cannot damage
+the core. A force that returns with stolen oil unloads
 at `cityUnloadPerSecond` 3 L/s per vehicle. A complete force then rests
 for `citySortieCooldownTicks` 90 s before attacking again. A damaged force
 waits one minute and replaces missing vehicles; an empty or destroyed
@@ -602,10 +604,11 @@ For whoever works on the game, not for the player: in the region, hold Control a
   real attack arrives on its bearing with a crawler and one raider; it
   attacks without stopping to camp as the first city starts building.
   During construction, later attacks follow one minute after the previous
-  party ends. They camp first and grow slowly, from one raider to four.
-  Each city building takes 45 seconds. Its first battalion has two raiders
-  and no artillery; replacement forces add mobile artillery and grow to
-  four raiders. Full forces rest 90 seconds after unloading before
+  party ends. They camp first and add one raider per visit, from one to four;
+  each has a crawler antimist vehicle. Each city building takes 45 seconds.
+  City battalions start with a crawler and one raider, adding raiders up to
+  four. Once they reach five vehicles, later battalions replace the crawler
+  with mobile artillery. Full forces rest 90 seconds after unloading before
   attacking again. Damaged forces replace losses after a minute; empty or
   destroyed forces rebuild after a minute. Later cities arrive on the
   city clock. Structures can be destroyed, wrecks drop loot, and the
@@ -1039,6 +1042,12 @@ time and rerun all four probe policies.
   are gray and cannot be clicked; lilac and oil prices are individually
   outlined, with resource shortfalls in red. The UI and queue action share
   the same eligibility check. Pinned by `markup_test.go`.
+- 2026-09-28: every rival party now brings an antimist vehicle. Intro raids
+  add one raider per visit, up to four. City battalions grow from a crawler
+  and one raider to five vehicles; later battalions replace the crawler with
+  mobile artillery instead of growing beyond five. Version 11 saves add a
+  crawler to an active older city force that has no antimist vehicle. Pinned
+  by `enemies_test.go` and `cities_test.go`.
 - 2026-09-27: squad ordering expires after 20 seconds without a target;
   hovering the ground shows a translucent pennant at the exact spot the
   green guard marker will occupy after clicking.

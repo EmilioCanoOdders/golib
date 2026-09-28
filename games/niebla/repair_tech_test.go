@@ -115,7 +115,7 @@ func TestPressureSortieLullIsRemembered(t *testing.T) {
 	s.Raids.PressureCity = 700
 	city := City{ID: 700, Sorties: 1}
 	s.Cities[city.ID] = city
-	s.spawnCitySortie(city, false)
+	s.spawnCitySortie(city)
 	if !s.Raids.PressureSortieStarted {
 		t.Fatal("the pressure city's first sortie was not recorded")
 	}
