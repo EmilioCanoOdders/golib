@@ -93,7 +93,7 @@ func drawEnemies(
 	}
 	sort.SliceStable(spots, func(i, j int) bool { return spots[i].y < spots[j].y })
 	for _, sp := range spots {
-		if sp.e.Kind == EnemyBase || (sp.e.City != 0 && sp.e.Party == 0) {
+		if isRivalBuilding(sp.e) {
 			continue
 		}
 		model, _ := rivalVehicleModel(sp.e.Kind)
@@ -101,11 +101,7 @@ func drawEnemies(
 		model.drawShadow(screen, camera, center, sp.e.Facing, zoom)
 	}
 	for _, sp := range spots {
-		if sp.e.Kind == EnemyBase {
-			drawCityBuilding(s, screen, sp.e, sp.x, sp.y, zoom)
-			continue
-		}
-		if sp.e.City != 0 && sp.e.Party == 0 {
+		if isRivalBuilding(sp.e) {
 			drawCityBuilding(s, screen, sp.e, sp.x, sp.y, zoom)
 			continue
 		}
@@ -118,11 +114,10 @@ func drawEnemies(
 func drawCityConstruction(s *State, screen *golib.Screen, zoom float32) {
 	for _, id := range sortedCityIDs(s) {
 		city := s.Cities[id]
-		stage, building := cityNextBuildingStage(s, city)
+		x, y, _, _, building := cityConstructionSite(s, city)
 		if !building {
 			continue
 		}
-		x, y := cityBuildingPosition(city, stage)
 		gx, gy := project(float32(x), float32(y))
 		gray := golib.Color{R: 158, G: 169, B: 172, A: 255}
 		w := dotRadius(11, zoom, 5)
@@ -152,9 +147,6 @@ func drawCityBuilding(
 	case EnemyBase:
 		isoSlab(screen, gx, gy, 30*k, 9*k, 15*k, gray, mid(gray, dark), dark)
 		isoBox(screen, gx, gy-15*k*unitH, 6*k, 14*k, light, gray, dark)
-	case EnemyCityCrawler:
-		isoSlab(screen, gx, gy, 16*k, 9*k, 7*k, gray, mid(gray, dark), dark)
-		isoBox(screen, gx, gy-7*k*unitH, 5*k, 13*k, light, gray, dark)
 	case EnemyCityRepulsor:
 		isoBox(screen, gx, gy, 10*k, 24*k, gray, mid(gray, dark), dark)
 		screen.DrawCircle(gx, gy-26*k*unitH, 4*k*unitW, light)
@@ -232,6 +224,8 @@ func rivalVehicleModel(kind EnemyKind) (worldSprite, float32) {
 		model, across = rivalArtilleryModel, 16
 	case EnemyCrawler:
 		model, across = rivalCrawlerModel, 16
+	case EnemyCityCrawler:
+		model, across = rivalCityCrawlerModel, 16
 	case EnemyScout:
 		model, across = rivalScoutModel, 6
 	}
@@ -313,6 +307,9 @@ func threatWords(s *State) string {
 			continue
 		}
 		where := compassWord(city.X, city.Y)
+		if cityNeedsCrawler(s, city) && cityHasStructures(s, city) {
+			return fmt.Sprintf("rival city %s, rebuilding crawler", where)
+		}
 		stage, building := cityNextBuildingStage(s, city)
 		if city.Stage == len(cityBuildOrder) && building &&
 			cityHasStructures(s, city) {
@@ -379,6 +376,11 @@ func reportWords(r Report) string {
 			return fmt.Sprintf("The rival city to the %s completed its %s.",
 				where, cityBuildingName(cityBuildOrder[index]))
 		}
+	case ReportCityCrawler:
+		return fmt.Sprintf(
+			"A construction crawler returned to the rival city to the %s.",
+			where,
+		)
 	case ReportRazed:
 		return fmt.Sprintf("[danger]A shell brought a building down, %s.[/] Half of it lies there as a pile.", where)
 	case ReportPumpEaten:

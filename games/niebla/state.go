@@ -76,7 +76,8 @@ func (s *State) recordRobotDeath(r Robot) {
 
 func (s *State) recordEnemyDeath(e Enemy) {
 	switch e.Kind {
-	case EnemyScout, EnemyCrawler, EnemyRaider, EnemyArtillery:
+	case EnemyScout, EnemyCrawler, EnemyRaider, EnemyArtillery,
+		EnemyCityCrawler:
 	default:
 		return
 	}
@@ -102,7 +103,7 @@ func (s *State) recordRivalBuildingDeath(e Enemy) {
 	})
 }
 
-const stateVersion = 11
+const stateVersion = 12
 
 // Fog is the region's weather, where the fog's breath has got to. The
 // swell rises at a cycle's end and drains tick by tick; NextIn counts
@@ -400,6 +401,9 @@ func (s *State) migrateState() {
 	}
 	if s.Version < 11 {
 		s.migrateCityAntimist()
+	}
+	if s.Version < 12 {
+		s.migrateCityCrawlerConstruction()
 	}
 	s.Version = stateVersion
 }

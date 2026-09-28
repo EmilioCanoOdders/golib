@@ -183,13 +183,11 @@ func (f *miteField) update(s *State, dt float32) {
 	}
 	for _, id := range sortedCityIDs(s) {
 		city := s.Cities[id]
-		stage, building := cityNextBuildingStage(s, city)
+		x, y, kind, _, building := cityConstructionSite(s, city)
 		if !building {
 			continue
 		}
-		x, y := cityBuildingPosition(city, stage)
-		spec := cityBuildingSpec(cityBuildOrder[stage])
-		across, height, _ := enemyMiteBody(Enemy{Kind: spec.kind})
+		across, height, _ := enemyMiteBody(Enemy{Kind: kind})
 		h := f.host(citySiteMiteKey(id), x, y, dt)
 		h.Across, h.Height = across, height
 		h.RivalCity = true
@@ -256,7 +254,8 @@ func pileMiteScale(p Pile) float32 {
 
 func enemyMiteBody(e Enemy) (across, height float32, unit bool) {
 	switch e.Kind {
-	case EnemyScout, EnemyCrawler, EnemyRaider, EnemyArtillery:
+	case EnemyScout, EnemyCrawler, EnemyRaider, EnemyArtillery,
+		EnemyCityCrawler:
 		return 10, 8, true
 	default:
 		return 24, 18, false

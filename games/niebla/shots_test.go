@@ -268,20 +268,24 @@ func TestBuildingDeathsAreTransientAndNameTheirCause(t *testing.T) {
 	}
 }
 
-func TestDestroyedCityStructureEmitsABuildingDeath(t *testing.T) {
+func TestDestroyedCityCrawlerEmitsAUnitDeath(t *testing.T) {
 	s := newGame()
 	noRivals(s)
 	cityID := s.foundCity(3300, 3000, 0.4)
 	rigID := s.Cities[cityID].BuildingIDs[0]
 	s.killEnemy(rigID)
-	if len(s.BuildingDeaths) != 1 {
-		t.Fatalf("the destroyed city rig produced %d collapse events: %+v",
-			len(s.BuildingDeaths), s.BuildingDeaths)
+	if len(s.Deaths) != 1 {
+		t.Fatalf("the destroyed city crawler produced %d unit deaths: %+v",
+			len(s.Deaths), s.Deaths)
 	}
-	death := s.BuildingDeaths[0]
-	if death.RivalKind != EnemyCityCrawler ||
-		death.Cause != BuildingDestroyed {
-		t.Fatalf("the city rig's collapse event is %+v", death)
+	if s.Deaths[0].EnemyKind != EnemyCityCrawler ||
+		len(s.BuildingDeaths) != 0 {
+		t.Fatalf("the city crawler deaths are %+v and %+v",
+			s.Deaths, s.BuildingDeaths)
+	}
+	city := s.Cities[cityID]
+	if !city.Ruined || city.RefoundAt != s.Ticks+cityRefoundDelayTicks {
+		t.Fatalf("a city with no remaining structures was not razed: %+v", city)
 	}
 }
 
@@ -334,9 +338,9 @@ func TestUnitExplosionProfilesGiveArtilleryTheLargestBlast(t *testing.T) {
 			len(robotExplosions),
 		)
 	}
-	if len(enemyExplosions) != 4 {
+	if len(enemyExplosions) != 5 {
 		t.Fatalf(
-			"there are %d rival blast profiles, want one per mobile unit",
+			"there are %d rival blast profiles, want one per vehicle kind",
 			len(enemyExplosions),
 		)
 	}

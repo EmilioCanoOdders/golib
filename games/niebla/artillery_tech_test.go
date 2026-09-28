@@ -76,7 +76,9 @@ func TestCityFactoryCompletionAndSortiesDoNotUnlockArtillery(t *testing.T) {
 	s := artilleryTechTestState()
 	noRivals(s)
 	s.Raids.Visits = 3
-	city := City{ID: 90, Oil: 1000, Lilac: 2000}
+	cityID := s.foundCity(3500, 3200, 0.4)
+	city := s.Cities[cityID]
+	city.Oil, city.Lilac = 1000, 2000
 	for range len(cityBuildOrder) - 1 {
 		s.finishCityBuilding(&city)
 	}

@@ -12,14 +12,15 @@ import (
 
 func TestWorldSpritesHaveEveryFacing(t *testing.T) {
 	for name, model := range map[string]worldSprite{
-		"core":      coreWorkerModel,
-		"carrier":   carrierModel,
-		"trooper":   trooperModel,
-		"mechanic":  mechanicModel,
-		"scout":     rivalScoutModel,
-		"crawler":   rivalCrawlerModel,
-		"raider":    rivalRaiderModel,
-		"artillery": rivalArtilleryModel,
+		"core":         coreWorkerModel,
+		"carrier":      carrierModel,
+		"trooper":      trooperModel,
+		"mechanic":     mechanicModel,
+		"scout":        rivalScoutModel,
+		"crawler":      rivalCrawlerModel,
+		"city crawler": rivalCityCrawlerModel,
+		"raider":       rivalRaiderModel,
+		"artillery":    rivalArtilleryModel,
 	} {
 		if got := model.sprite.Frames(); got != 8 {
 			t.Errorf("%s sprite has %d facings, want 8", name, got)

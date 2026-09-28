@@ -173,6 +173,17 @@ def rival_crawler():
     p = palette("Rival crawler", (0.55, 0.16, 0.11),
                 (0.73, 0.25, 0.16), (0.22, 0.07, 0.06),
                 (1.0, 0.52, 0.22))
+    return rival_crawler_model(p)
+
+
+def rival_city_crawler():
+    p = palette("Rival city crawler", (0.36, 0.28, 0.28),
+                (0.50, 0.40, 0.40), (0.17, 0.13, 0.14),
+                (0.92, 0.48, 0.40))
+    return rival_crawler_model(p)
+
+
+def rival_crawler_model(p):
     unit = root("Model")
     body = [
         (8.0, 0), (6.1, 4.15), (-6.2, 4.15), (-8.1, 2.5),
@@ -232,6 +243,7 @@ MODELS = {
     "worker-mechanic": worker_mechanic,
     "rival-scout": rival_scout,
     "rival-crawler": rival_crawler,
+    "rival-city-crawler": rival_city_crawler,
     "rival-raider": rival_raider,
 }
 

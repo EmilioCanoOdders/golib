@@ -153,6 +153,13 @@ var enemyExplosions = map[EnemyKind]unitExplosion{
 		smokeCount: 17, smokeReach: 13, smokeSize: 1.5,
 		smokeLife: 1.3, height: 8, color: shellLight,
 	},
+	EnemyCityCrawler: {
+		lightReach: 44, flashLife: 0.24,
+		sparkCount: 58, sparkSpeed: 76, sparkLift: 108,
+		sparkLife: 1.05, sparkSize: 1.2,
+		smokeCount: 13, smokeReach: 10, smokeSize: 1.25,
+		smokeLife: 1.1, height: 7, color: shellLight,
+	},
 	EnemyArtillery: {
 		lightReach: 78, flashLife: 0.36,
 		sparkCount: 132, sparkSpeed: 130, sparkLift: 200,
@@ -417,8 +424,6 @@ func buildingCollapseSize(death BuildingDeath) (across, height float32) {
 	switch death.RivalKind {
 	case EnemyBase:
 		return 30, 29
-	case EnemyCityCrawler:
-		return 16, 20
 	case EnemyCityRepulsor:
 		return 10, 28
 	case EnemyCityOilworks:

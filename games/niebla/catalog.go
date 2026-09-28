@@ -330,7 +330,7 @@ var catalog = map[ThingType]ThingInfo{
 	TypeCityOilworks:   {Name: "Rival oil extractor", Color: panelDimColor, Primary: true, Details: enemyDetails},
 	TypeCityMine:       {Name: "Rival mineral mine", Color: panelDimColor, Primary: true, Details: enemyDetails},
 	TypeCityFactory:    {Name: "Rival war factory", Color: panelDimColor, Primary: true, Details: enemyDetails},
-	TypeCityCrawler:    {Name: "Rival city rig", Color: panelDimColor, Primary: true, Details: enemyDetails},
+	TypeCityCrawler:    {Name: "Rival city crawler", Color: panelDimColor, Primary: true, Details: enemyDetails},
 	TypeEnemyArtillery: {Name: "Rival mobile artillery", Color: enemyLampColor, Details: enemyDetails},
 	TypeScout:          {Name: "Rival scout", Color: enemyLampColor, Details: enemyDetails},
 	TypeCrawler:        {Name: "Rival crawler", Color: enemyLampColor, Details: enemyDetails},
@@ -378,6 +378,8 @@ func enemyDetails(s *State, thing Thing) []Detail {
 	}
 	if spec.bubble > 0 {
 		details = append(details, Detail{"repulsor", "r = " + si(spec.bubble, "m")})
+	} else if e.Kind == EnemyCityCrawler {
+		details = append(details, Detail{"repulsor", "none: construction vehicle"})
 	} else {
 		details = append(details, Detail{"repulsor", "none: it lives under its crawler's"})
 	}
@@ -392,12 +394,11 @@ func enemyDetails(s *State, thing Thing) []Detail {
 				Detail{"city oil", si(math.Round(city.Oil), "L")},
 				Detail{"city mineral", si(math.Round(city.Lilac), "kg")},
 			)
-			if stage, building := cityNextBuildingStage(s, city); building {
+			if name := cityConstructionName(s, city); name != "" {
 				left := (city.Work + 59) / 60
 				details = append(details, Detail{
 					"building", fmt.Sprintf("%s, %d:%02d",
-						cityBuildingName(cityBuildOrder[stage]),
-						left/60, left%60),
+						name, left/60, left%60),
 				})
 			} else {
 				left := city.NextSortie - s.Ticks

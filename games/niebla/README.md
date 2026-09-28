@@ -280,10 +280,11 @@ crawler. It waits while a non-settled party is active. `rivals: stop
 waiting` ends the preparation of a camped party or a city's current unit
 build, force replacement or regroup wait (`DevHurryRivals`). `rivals: new city`
 establishes a city now (`DevNewCity`). The next three buttons each act
-on the oldest city: finish exactly one building
-(`DevFinishCityBuilding`), create and launch its next complete battalion
-(`DevFinishCityBattalion`), or end a damaged force's replacement wait
-or a full force's regroup wait (`DevSendCityBattalion`). `fast forward x8`
+on the oldest city: finish exactly one construction step
+(`DevFinishCityBuilding`, replacing a missing crawler first), create and
+launch its next complete battalion (`DevFinishCityBattalion`), or end a
+damaged force's replacement wait or a full force's regroup wait
+(`DevSendCityBattalion`). `fast forward x8`
 sends `devFastTicks` ticks an update instead of one until pressed again;
 the simulation advances identically, only sooner.
 
@@ -344,7 +345,7 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); camera, selection, open cards, robot roster, individual assignment and pointer modes live here, never serialized; unit cards follow a directly selected robot or rival vehicle, squad cards follow their pennant or target ring; the cell under a guard pennant selects instead of opening the build menu; the schematics callout and one-use building placement mode, rivals' HUD, reach overlays, floating cost numbers and autosave are view state too |
 | `radial.go` | The build menu: the two rings a click on empty ground opens - the build groups (industry, military, logistics), then the group's blueprints - laid out around the cell every frame, and `backRadial`/`closeRadial`/`openRadial` for the scene |
 | `glyphs.go` | The marks the build menu wears: a group's own glyph, a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both - and the pipe's mark, the tube the region lifts on posts |
-| `state.go` | The simulation's state and save-schema version 11: builders, workers, troopers, mechanics and rivals with saved hull, facing and stillness ticks; rival-city reconstruction and refounding timers; active older city forces gain a crawler when they lack antimist; the first scout's saved core-bubble crossing tick; buildings, jobs, piles and pipes with mite wear; stock, deposits, weather and rival tables; one-tick unit, building-death and resource-cost receipts feed view effects without being saved; `newGame` gives the colony one fueled builder |
+| `state.go` | The simulation's state and save-schema version 12: builders, workers, troopers, mechanics and rivals with saved hull, facing and stillness ticks; rival-city crawler reconstruction and refounding timers; active older city forces gain a crawler when they lack antimist; the first scout's saved core-bubble crossing tick; buildings, jobs, piles and pipes with mite wear; stock, deposits, weather and rival tables; one-tick unit, building-death and resource-cost receipts feed view effects without being saved; `newGame` gives the colony one fueled builder |
 | `costs.go` | Transient resource-cost receipts from placement, production, repairs, upkeep and weapons; never saved |
 | `actions.go` | The actions (`Tick`, `SendRobot`, ID-specific `AssignRobot` and `RecallRobot`, `MarkBuilding`, typed `QueueRobot`, `QueueMechanic`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
 | `sim_robots.go` | The robots' rules and tuning: `robotDay`, common priorities, builders alone claiming construction and pipe work, workers mining posts, builders and unassigned workers collecting piles, oil-pool waits under fog, stationary hull damage and tank wear, `postRobots` and worker-only `pickRobot`, movement, pipe-section claims and idle ranks |
@@ -354,14 +355,14 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus`; fog-covered oil pools stop pumps without losing oil, protectors clear them, tanks fill from pipes at a shared 1.6 L/s limit and pass excess onward, while protectors keep their reserve and upkeep; each pipe records offered, moved and cumulative liters for the view |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, local exposure (`fogExposureAt`), oil pools covered outside bubbles, where the line stands now (`fogLineNow`), and the drag a walker keeps (`fogDrag`) |
 | `sim_enemies.go` | The rivals' timing and movement: `Enemy` with its saved facing octant and mite-stillness ticks, `Party`, `Raids`, `Mark` and `Report`; the one-minute scout and follow-up clocks, the first no-camp attack, raider growth by visit up to four, city arrivals, party stages, siphoning and return, the first scout's saved outward crossing tick of the core bubble, mite damage and wrecks, guard posts whose shots report oil costs, the shared 130 m small-arms reach, repair-protocol battle markers and legacy trigger migration |
-| `sim_cities.go` | Rival cities: serializable production, sequential rebuilding and refounding, construction-site mite damage, deterministic 45-second building steps and 30-second vehicle steps, finite local oil/mineral reserves, city arrival and old-save migration, city battalions assembled one vehicle at a time to five before artillery replaces the crawler, antimist replacement, unloading, 90-second rests and squad replacement; records the pressure city's first sortie |
+| `sim_cities.go` | Rival cities: serializable production, crawler-first replacement, sequential rebuilding and refounding, construction-site mite damage, deterministic 45-second crawler and building steps and 30-second sortie-vehicle steps, finite local oil/mineral reserves, city arrival and old-save migration, city battalions assembled one vehicle at a time to five before artillery replaces the crawler, antimist replacement, unloading, 90-second rests and squad replacement; records the pressure city's first sortie |
 | `sim_tech.go` | The schematics: the robot factory is the opening drop, first delivery unlocks infrastructure, the guard post follows the first scout's return past the core bubble, and the frontier kit follows one minute after that crossing (old saves keep the 5:30 trigger); the war factory follows the first-city founding; artillery follows three ended normal attacks (old saves keep the rival-factory trigger); the repair protocol waits for rival building damage and a city-force lull (minute 12 if no first force is produced); `stepTech`, `kindUnlocked`, `dropArrived` and `techPending` derive arrivals and `State.Tech` keeps which drops were opened |
 | `sim_squads.go` | The military units' law and tuning: troopers (`RobotCombat`) and mechanics (`RobotRepair`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), which reports ammunition oil costs, the shared 130 m small-arms reach, the war factory's capacity (`squadRoom`, `mechanicRoom`), and rivals targeting defenders (`stepEnemyGuns`) |
 | `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right with a trooper icon, unit count and key (`drawSquadStrip`, `drawTrooperIcon`, `squadBoxRect`, `squadBoxAt`), selection of the pennant or target ring and the squad card's `give order` button (`selectSquad`, `squadMarkAt`, `squadMarkScreen`), guard-pennant cell hit-testing (`squadPennantInCell`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
 | `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), vulnerable colony units, rival-shot building damage markers, building health, proportional repair charges and mechanic fuel with cost receipts, what the colony sees (`seen`) and its artillery with shell cost receipts (`stepArtillery`) |
 | `shots.go` | Shots and building collapses on the screen, for looks only: bullets as streaks, shells on their arc over a shadow, pools of light added over the ground and what stands on it (`lightPool`), guns' flashes, and bursts of sparks, embers, smoke and metal shards; unit and building death effects scale to their kind, and projectile impacts merge with nearby falls; `fxField` learns from transient events and shots; view, never state |
 | `spending.go` | Floating oil and lilac costs above the building, pipe or robot that spent them; recurring expenses become one-second totals, while robot carrying/fog fuel burn and refills stay hidden; view, never state |
-| `enemies.go` | The rivals on the screen: the scouts' marks on the ground, shadows and eight-view PNG models for all four moving rival chassis, damage bars and the words the player is told (`threatWords` for the HUD, `reportWords` and `drawReport` for the news) |
+| `enemies.go` | The rivals on the screen: the scouts' marks on the ground, shadows and eight-view PNG models for the four mobile rival chassis plus the red-gray resident city crawler, damage bars and the words the player is told (`threatWords` for the HUD, `reportWords` and `drawReport` for the news) |
 | `mist.go` | The fog on the screen: a haze outside every repulsor's circle and `mistLayers` layers that thicken it past the line, each the region minus the clear circles (`clearDiscs`: the core's, the protectors', the rivals'), cut in strips whose gaps join into quads (`drawMist`, `mistGaps`), so the circles are round at every zoom and the air inside them is clear |
 | `bubble_edges.go` | The core's and protectors' joined clear ground: circle intersections divide each boundary into arcs, and only the arcs outside every other bubble are drawn, leaving one exterior outline |
 | `swell.go` | How a pressing swell looks: waves of shade roll in to the line, stopping at clear circles; one-pixel static also appears in calm haze, at half strength, and grows darker with exposure |
@@ -377,7 +378,7 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | `sim_mites.go` | Deterministic mite exposure and wear: common unit damage, colony and rival building sites, buildings, piles that lose material over three minutes at full exposure, and laid pipe sections that wear only where exposed; active repulsors shelter their bubbles |
 | `mites.go` | The mites' view: volume- and exposure-scaled swarms around robots, rivals, buildings, sites, piles and laid pipe sections; city-owned hosts animate 60% of the usual particles, without changing damage; swarms double when stationary and again in a full swell, with a red halo around still hosts |
 | `pipes.go` | Pipes on the screen (`drawPipes`: casing, body, the ghost of the unlaid part, orange bands sized by offered flow and animated by liters moved) and the pointer's mode that lays one (`pipeLaying`, `updateLaying`, the curve in hand and its price) |
-| `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset/replay the world, next arrival, create city, finish one city building, finish/send a battalion, fast-forward and next schematics —; view only, acting through `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
+| `dev.go` | The dev tools: Control and two clicks on the game's name open a strip of buttons — hold a swell, place free robots, reset/replay the world, next arrival, create city, finish one city construction step, finish/send a battalion, fast-forward and next schematics —; view only, acting through `Dev*` actions; `unitsAtWorld`, the inverse of `project` |
 | `tech.go` | The schematics on the screen: the badge over the core - breathing halos around the drop's mark - while an unopened drop waits, the callout its click opens (`techWords`, `techWrap`) with a clickable square per building and informational squares for pipes and the mechanic (`techBrings`, `drawTechSquares`); only building squares arm placement, and an informational-only callout stays open until dismissed; view, never state |
 | `guides.go` | Screen-edge arrows for the first live scout, an offscreen rival report or pending schematics, with the scout's theft report sharing its guide; view, never state |
 | `audio.go` | The region's sound: wind, oil and mineral resonance loops, pool bubbles and crystal pings, gunfire and shell impacts, the CC0 metallic building-collapse recording, low interface clicks, a site-marking thump and a fanfare for rival reports. Ordinary world emitters fade with distance; cannon reports keep their longer range. Shell whistles follow their positions through descent. Gun reports capture their distance at firing (per-voice volume tracking is noted as debt in DESIGN.md). The field reads every simulation tick, even in fast-forward; view, never state |
@@ -853,9 +854,10 @@ while its location overlaps the live scout, avoiding a duplicate. Once
 they separate, each can have a guide. Other current reports and the live
 scout can each have a guide, alongside the pending-schematics guide.
 
-Mites affect rival vehicles and city structures under the same health rule
-as colony units. `stepExposure` compares each enemy's position across the
-tick: movement resets `Enemy.StillTicks`; after two stationary seconds in
+Mites affect rival vehicles, the resident city crawler and city structures
+under the same health rule as colony units. `stepExposure` compares each
+enemy's position across ticks: movement resets `Enemy.StillTicks`; after two
+stationary seconds in
 exposed air, health falls at `miteDamagePerSecond`, doubled by full swell
 pressure. Active repulsor bubbles clear mites. A charged city pylon is itself
 immune; other city structures become vulnerable when no active bubble covers
@@ -873,14 +875,18 @@ building step starts over. The core has no mite host and is not part of this
 system.
 
 The city progression (`sim_cities.go`) is stored in each `City`: stage,
-construction timer, finite oil and lilac reserves, city stores, building
-IDs, next production tick and completed sorties. The first city starts
-on the scout's bearing at the second attack; its crawler is the initial
-rig. Later crawlers arrive from the region edge. Every city builds a pylon
-first, then a Nexus, oil extractor, lilac mine and war factory. Each step
-takes `cityBuildTicks`; completed structures are city-owned `Enemy`
-records. Oil and mineral extraction stop if their building is destroyed.
-The war factory assembles a sortie as a saved `StageBuild` party, producing
+construction timer, finite oil and lilac reserves, city stores, resident
+crawler and structure IDs, next production tick and completed sorties. The
+first city starts on the scout's bearing at the second attack; its crawler
+is the initial constructor. Later crawlers arrive from the region edge.
+Every city builds a pylon first, then a Nexus, oil extractor, lilac mine and
+war factory. Each step takes `cityBuildTicks`; completed structures are
+city-owned `Enemy` records. The resident crawler is required for construction,
+extraction and sorties. If destroyed while a structure remains, it takes a
+full 45-second build to replace before any missing structure; with no
+structures left, the city is razed and later refounded. Oil and mineral
+extraction stop if their building or the crawler is missing. The war factory
+assembles a sortie as a saved `StageBuild` party, producing
 and charging for one vehicle every 30 seconds; the party attacks only when
 its full composition is ready. Intact returning squads are reused after
 unloading; a missing unit, including the antimist crawler, is rebuilt one at
@@ -913,12 +919,14 @@ a proportional share of the building's construction cost from colony
 stores; a full repair costs 50% in lilac and oil. Ordinary workers never
 repair; the core is no building and takes nothing.
 
-The arriving crawler keeps its ID as the city's construction rig. The
+The arriving crawler keeps its ID as the city's construction vehicle. The
 city first raises its pylon, then a Nexus. Old saves with a `StageSettled`
-base migrate in `State.enterRegion` as a completed pylon and Nexus.
-Destroying the Nexus removes the city and its static structures.
-Destroying an extractor or factory removes only that production
-capability. Remaining city forces are left to their party and fog rules.
+base migrate in `State.enterRegion` as a completed pylon and Nexus, then
+build a resident crawler if they lack one. Destroying the crawler pauses the
+city and puts its replacement first in the construction queue. Destroying a
+structure queues its replacement while any structure remains; losing all
+five structures razes the city and clears its stores. Remaining city forces
+are left to their party and fog rules.
 
 The colony's artillery (`BuildingArtillery`, `stepArtillery`) shells
 visible rivals between `artilleryMinUnits` and `artilleryRangeUnits`, a
@@ -1071,9 +1079,10 @@ top of `things.go`.
 
 ### Blender mobile units
 
-Each of the eight mobile chassis has its own editable `.blend` in
-`sources/models/`, an eight-frame transparent PNG in `assets/sprites/`, and
-an eight-frame shadow mask in `assets/sprites/shadows/`. `studio.py` supplies
+Each mobile chassis has an editable `.blend` in `sources/models/`, an
+eight-frame transparent PNG in `assets/sprites/`, and an eight-frame shadow
+mask in `assets/sprites/shadows/`. The crawler chassis has a second,
+red-gray city-construction variant. `studio.py` supplies
 the geometry primitives, material setup, light, isometric camera, direction
 conversion, `render_sheet()` and `render_shadow_sheet()`. The shadow mask is
 isolated from an EEVEE render of the model over a matte floor, by comparing
@@ -1081,7 +1090,7 @@ the floor with and without the shadow-casting daylight; the model's own
 sprite alpha removes its silhouette from the mask. It is tinted and drawn
 under the unit, not saved in game state.
 `artillery.py` holds only the artillery model; `other_units.py` holds the
-seven other models, including `worker-mechanic`: an armored service rover
+eight other models, including `worker-mechanic`: an armored service rover
 with an amber tool deck and raised crane, without a weapon. After editing
 a `.blend` in Blender, render it from the project root with its matching
 script:
@@ -1092,6 +1101,8 @@ blender -b games/niebla/sources/models/artillery.blend \
 blender -b games/niebla/sources/models/worker-core.blend \
   -P games/niebla/sources/models/other_units.py
 blender -b games/niebla/sources/models/worker-mechanic.blend \
+  -P games/niebla/sources/models/other_units.py
+blender -b games/niebla/sources/models/rival-city-crawler.blend \
   -P games/niebla/sources/models/other_units.py
 ```
 
@@ -1108,7 +1119,7 @@ blender -b games/niebla/sources/models/artillery.blend \
 ```
 
 To **discard manual edits** and recreate the `.blend` and PNG from Python,
-use `--create`. This generates all seven other units at once, or only the
+use `--create`. This generates all eight other models at once, or only the
 named model if you pass its basename:
 
 ```text
@@ -1120,6 +1131,8 @@ blender -b -P games/niebla/sources/models/other_units.py \
   -- --create worker-core
 blender -b -P games/niebla/sources/models/other_units.py \
   -- --create worker-mechanic
+blender -b -P games/niebla/sources/models/other_units.py \
+  -- --create rival-city-crawler
 ```
 
 The shared camera matches the ground's 2:1 projection at 30 degrees;

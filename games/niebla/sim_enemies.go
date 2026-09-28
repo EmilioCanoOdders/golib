@@ -183,6 +183,7 @@ const (
 	ReportSortie       ReportKind = "sortie"
 	ReportCityIncoming ReportKind = "cityincoming"
 	ReportCityBuilding ReportKind = "citybuilding"
+	ReportCityCrawler  ReportKind = "citycrawler"
 )
 
 // Report is one line of news, written by the simulation and worded by
@@ -822,7 +823,17 @@ func (s *State) killEnemy(id int64) {
 	}
 	delete(s.Enemies, id)
 	stage := cityStageForEnemy(e.Kind)
-	if e.City != 0 && belongs && (e.Party == 0 || stage >= 0) {
+	if e.Kind == EnemyCityCrawler && e.City != 0 && belongs {
+		removeCityBuilding(&city, id)
+		if cityHasStructures(s, city) {
+			city.Work = cityBuildTicks
+			city.MiteDamage = 0
+			s.Cities[city.ID] = city
+		} else {
+			s.ruinCity(&city)
+			s.report(ReportBaseDown, 0, city.X, city.Y)
+		}
+	} else if e.City != 0 && belongs && (e.Party == 0 || stage >= 0) {
 		removeCityBuilding(&city, id)
 		if e.Kind == EnemyBase {
 			city.NexusID = 0
@@ -856,17 +867,18 @@ func isRivalBuilding(e Enemy) bool {
 	case EnemyBase, EnemyCityRepulsor, EnemyCityOilworks,
 		EnemyCityMine, EnemyCityFactory:
 		return true
-	case EnemyCityCrawler:
-		return e.City != 0 && e.Party == 0
 	}
 	return false
 }
 
 func (s *State) ruinCity(city *City) {
 	for _, id := range city.BuildingIDs {
-		if building, found := s.Enemies[id]; found &&
-			isRivalBuilding(building) {
-			s.recordRivalBuildingDeath(building)
+		if building, found := s.Enemies[id]; found {
+			if isRivalBuilding(building) {
+				s.recordRivalBuildingDeath(building)
+			} else if building.Kind == EnemyCityCrawler {
+				s.recordEnemyDeath(building)
+			}
 		}
 		delete(s.Enemies, id)
 	}

@@ -266,8 +266,8 @@ real attack arrives on the scout's saved bearing, and a rival city starts
 building 10 tiles (2 km) from the core on that same bearing, beyond the
 colony artillery's 1.5 km range. The attack has a crawler and one raider.
 It goes straight from its entry point to the nearest oil tank: it does not
-stop to camp. The crawler serves as the city's construction rig. The Nexus
-comes after the pylon. While that city is being built, another attack
+stop to camp. The arriving crawler stays as the city's construction vehicle.
+The Nexus comes after the pylon. While that city is being built, another attack
 arrives one minute after the previous party leaves or is destroyed. Those
 later parties camp before attacking and add one raider per visit, up to
 four. Each includes a crawler with an antimist bubble. Only one party moves
@@ -302,28 +302,33 @@ unless newer news replaces them; other reports and arrows last
 `reportShowTicks` 15 s. A completed city identifies its current rebuilding
 target in the HUD until its construction queue is clear.
 
-The arrival crawler stays as the city's construction rig. The Nexus ID is
-reserved at founding, but its entity appears only after the antimist pylon
-is built. It has no repulsor of its own; the pylon covers it and the rest
-of the city. The extractor, lilac mine and military factory follow the
-Nexus, each a gray rival structure with health and a `cityBuildTicks` 45 s
-build. Five buildings take 3 min 45 s of uninterrupted construction. Oil
-and lilac are finite city-local reserves (`cityOilReserve` 900 L and
-`cityLilacReserve` 1800 kg). The extractors add to city stores; the factory
-spends them on sorties. City buildings never fire.
+The arrival crawler stays as the city's construction vehicle, in a subdued
+red-gray distinct from the military units. The Nexus ID is reserved at
+founding, but its entity appears only after the antimist pylon is built. The
+crawler has no repulsor of its own; the pylon covers it and the rest of the
+city. The extractor, lilac mine and military factory follow the Nexus, each a
+gray rival structure with health and a `cityBuildTicks` 45 s build. Five
+structures take 3 min 45 s of uninterrupted construction. Oil and lilac are
+finite city-local reserves (`cityOilReserve` 900 L and `cityLilacReserve`
+1800 kg). The extractors add to city stores; the factory spends them on
+sorties. City buildings never fire.
 
-The city keeps constructing without spawning a builder for each job. If a
-structure is destroyed while another city structure remains, the city pauses
-extraction and sorties and rebuilds the first missing structure in the same
-order as its founding. Each replacement takes the full 45 seconds. This
-includes the Nexus: its loss does not erase the city while another structure
-still stands. A rebuilt Nexus gets a new entity ID. Once every one of the
-five structures is gone, the city is razed: its stores and unfinished work
-are lost, and any force away from home withdraws. After 60 seconds, a crawler
-sets out to found the same city's replacement at a site at least 900 m from
-the ruins, subject to the region's one-moving-party rule. The old location
-stays reserved until the crawler settles; the new base starts with its
-original reserves and build order. Saves keep this wait and the crawler's
+The city keeps constructing without spawning a builder for each job. Its
+crawler must be present for construction, extraction and sorties. If the
+crawler is destroyed while any city structure remains, the city pauses
+production and builds a replacement crawler first, for the full 45 seconds;
+only then does it resume the first missing structure in its founding order.
+If a structure is destroyed while the crawler remains, the city pauses
+extraction and sorties and rebuilds the first missing structure. Each
+replacement takes the full 45 seconds. This includes the Nexus: its loss does
+not erase the city while another structure still stands. A rebuilt Nexus gets
+a new entity ID. Once every one of the five structures is gone, the city is
+razed: its stores and unfinished work are lost, and any force away from home
+withdraws. The crawler is destroyed with the base. After 60 seconds, a
+crawler sets out to found the same city's replacement at a site at least
+900 m from the ruins, subject to the region's one-moving-party rule. The old
+location stays reserved until the crawler settles; the new base starts with
+its original reserves and build order. Saves keep this wait and the crawler's
 route deterministic.
 
 Once the factory and stores are ready, the city builds its next battalion
@@ -352,9 +357,10 @@ later city arrivals are scheduled by the rival clock. Once a city is
 complete, its factory produces and reuses forces as described above.
 Rivals' small arms can answer colony fire at their vehicles, but the city
 and its buildings do not automatically shoot back. Rival structures are
-gray and subdued to distinguish them from the colony at every zoom. Wrecks
-still drop their own salvage and stolen oil as a pile for the colony's
-robots to haul.
+gray and subdued to distinguish them from the colony at every zoom; the
+resident construction crawler is red-gray to distinguish it from mobile
+military units. Wrecks still drop their own salvage and stolen oil as a pile
+for the colony's robots to haul.
 
 The colony's guard post remains its oil-paid answer; squads remain direct
 orders through the war factory and keys 1-9. The post and troopers share
@@ -371,7 +377,7 @@ and smoke. The blast profile belongs to its unit kind; mobile artillery has
 the largest one. Death effects are cosmetic, are not saved, and merge with a
 nearby projectile impact rather than adding a second full flash.
 
-Open: independent city choices and production strategies, pathfinding, cities sending more than one sortie at once, the city's response to a completely guarded oil supply, and city graphics beyond gray versions of the existing silhouettes.
+Open: independent city choices and production strategies, pathfinding, cities sending more than one sortie at once, the city's response to a completely guarded oil supply, and city graphics beyond gray versions of the existing structures.
 
 ## Architecture
 
@@ -383,7 +389,7 @@ is never saved.
 
 The game is a deterministic simulation first, and a picture of it second. These rules are law; every feature bends around them.
 
-1. **One serializable state.** The whole game is a single value (`State`) that serializes to JSON with no pointers, no channels, no functions. `State.Version` identifies its save schema; `enterRegion` migrates old protector records, robot roles and hull, and gives a missing rival-city building its full reconstruction timer. Entities live in ID-keyed tables (`map[int64]Entity`-style, with fixed field structs); every reference between things is an ID, like a relational database. Saving = the state's JSON into the local database (SQLite, the schema a server keeps; `golib shot --save` feeds the same value through the shot channel). Loading the state = loading the game, exactly.
+1. **One serializable state.** The whole game is a single value (`State`) that serializes to JSON with no pointers, no channels, no functions. `State.Version` identifies its save schema; `enterRegion` migrates old protector records, robot roles and hull, restores missing city crawlers before structure work and gives missing rival-city buildings their full reconstruction timer. Entities live in ID-keyed tables (`map[int64]Entity`-style, with fixed field structs); every reference between things is an ID, like a relational database. Saving = the state's JSON into the local database (SQLite, the schema a server keeps; `golib shot --save` feeds the same value through the shot channel). Loading the state = loading the game, exactly.
 2. **Actions in, state out (flux/redux).** Nothing mutates the state
    except reducers. Actions are serializable structs (`MarkBuilding`,
    `QueueMechanic`, `OrderSquad`, `Tick`...). `Apply(state, action) ->
@@ -451,8 +457,8 @@ static data generated from `State.Seed`, never state. `play.go` and
     doing and where (`raiders camped east, moving in 2:40`, `rival base
     west, level 2`). A news plate under the HUD, for `reportShowTicks`
     15 s (one minute for a city founding), reports their theft, camp, raid,
-    return, new base, razed
-    building or fallen base. Rival vehicles and bases have cards too;
+    return, new base, razed building, restored crawler or fallen base. Rival
+    vehicles and bases have cards too;
     vehicles can be clicked on their body for an individual health card.
     A war factory's card builds troopers and, after the repair protocol
     arrives, offers one mechanic and gives the squad orders; damaged things
@@ -535,7 +541,8 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - **rivals: stop waiting** (`DevHurryRivals`): ends a camped party's wait or
   a city unit's build, a force's replacement wait, or its regroup.
 - **rivals: new city** (`DevNewCity`): establishes a city now, up to `cityLimit` 3.
-- **finish city build** (`DevFinishCityBuilding`): completes one next building in the oldest city.
+- **finish city build** (`DevFinishCityBuilding`): completes one construction
+  step in the oldest city, replacing a missing crawler before a structure.
 - **finish battalion** (`DevFinishCityBattalion`): creates the oldest city's next complete force and starts its attack.
 - **send battalion** (`DevSendCityBattalion`): ends that city's squad-
   completion or regroup wait.
@@ -1027,6 +1034,11 @@ all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-28: rival cities now rely on their resident crawler to build. A
+  replacement crawler takes priority over missing structures, while a city
+  without any surviving structures is razed. The resident uses a distinct
+  red-gray vehicle sprite, selection and unit death effects. Pinned by the
+  city reconstruction, migration and unit-picking tests.
 - 2026-09-28: rival cities now assemble forces one vehicle at a time, 30
   seconds per vehicle. Complete battalions wait at the city before attacking;
   damaged forces use the same per-vehicle build time. Pinned by
@@ -1338,11 +1350,11 @@ all four probe policies.
   carried resources in a wreck, whether the fog digests them or enemy fire
   brings a trooper down. Pinned by the worker and trooper wreck tests.
 - 2026-09-23: revised the city foundation: the arriving crawler remains
-  as a construction rig, raises the antimist pylon first, then builds the
+  as the construction vehicle, raises the antimist pylon first, then builds the
   Nexus. The pylon-first progression is covered by the city construction
   test and capture.
 - 2026-09-23: moved new cities to 10 tiles, beyond the colony's
-  artillery range. The arrival crawler is a construction rig; the city
+  artillery range. The arrival crawler is the construction vehicle; the city
   builds its antimist pylon first and its Nexus second. Oil-extractor
   droplets now rise smoothly and fade to transparent with a peak alpha
   of 0.34.

@@ -74,6 +74,10 @@ var (
 		"sprites/rival-crawler.png",
 		"sprites/shadows/rival-crawler.png", 8, 9,
 	)
+	rivalCityCrawlerModel = newWorldSprite(
+		"sprites/rival-city-crawler.png",
+		"sprites/shadows/rival-city-crawler.png", 8, 9,
+	)
 	rivalRaiderModel = newWorldSprite(
 		"sprites/rival-raider.png",
 		"sprites/shadows/rival-raider.png", 4, 5,

@@ -79,7 +79,8 @@ func (s *playScene) unitAtScreen(
 
 func selectableEnemyVehicle(kind EnemyKind) bool {
 	switch kind {
-	case EnemyScout, EnemyCrawler, EnemyRaider, EnemyArtillery:
+	case EnemyScout, EnemyCrawler, EnemyRaider, EnemyArtillery,
+		EnemyCityCrawler:
 		return true
 	}
 	return false

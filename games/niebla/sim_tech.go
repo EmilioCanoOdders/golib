@@ -115,6 +115,9 @@ func pressureCitySortieReady(s *State) bool {
 	if !exists || city.Ruined || s.Raids.PressureSortieStarted {
 		return false
 	}
+	if cityNeedsCrawler(s, city) {
+		return false
+	}
 	for _, id := range sortedPartyIDs(s) {
 		party := s.Parties[id]
 		if party.City == city.ID && party.Stage == StageBuild {

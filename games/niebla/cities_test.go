@@ -110,7 +110,7 @@ func TestAResidentCrawlerArrivesBeforeTheCityBuilds(t *testing.T) {
 	}
 	Apply(s, Tick{})
 	if len(s.Cities) != 1 {
-		t.Fatal("the city rig left after settling")
+		t.Fatal("the city crawler left after settling")
 	}
 	city = s.Cities[cityID]
 	s.finishCityBuilding(&city)
@@ -191,6 +191,87 @@ func TestCityRebuildsMissingBuildingsBeforeResumingProduction(t *testing.T) {
 	}
 }
 
+func TestCityRebuildsItsCrawlerBeforeMissingBuildings(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	cityID := s.foundCity(3500, 3200, 0.4)
+	city := s.Cities[cityID]
+	for range 3 {
+		s.finishCityBuilding(&city)
+	}
+	s.Cities[cityID] = city
+
+	var nexusID int64
+	for _, id := range city.BuildingIDs {
+		if s.Enemies[id].Kind == EnemyBase {
+			nexusID = id
+		}
+	}
+	if nexusID == 0 {
+		t.Fatal("the city has no Nexus to destroy")
+	}
+	s.killEnemy(nexusID)
+	city = s.Cities[cityID]
+	if stage, building := cityNextBuildingStage(s, city); !building ||
+		stage != 1 {
+		t.Fatalf("the destroyed Nexus was not queued for rebuilding: %+v", city)
+	}
+
+	oldCrawlerID := cityCrawlerID(s, city)
+	s.killEnemy(oldCrawlerID)
+	city = s.Cities[cityID]
+	if city.Ruined || !cityNeedsCrawler(s, city) ||
+		city.Work != cityBuildTicks ||
+		cityConstructionName(s, city) != "crawler" {
+		t.Fatalf("the city did not prioritize its missing crawler: %+v", city)
+	}
+
+	s.finishCityBuilding(&city)
+	city = s.Cities[cityID]
+	newCrawlerID := cityCrawlerID(s, city)
+	if newCrawlerID == 0 || newCrawlerID == oldCrawlerID ||
+		cityNeedsCrawler(s, city) || city.Stage != 3 ||
+		cityHasBuilding(s, city, EnemyBase) ||
+		cityConstructionName(s, city) != cityBuildingName(CityCore) {
+		t.Fatalf("the city built something other than its crawler first: %+v",
+			city)
+	}
+}
+
+func TestCityWaitsForCrawlerBeforeProductionAndRebuildsIt(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	cityID := finishedCityForTest(s)
+	city := s.Cities[cityID]
+	city.Oil, city.Lilac = citySortieOil*2, citySortieLilac*2
+	city.OilDeposit, city.LilacDeposit = cityOilReserve, cityLilacReserve
+	city.NextSortie = s.Ticks
+	s.Cities[cityID] = city
+
+	oldCrawlerID := cityCrawlerID(s, city)
+	s.killEnemy(oldCrawlerID)
+	city = s.Cities[cityID]
+	startingOil, startingLilac := city.OilDeposit, city.LilacDeposit
+	stepCity(s, &city)
+	if city.Work != cityBuildTicks-1 || city.OilDeposit != startingOil ||
+		city.LilacDeposit != startingLilac || len(s.Parties) != 0 {
+		t.Fatalf("the city advanced production without its crawler: %+v", city)
+	}
+	s.Cities[cityID] = city
+
+	runTicks(s, int(cityBuildTicks)-2)
+	if cityCrawlerID(s, s.Cities[cityID]) != 0 ||
+		s.Cities[cityID].Work != 1 {
+		t.Fatal("the replacement crawler completed before its full build time")
+	}
+	runTicks(s, 1)
+	city = s.Cities[cityID]
+	if cityCrawlerID(s, city) == 0 || city.Work != cityBuildTicks ||
+		len(s.Parties) != 0 || lastReport(s).Kind != ReportCityCrawler {
+		t.Fatalf("the crawler did not return after 45 seconds: %+v", city)
+	}
+}
+
 func TestCompletedCityShowsItsRebuildInTheHud(t *testing.T) {
 	s := newGame()
 	noRivals(s)
@@ -207,6 +288,22 @@ func TestCompletedCityShowsItsRebuildInTheHud(t *testing.T) {
 	city = s.Cities[cityID]
 	want := "rival city " + compassWord(city.X, city.Y) +
 		", rebuilding " + cityBuildingName(CityFactory)
+	if got := threatWords(s); got != want {
+		t.Fatalf("rebuilding city HUD says %q, want %q", got, want)
+	}
+}
+
+func TestCompletedCityShowsItsCrawlerRebuildInTheHud(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	cityID := finishedCityForTest(s)
+	city := s.Cities[cityID]
+	city.AnnounceUntil = s.Ticks
+	s.Cities[cityID] = city
+	s.killEnemy(cityCrawlerID(s, city))
+
+	want := "rival city " + compassWord(city.X, city.Y) +
+		", rebuilding crawler"
 	if got := threatWords(s); got != want {
 		t.Fatalf("rebuilding city HUD says %q, want %q", got, want)
 	}
@@ -245,9 +342,13 @@ func TestRazedCityRefoundsWithACrawlerAtANewSite(t *testing.T) {
 	for _, id := range structureIDs {
 		s.killEnemy(id)
 	}
-	if got, want := len(s.BuildingDeaths), len(structureIDs)+1; got != want {
+	if got, want := len(s.BuildingDeaths), len(structureIDs); got != want {
 		t.Fatalf("the razed city made %d collapse events, want %d",
 			got, want)
+	}
+	if len(s.Deaths) != 1 || s.Deaths[0].EnemyKind != EnemyCityCrawler {
+		t.Fatalf("the razed city made unit deaths %+v, want its crawler",
+			s.Deaths)
 	}
 	city := s.Cities[cityID]
 	if !city.Ruined || city.RefoundAt != s.Ticks+cityRefoundDelayTicks ||
@@ -351,6 +452,46 @@ func TestVersionNineCityWithMissingBuildingGetsFreshBuildWork(t *testing.T) {
 	if s.Version != stateVersion || city.Ruined ||
 		city.Work != cityBuildTicks {
 		t.Fatalf("version 9 city migrated to %+v at version %d",
+			city, s.Version)
+	}
+}
+
+func TestVersionElevenCityWithoutCrawlerMigratesToCrawlerWork(t *testing.T) {
+	s := newGame()
+	cityID := finishedCityForTest(s)
+	city := s.Cities[cityID]
+	crawlerID := cityCrawlerID(s, city)
+	delete(s.Enemies, crawlerID)
+	removeCityBuilding(&city, crawlerID)
+	city.Work = 0
+	s.Cities[cityID] = city
+	s.Version = 11
+
+	s.migrateState()
+	city = s.Cities[cityID]
+	if s.Version != stateVersion || city.Ruined ||
+		!cityNeedsCrawler(s, city) || city.Work != cityBuildTicks {
+		t.Fatalf("version 11 city migrated to %+v at version %d",
+			city, s.Version)
+	}
+}
+
+func TestVersionElevenCityWithoutStructuresMigratesToRazed(t *testing.T) {
+	s := newGame()
+	cityID := s.foundCity(3500, 3200, 0.4)
+	city := s.Cities[cityID]
+	crawlerID := cityCrawlerID(s, city)
+	delete(s.Enemies, crawlerID)
+	removeCityBuilding(&city, crawlerID)
+	s.Cities[cityID] = city
+	s.Version = 11
+
+	s.migrateState()
+	city = s.Cities[cityID]
+	if s.Version != stateVersion || !city.Ruined ||
+		city.RefoundAt != s.Ticks+cityRefoundDelayTicks ||
+		len(city.BuildingIDs) != 0 {
+		t.Fatalf("version 11 empty city migrated to %+v at version %d",
 			city, s.Version)
 	}
 }

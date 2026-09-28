@@ -355,7 +355,7 @@ func artilleryTarget(s *State, x, y float64) (Enemy, bool) {
 		if gap < artilleryMinUnits || gap > artilleryRangeUnits || !seen(s, e.X, e.Y) {
 			continue
 		}
-		structure := (e.City != 0 && e.Party == 0) || e.Kind == EnemyBase
+		structure := isRivalBuilding(e)
 		if !found || (structure && !bestStructure) ||
 			(structure == bestStructure && gap < bestGap) {
 			best, found, bestStructure, bestGap = e, true, structure, gap

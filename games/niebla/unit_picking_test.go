@@ -15,6 +15,7 @@ func TestWorldSpriteOpaqueBoundsCoverEveryFacing(t *testing.T) {
 		mechanicModel,
 		rivalScoutModel,
 		rivalCrawlerModel,
+		rivalCityCrawlerModel,
 		rivalRaiderModel,
 		rivalArtilleryModel,
 	}
@@ -87,6 +88,35 @@ func TestUnitPickingUsesSpriteBodiesAndTheFrontmostLayer(t *testing.T) {
 		); found {
 			t.Fatalf("the squad target picker reached outside the hitbox at zoom %g",
 				zoom)
+		}
+	}
+}
+
+func TestResidentCityCrawlerIsPickedAsAVehicle(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	cityID := s.foundCity(3500, 3200, 0.4)
+	crawlerID := cityCrawlerID(s, s.Cities[cityID])
+	scene := newPlayScene(s)
+
+	for _, zoom := range []float32{1, 8, 32} {
+		scene.zoom = zoom
+		scene.camera.Zoom = zoom
+		visible, ok := scene.unitBounds(unitSelection{
+			kind: TypeCityCrawler,
+			id:   crawlerID,
+		})
+		if !ok {
+			t.Fatalf("the city crawler has no screen bounds at zoom %g", zoom)
+		}
+		point := visible.Center()
+		hit, found := scene.unitAtScreen(point.X, point.Y, true)
+		if !found || hit.selection != (unitSelection{
+			kind: TypeCityCrawler,
+			id:   crawlerID,
+		}) {
+			t.Fatalf("at zoom %g the city crawler hit is %+v, %v",
+				zoom, hit.selection, found)
 		}
 	}
 }

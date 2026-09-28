@@ -109,6 +109,55 @@ func (s *State) migrateSettledCities() {
 	}
 }
 
+func (s *State) migrateCityCrawlerConstruction() {
+	for _, id := range sortedCityIDs(s) {
+		city := s.Cities[id]
+		if city.Ruined {
+			continue
+		}
+		if crawlerID := cityCrawlerID(s, city); crawlerID != 0 {
+			found := false
+			for _, buildingID := range city.BuildingIDs {
+				if buildingID == crawlerID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				city.BuildingIDs = append(city.BuildingIDs, crawlerID)
+			}
+			s.Cities[id] = city
+			continue
+		}
+		if cityHasStructures(s, city) {
+			city.Work = cityBuildTicks
+			city.MiteDamage = 0
+			s.Cities[id] = city
+			continue
+		}
+		city.Ruined = true
+		city.RefoundAt = s.Ticks + cityRefoundDelayTicks
+		city.Work = 0
+		city.MiteDamage = 0
+		city.Oil = 0
+		city.Lilac = 0
+		city.OilDeposit = 0
+		city.LilacDeposit = 0
+		city.BuildingIDs = nil
+		for _, partyID := range sortedPartyIDs(s) {
+			party := s.Parties[partyID]
+			if party.City != city.ID || party.CityArrives {
+				continue
+			}
+			party.Stage = StageLeave
+			party.Wait = 0
+			party.EntryX, party.EntryY = city.X, city.Y
+			s.Parties[partyID] = party
+		}
+		s.Cities[id] = city
+	}
+}
+
 func (s *State) foundCity(x, y, angle float64) int64 {
 	if s.Cities == nil {
 		s.Cities = map[int64]City{}
@@ -269,6 +318,16 @@ func stepCity(s *State, city *City) {
 		}
 		if !s.spawnCityVisitFor(city.ID) {
 			city.RefoundAt = s.Ticks + fogCycleTicks
+		}
+		return
+	}
+	if cityNeedsCrawler(s, *city) {
+		if city.Work <= 0 {
+			city.Work = cityBuildTicks
+		}
+		city.Work--
+		if city.Work <= 0 {
+			s.finishCityCrawler(city)
 		}
 		return
 	}
@@ -479,6 +538,55 @@ func cityHasBuilding(s *State, city City, kind EnemyKind) bool {
 	return false
 }
 
+func cityHasCrawler(s *State, city City) bool {
+	return cityCrawlerID(s, city) != 0
+}
+
+func cityCrawlerID(s *State, city City) int64 {
+	for _, id := range sortedEnemyIDs(s) {
+		e := s.Enemies[id]
+		if e.City == city.ID && e.Party == 0 &&
+			e.Kind == EnemyCityCrawler {
+			return id
+		}
+	}
+	return 0
+}
+
+func cityNeedsCrawler(s *State, city City) bool {
+	return !city.Ruined && !cityHasCrawler(s, city)
+}
+
+func cityConstructionSite(
+	s *State,
+	city City,
+) (x, y float64, kind EnemyKind, health float64, building bool) {
+	if cityNeedsCrawler(s, city) {
+		x, y = cityCrawlerPosition(city)
+		return x, y, EnemyCityCrawler,
+			enemySpecOf(EnemyCityCrawler).health, true
+	}
+	stage, needsBuilding := cityNextBuildingStage(s, city)
+	if !needsBuilding {
+		return 0, 0, "", 0, false
+	}
+	buildingKind := cityBuildOrder[stage]
+	x, y = cityBuildingPosition(city, stage)
+	spec := cityBuildingSpec(buildingKind)
+	return x, y, spec.kind, spec.health, true
+}
+
+func cityConstructionName(s *State, city City) string {
+	if cityNeedsCrawler(s, city) {
+		return "crawler"
+	}
+	stage, building := cityNextBuildingStage(s, city)
+	if !building {
+		return ""
+	}
+	return cityBuildingName(cityBuildOrder[stage])
+}
+
 func cityNextBuildingStage(s *State, city City) (int, bool) {
 	if city.Ruined {
 		return 0, false
@@ -492,6 +600,9 @@ func cityNextBuildingStage(s *State, city City) (int, bool) {
 }
 
 func cityNeedsConstruction(s *State, city City) bool {
+	if cityNeedsCrawler(s, city) {
+		return true
+	}
 	_, building := cityNextBuildingStage(s, city)
 	return building
 }
@@ -526,6 +637,10 @@ func removeCityBuilding(city *City, id int64) {
 }
 
 func (s *State) finishCityBuilding(city *City) {
+	if cityNeedsCrawler(s, *city) {
+		s.finishCityCrawler(city)
+		return
+	}
 	stage, building := cityNextBuildingStage(s, *city)
 	if !building {
 		return
@@ -566,6 +681,24 @@ func (s *State) finishCityBuilding(city *City) {
 				int64(cityIntervalCycles)*fogCycleTicks
 		}
 	}
+}
+
+func (s *State) finishCityCrawler(city *City) {
+	if !cityNeedsCrawler(s, *city) {
+		return
+	}
+	id := s.NextID
+	s.NextID++
+	x, y := cityCrawlerPosition(*city)
+	s.Enemies[id] = Enemy{
+		ID: id, Kind: EnemyCityCrawler, X: x, Y: y,
+		Health: enemySpecOf(EnemyCityCrawler).health, City: city.ID,
+	}
+	city.BuildingIDs = append(city.BuildingIDs, id)
+	city.Work = cityBuildTicks
+	city.MiteDamage = 0
+	s.Cities[city.ID] = *city
+	s.report(ReportCityCrawler, 0, city.X, city.Y)
 }
 
 func (s *State) finishCitySortie(city *City) {
@@ -693,7 +826,7 @@ func cityBuildingName(kind BuildingKind) string {
 func cityBuildingCaption(s *State, e Enemy) string {
 	switch e.Kind {
 	case EnemyCityCrawler:
-		return "city construction rig"
+		return "city construction crawler"
 	case EnemyBase:
 		return "Nexus"
 	case EnemyCityRepulsor:
@@ -706,9 +839,9 @@ func cityBuildingCaption(s *State, e Enemy) string {
 		return "building the next force"
 	}
 	if city, ok := s.Cities[e.City]; ok {
-		if stage, building := cityNextBuildingStage(s, city); building {
+		if name := cityConstructionName(s, city); name != "" {
 			return fmt.Sprintf("city construction: %s",
-				cityBuildingName(cityBuildOrder[stage]))
+				name)
 		}
 	}
 	return "city structure"
