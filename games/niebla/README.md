@@ -923,10 +923,10 @@ capability. Remaining city forces are left to their party and fog rules.
 The colony's artillery (`BuildingArtillery`, `stepArtillery`) shells
 visible rivals between `artilleryMinUnits` and `artilleryRangeUnits`, a
 base or static city building before a vehicle, and pays every shell in
-lilac and oil. The mobile rival artillery (`EnemyArtillery`) uses
-`fireCityArtillery` during a sortie; it fires only at colony buildings,
-never the core. Its shots are rival shells, so existing `land` and
-`hurtBuilding` apply.
+lilac and oil. The mobile rival artillery (`EnemyArtillery`) has its own
+600 m range (`cityArtilleryRangeUnits`) and uses `fireCityArtillery` during
+a sortie; it fires only at colony buildings, never the core. Its shots are
+rival shells, so existing `land` and `hurtBuilding` apply.
 
 Squads and mechanics (`sim_squads.go`). A war factory
 (`BuildingWarFactory`) builds troopers through `QueueRobot`; after the

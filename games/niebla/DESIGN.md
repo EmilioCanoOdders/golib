@@ -335,8 +335,9 @@ one raider until it has four raiders and five vehicles total. Only the next
 battalions replace the crawler with mobile artillery, keeping the total at
 five. The crawler's bubble is 120 m; artillery's is 170 m. The force walks
 directly to the nearest colony oil tank, siphons and returns to its city.
-Mobile artillery shells colony buildings on the way in; a shot cannot damage
-the core. A force that returns with stolen oil unloads
+Mobile artillery has a 600 m reach and shells colony buildings on the way in;
+a shot cannot damage the core. The colony's own artillery keeps its 1.5 km
+reach. A force that returns with stolen oil unloads
 at `cityUnloadPerSecond` 3 L/s per vehicle. A complete force then rests
 for `citySortieCooldownTicks` 90 s before the city starts assembling its
 next one. A damaged force builds each missing vehicle in 30 s; an empty or
@@ -1033,6 +1034,9 @@ all four probe policies.
 - 2026-09-28: stationary mite halos now turn a near-black red, with their
   full-grip red channel reduced from 180 to 60. Pinned by
   `TestMiteHalosTurnRedWhenHostsStop`.
+- 2026-09-28: rival mobile artillery's reach is now 600 m, independent of
+  the colony artillery's 1.5 km reach. Pinned at and beyond the limit by
+  `TestRivalMobileArtilleryHasA600MeterRange`.
 - 2026-09-28: a ground cell under a guard pennant now selects like an
   occupied building cell instead of opening the build menu. The pennant's
   icon still opens its squad card. Pinned by

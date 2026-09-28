@@ -35,8 +35,9 @@ const (
 
 	reportsKept = 12 // reports the state remembers
 
-	cityArtilleryReload = 6 * 60
-	cityArtilleryDamage = 45.0
+	cityArtilleryRangeUnits = 600.0 // u
+	cityArtilleryReload     = 6 * 60
+	cityArtilleryDamage     = 45.0
 )
 
 // EnemyKind names a rival vehicle or city structure.
@@ -671,7 +672,7 @@ func (s *State) fireCityArtillery(e Enemy) {
 		b := s.Buildings[id]
 		x, y := cellCenterUnits(b.Col, b.Row)
 		gap := math.Hypot(x-e.X, y-e.Y)
-		if gap < 200 || gap > artilleryRangeUnits || gap >= nearest {
+		if gap < 200 || gap > cityArtilleryRangeUnits || gap >= nearest {
 			continue
 		}
 		targetX, targetY, nearest, found = x, y, gap, true

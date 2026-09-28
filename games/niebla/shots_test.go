@@ -857,6 +857,39 @@ func TestOneMechanicCannotOutrepairContinuousArtillery(t *testing.T) {
 	}
 }
 
+func TestRivalMobileArtilleryHasA600MeterRange(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		col      int
+		wantShot bool
+	}{
+		{name: "at limit", col: 24, wantShot: true},
+		{name: "beyond limit", col: 25},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			s := newGame()
+			const partyID, artilleryID, buildingID = 30, 31, 32
+			s.Parties[partyID] = Party{ID: partyID, Stage: StageRaid}
+			s.Enemies[artilleryID] = Enemy{
+				ID: artilleryID, Kind: EnemyArtillery, Party: partyID,
+				X: 12.5, Y: 12.5,
+			}
+			s.Buildings[buildingID] = Building{
+				ID: buildingID, Kind: BuildingSilo,
+				Col: test.col, Row: 0,
+			}
+
+			s.fireCityArtillery(s.Enemies[artilleryID])
+
+			if got := len(s.Shots) > 0; got != test.wantShot {
+				distance := float64(test.col * buildingCell)
+				t.Fatalf("at %.0f m, fired %v, want %v",
+					distance, got, test.wantShot)
+			}
+		})
+	}
+}
+
 func TestRivalShotsDamageMechanicsButNotWorkers(t *testing.T) {
 	s := newGame()
 	noRivals(s)
