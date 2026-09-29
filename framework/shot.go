@@ -140,7 +140,8 @@ type touchHold struct {
 // Enter down in update 1, which is one press, holds Right from update 30 to
 // update 90, moves the mouse pointer to 640, 360 in update 100, clicks the left
 // mouse button in update 101 and presses A on gamepad 0 in update 120. Fingers
-// come as "Touch@40:200,600", one tap, or "Touch@40-90:200,600", a finger held.
+// come as "Touch@40:200,600", one tap, or "Touch@40-90:200,600", a finger held,
+// and text as "Type@130:LDA\s#1", which Input.TypedText gives update 130.
 type inputScript struct {
 	keys           []hold[Key]
 	buttons        []hold[MouseButton]
@@ -149,16 +150,24 @@ type inputScript struct {
 	sticks         []stickMove // in update order
 	wheel          []wheelTurn
 	touches        []touchHold // one finger each, in the script's order
+	texts          []typing
+}
+
+// typing is text typed in update number update.
+type typing struct {
+	update int
+	text   string
 }
 
 // parseInputScript parses an input script: items separated by spaces. Each is
 // Name@update or Name@first-last to hold a key or a button down,
 // Mouse@update:x,y to move the mouse pointer, MouseWheel@update:notches to
 // turn the wheel, GamepadLeftStick@update:x,y or GamepadRightStick@update:x,y
-// to tilt a stick, or Touch@update:x,y or Touch@first-last:x,y to put a finger
-// on the touch screen. Names are those of the Key constants without the Key
-// prefix, and of the MouseButton and GamepadButton constants, in any letter
-// case. Gamepad items act on gamepad 0, and each Touch item is a finger of its
+// to tilt a stick, Touch@update:x,y or Touch@first-last:x,y to put a finger
+// on the touch screen, or Type@update:text to type text, where \s is a space
+// and \\ a backslash, since a space ends the item. Names are those of the Key
+// constants without the Key prefix, and of the MouseButton and GamepadButton
+// constants, in any letter case. Gamepad items act on gamepad 0, and each Touch item is a finger of its
 // own, so two that overlap are two fingers at once. An empty script plays no
 // input.
 func parseInputScript(script string) (inputScript, error) {
@@ -182,6 +191,15 @@ func parseInputScript(script string) (inputScript, error) {
 				return inputScript{}, inputScriptError(item, "Touch@update:x,y puts a finger on pixel x, y, and Touch@first-last:x,y holds it there, such as Touch@40-90:200,600")
 			}
 			s.touches = append(s.touches, touchHold{first: first, last: last, x: x, y: y})
+			continue
+		case strings.EqualFold(name, "Type"):
+			updateText, text, hasColon := strings.Cut(when, ":")
+			update, err := strconv.Atoi(updateText)
+			if !hasColon || err != nil || update < 1 || text == "" {
+				return inputScript{}, inputScriptError(item, `Type@update:text types text in an update, with \s for a space, such as Type@130:LDA\s#1`)
+			}
+			text = strings.NewReplacer(`\\`, `\`, `\s`, " ").Replace(text)
+			s.texts = append(s.texts, typing{update: update, text: text})
 			continue
 		case strings.EqualFold(name, "MouseWheel"):
 			update, amount, ok := parseAmountAt(when)
@@ -349,6 +367,11 @@ func (s inputScript) at(update int) Input {
 			in.mouseWheel += turn.amount
 		}
 	}
+	for _, t := range s.texts {
+		if t.update == update {
+			in.typed += t.text
+		}
+	}
 
 	if len(s.gamepadButtons) == 0 && len(s.sticks) == 0 {
 		return in
@@ -388,8 +411,11 @@ func runShots(game Game, config Config, plan *shotPlan) error {
 	// A script with fingers in it is played with fingers, as a script with
 	// gamepad items has that gamepad connected: a game that draws its on-screen
 	// controls only for a player using them draws them in these shots, in every
-	// frame and not only in the ones a finger is down in.
+	// frame and not only in the ones a finger is down in. A script with gamepad
+	// items is played with the gamepad in the same way, so the game's prompts
+	// show its buttons from the first frame.
 	playingWithTouch.Store(len(plan.input.touches) > 0)
+	playingWithGamepad.Store(len(plan.input.gamepadButtons) > 0 || len(plan.input.sticks) > 0)
 	if device.WritesFiles {
 		if err := os.MkdirAll(plan.dir, 0o755); err != nil {
 			return fmt.Errorf("golib.Run: cannot create the screenshot folder: %w", err)

@@ -21,6 +21,8 @@ func TestKeyCodesAreRaylibs(t *testing.T) {
 		"KeyBackspace": {KeyBackspace, rl.KeyBackspace},
 		"KeyLeft":      {KeyLeft, rl.KeyLeft}, "KeyRight": {KeyRight, rl.KeyRight},
 		"KeyUp": {KeyUp, rl.KeyUp}, "KeyDown": {KeyDown, rl.KeyDown},
+		"KeyDelete": {KeyDelete, rl.KeyDelete}, "KeyHome": {KeyHome, rl.KeyHome}, "KeyEnd": {KeyEnd, rl.KeyEnd},
+		"KeyPageUp": {KeyPageUp, rl.KeyPageUp}, "KeyPageDown": {KeyPageDown, rl.KeyPageDown},
 		"KeyLeftShift": {KeyLeftShift, rl.KeyLeftShift}, "KeyRightShift": {KeyRightShift, rl.KeyRightShift},
 		"KeyLeftControl": {KeyLeftControl, rl.KeyLeftControl}, "KeyRightControl": {KeyRightControl, rl.KeyRightControl},
 		"KeyLeftAlt": {KeyLeftAlt, rl.KeyLeftAlt}, "KeyRightAlt": {KeyRightAlt, rl.KeyRightAlt},

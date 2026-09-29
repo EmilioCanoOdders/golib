@@ -11,6 +11,7 @@ import (
 type Input struct {
 	down    [keyCount]bool
 	pressed [keyCount]bool
+	typed   string
 
 	mouseX, mouseY float32
 	mouseMoved     bool
@@ -35,6 +36,16 @@ func (in *Input) KeyDown(key Key) bool {
 // jumping or confirming a menu.
 func (in *Input) KeyPressed(key Key) bool {
 	return validKey(key) && in.pressed[key]
+}
+
+// TypedText returns the text typed since the previous update: the
+// characters the player's keyboard makes, in the order they were typed, with
+// its layout, Shift, AltGr and accents applied, so "#", "ñ" and "é" come as
+// they are on any keyboard. A held key repeats as it does in any text box.
+// Keys that type nothing, such as Enter, Backspace and the arrows, aren't in
+// it: read them with KeyPressed. Each character reaches exactly one update.
+func (in *Input) TypedText() string {
+	return in.typed
 }
 
 // MousePosition returns where the mouse pointer is, in the pixel coordinates
@@ -108,6 +119,26 @@ func (in *Input) GamepadName(pad int) string {
 	return gamepad.name
 }
 
+// GamepadType returns the kind of gamepad number pad is, guessed from the name
+// the system gives it, so a game can show its buttons as they are printed on
+// it. The buttons themselves are read by where they are, whatever the type:
+//
+//	build := "A" // GamepadA, the bottom button
+//	switch input.GamepadType(0) {
+//	case golib.GamepadTypePlayStation:
+//		build = "Cross"
+//	case golib.GamepadTypeNintendo:
+//		build = "B" // a Nintendo gamepad has B at the bottom
+//	}
+//
+// A gamepad it doesn't recognize, and one that isn't connected, is
+// GamepadTypeXbox, whose labels are GoLib's names for the buttons. Names vary
+// between systems, drivers and makers, so a game that shows button pictures
+// should let the player choose them in its settings too.
+func (in *Input) GamepadType(pad int) GamepadType {
+	return gamepadTypeOf(in.GamepadName(pad))
+}
+
 // GamepadDown reports whether button is held down on gamepad number pad. It is
 // false when that gamepad isn't connected, so games can read the gamepad
 // alongside the keyboard without checking first:
@@ -172,6 +203,7 @@ func validKey(key Key) bool {
 type inputQueue struct {
 	down    [keyCount]bool
 	pending [keyCount]bool // pressed, not yet delivered to an update
+	typed   string         // typed, not yet delivered to an update
 
 	mouseX, mouseY float32
 	mouseDown      [mouseButtonCount]bool
@@ -205,6 +237,22 @@ func (q *inputQueue) readKeyboard(isDown, wasPressed func(Key) bool) {
 		if wasPressed(key) {
 			q.pending[key] = true
 		}
+	}
+}
+
+// maxTyped is how many bytes of typed text wait for an update at most: a
+// game that runs no update for a while doesn't collect text without end.
+const maxTyped = 1024
+
+// readText records the text typed in the current frame. text is
+// device.TypedText; tests pass their own.
+func (q *inputQueue) readText(text string) {
+	if text == "" {
+		return
+	}
+	q.keyboardUsed = true
+	if len(q.typed)+len(text) <= maxTyped {
+		q.typed += text
 	}
 }
 
@@ -322,6 +370,7 @@ func (q *inputQueue) readGamepads(frame func(pad int) gamepadFrame) {
 func (q *inputQueue) next(input *Input) {
 	input.down = q.down
 	input.pressed = q.pending
+	input.typed, q.typed = q.typed, ""
 	input.mouseX, input.mouseY = q.mouseX, q.mouseY
 	input.mouseMoved = q.deliveredAny && (q.mouseX != q.deliveredX || q.mouseY != q.deliveredY)
 	q.deliveredX, q.deliveredY, q.deliveredAny = q.mouseX, q.mouseY, true

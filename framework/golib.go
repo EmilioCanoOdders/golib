@@ -267,6 +267,7 @@ func runWindow(game Game, config Config) error {
 
 		now := device.Time()
 		queue.readKeyboard(deviceKeyDown, deviceKeyPressed)
+		queue.readText(device.TypedText())
 		pointerX, pointerY := device.MousePosition()
 		mouseX, mouseY := toScreen(pointerX, pointerY, fit, screenWidth, screenHeight)
 		// The oldest finger on a touch screen moves the mouse pointer and holds
@@ -282,13 +283,15 @@ func runWindow(game Game, config Config) error {
 		queue.readGamepads(deviceGamepadFrame)
 		// Whether the game shows on-screen controls follows what the player
 		// last used, so one web build is played with fingers on a phone and
-		// with the keyboard and the mouse on a computer. The mouse is read from
+		// with the keyboard and the mouse on a computer, and so does whether
+		// its prompts show gamepad buttons or keys. The mouse is read from
 		// the machine, not from queue: a finger holds its left button too.
 		mouseUsed := pointerKnown && (pointerX != lastPointerX || pointerY != lastPointerY)
 		lastPointerX, lastPointerY, pointerKnown = pointerX, pointerY, true
 		mouseUsed = mouseUsed || wheel != 0 ||
 			deviceMouseDown(MouseLeft) || deviceMouseDown(MouseRight) || deviceMouseDown(MouseMiddle)
 		followTouchPlaying(len(touches) > 0, queue.keyboardUsed, mouseUsed, queue.gamepadUsed)
+		followGamepadPlaying(len(touches) > 0, queue.keyboardUsed, mouseUsed, queue.gamepadUsed)
 		frameUpdates := gameClock.advanceUnlessPaused(now-last, !focused && config.PauseUnfocused)
 		var (
 			quit bool

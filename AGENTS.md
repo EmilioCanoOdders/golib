@@ -12,7 +12,7 @@ The promise: someone downloads the template, runs a couple of commands, and buil
 
 Keep this section true: update it in the same change that lands or removes a feature. Never describe planned work as if it existed.
 
-Last updated: 2026-09-19 (milestones M5, Shipping, and M6, 2D essentials, done; Linux and macOS ran GoLib for the first time; the web build is at stage 4, phones, after a game published on itch.io was played on one; M7, 3D, comes after it).
+Last updated: 2026-09-29 (gamepad prompts, `golib.PlayingWithGamepad` and `Input.GamepadType`; typed text, `Input.TypedText`; milestones M5, Shipping, and M6, 2D essentials, done; Linux and macOS ran GoLib for the first time; the web build is at stage 4, phones, after a game published on itch.io was played on one; M7, 3D, comes after it).
 
 | Area | State |
 | --- | --- |
@@ -37,6 +37,8 @@ Last updated: 2026-09-19 (milestones M5, Shipping, and M6, 2D essentials, done; 
 | A Windows game that can't load raylib or libffi says why, in a message box when nobody sees its console, instead of ending silently | Done (M5) |
 | On Windows, `build` and `shot` work while `run` has the game open, and `golib` works while one of its copies is running | Done (M5) |
 | Keyboard, mouse (pointer, buttons, wheel) and gamepad (buttons, sticks) input; rectangles, circles, lines and triangles; `Rectangle` overlap and point checks | Done (M2) |
+| Prompts that show the button the player sees: whether they play with a gamepad now (`golib.PlayingWithGamepad`) and whether it is an Xbox, PlayStation or Nintendo one, from its name (`Input.GamepadType`) | Done (2026-09-29); the type is guessed from the names GLFW and the browsers give, and hasn't been tried with a PlayStation or Nintendo gamepad in hand yet |
+| Typed text, as the player's keyboard layout makes it (`Input.TypedText`, and `Type@` in `golib shot --input`), and the keys Delete, Home, End, Page Up and Page Down | Done (2026-09-27), for text a game lets the player type: names, code |
 | Screen scaled to any window size, fullscreen (`golib.SetFullscreen`), post-processing shaders (`golib.NewShader`, `golib.SetPostProcess`) | Done (M2) |
 | Random numbers: `golib.RandomInt`, `golib.RandomFloat`, `golib.SetRandomSeed` | Done (M2) |
 | Sound effects made in code, with no sound files: `golib.NewSound`, `golib.SoundSpec`, the ready-made recipes and `golib.SetVolume` | Done (M2) |

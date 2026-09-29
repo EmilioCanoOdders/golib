@@ -15,6 +15,7 @@ import (
 var input struct {
 	bytes []byte
 	array js.Value // the same buffer on the JavaScript side
+	typed string   // the characters typed since the last frame
 }
 
 // readInput takes the picture of the input for this frame and clears the
@@ -26,6 +27,13 @@ func readInput() {
 	}
 	js_().Call("snapshotInput")
 	js.CopyBytesToGo(input.bytes, input.array)
+	input.typed = js_().Call("takeTyped").String()
+}
+
+// TypedText returns the characters typed since the last frame, in order, as
+// the browser gives them with the keyboard's layout applied.
+func TypedText() string {
+	return input.typed
 }
 
 // number returns float number i of the input buffer.

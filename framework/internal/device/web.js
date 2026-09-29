@@ -705,6 +705,7 @@ void main() {
 	const KEYS = {
 		Space: 32, Enter: 257, NumpadEnter: 257, Escape: 256, Tab: 258, Backspace: 259,
 		ArrowLeft: 263, ArrowRight: 262, ArrowUp: 265, ArrowDown: 264,
+		Delete: 261, Home: 268, End: 269, PageUp: 266, PageDown: 267,
 		ShiftLeft: 340, ShiftRight: 344, ControlLeft: 341, ControlRight: 345,
 		AltLeft: 342, AltRight: 346,
 	};
@@ -730,6 +731,9 @@ void main() {
 	const keysDown = new Uint8Array(349), keysPressed = new Uint8Array(349);
 	const mouseDown = new Uint8Array(3), mousePressed = new Uint8Array(3);
 	let mouseX = 0, mouseY = 0, wheel = 0;
+	// The characters typed since the last frame, which Input.TypedText gives.
+	let typed = '';
+	const MAX_TYPED = 256;
 	const padWas = []; // what each pad's buttons were last frame, for presses
 
 	// The fingers on the screen, oldest first, each with an id of GoLib's own
@@ -799,9 +803,17 @@ void main() {
 			if (key !== undefined) {
 				if (!keysDown[key]) keysPressed[key] = 1;
 				keysDown[key] = 1;
-				// Arrows, space and tab would otherwise scroll the page or
-				// move the focus out of the game.
-				if (key === 32 || key === 258 || (key >= 262 && key <= 265)) e.preventDefault();
+				// Arrows, space, tab, Home, End and the page keys would
+				// otherwise scroll the page or move the focus out of the game.
+				if (key === 32 || key === 258 || (key >= 262 && key <= 269)) e.preventDefault();
+			}
+			// A key that types a character gives it in e.key, with the
+			// layout, Shift and AltGr applied; the others give their name,
+			// such as "Enter". Ctrl without Alt is a shortcut, not typing
+			// (AltGr comes as Ctrl and Alt on Windows).
+			if ([...e.key].length === 1 && !e.metaKey && (!e.ctrlKey || e.altKey)) {
+				if (typed.length < MAX_TYPED) typed += e.key;
+				e.preventDefault(); // "/" and "'" open Firefox's quick find
 			}
 			takeFullscreen();
 			wakeAudio();
@@ -923,6 +935,13 @@ void main() {
 		if (button === 1) return 2; // middle
 		if (button === 2) return 1; // right
 		return -1;
+	}
+
+	// takeTyped gives the characters typed since it was last called.
+	function takeTyped() {
+		const text = typed;
+		typed = '';
+		return text;
 	}
 
 	// snapshotInput writes the state the next frame reads and clears the
@@ -1507,7 +1526,7 @@ void main() {
 		draw: draw, drawBuffer: drawBuffer,
 		newTexture: newTexture, updateTexture: updateTexture, unloadTexture: unloadTexture,
 		newTarget: newTarget, unloadTarget: unloadTarget, readTarget: readTarget,
-		inputBuffer: inputBuffer, snapshotInput: snapshotInput, gamepadName: gamepadName,
+		inputBuffer: inputBuffer, snapshotInput: snapshotInput, takeTyped: takeTyped, gamepadName: gamepadName,
 		touchScreen: touchScreen,
 		onFrame: onFrame, askForFrame: askForFrame,
 		setFullscreen: setFullscreen, fullscreenLost: fullscreenLost,
