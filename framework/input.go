@@ -119,6 +119,26 @@ func (in *Input) GamepadName(pad int) string {
 	return gamepad.name
 }
 
+// GamepadType returns the kind of gamepad number pad is, guessed from the name
+// the system gives it, so a game can show its buttons as they are printed on
+// it. The buttons themselves are read by where they are, whatever the type:
+//
+//	build := "A" // GamepadA, the bottom button
+//	switch input.GamepadType(0) {
+//	case golib.GamepadTypePlayStation:
+//		build = "Cross"
+//	case golib.GamepadTypeNintendo:
+//		build = "B" // a Nintendo gamepad has B at the bottom
+//	}
+//
+// A gamepad it doesn't recognize, and one that isn't connected, is
+// GamepadTypeXbox, whose labels are GoLib's names for the buttons. Names vary
+// between systems, drivers and makers, so a game that shows button pictures
+// should let the player choose them in its settings too.
+func (in *Input) GamepadType(pad int) GamepadType {
+	return gamepadTypeOf(in.GamepadName(pad))
+}
+
 // GamepadDown reports whether button is held down on gamepad number pad. It is
 // false when that gamepad isn't connected, so games can read the gamepad
 // alongside the keyboard without checking first:

@@ -14,6 +14,7 @@ For AI agents writing game code with GoLib, and for anyone who wants the whole f
 | Draw a picture pixel by pixel, such as an emulator's screen | `golib.NewImage`, `image.SetPixel`, `screen.DrawImage` | [Pictures made pixel by pixel](#pictures-made-pixel-by-pixel) |
 | Load levels made in Tiled | `golib.NewMap`, `screen.DrawMap`, `level.TilesIn`, `level.Objects` | [Maps](#maps) |
 | Read keys, mouse and gamepads | `input.KeyDown`, `input.KeyPressed`, `input.MousePosition`, `input.GamepadDown` | [Input](#input) |
+| Show the player the right key or gamepad button to press | `golib.PlayingWithGamepad`, `input.GamepadType` | [Gamepads](#gamepads) |
 | Move, aim and chase | `golib.Vector2` and its `Add`, `Scale`, `Normalize`, `MoveTowards` | [Vectors, rectangles and collisions](#vectors-rectangles-and-collisions) |
 | Check collisions | `golib.Rectangle` and its `Overlaps`; `Vector2.Distance` for circles | [Vectors, rectangles and collisions](#vectors-rectangles-and-collisions) |
 | Scroll a world larger than the screen | `golib.NewCamera`, `screen.SetCamera` | [Camera](#camera) |
@@ -287,24 +288,45 @@ Gamepads are numbered 0 to 3, in the order they were connected; a one-player gam
 | --- | --- |
 | `Input.GamepadConnected` | `GamepadConnected(pad int) bool` |
 | `Input.GamepadName` | `GamepadName(pad int) string`: the name the system gives it, such as `"Xbox Controller"`, or `""` |
+| `Input.GamepadType` | `GamepadType(pad int) GamepadType`: the kind of gamepad, guessed from its name, which says what is printed on its buttons, for showing the player which one to press. An unknown gamepad, or none, is `GamepadTypeXbox`. Names vary between systems and makers, so a game that shows button pictures lets the player choose them in its settings too |
+| `GamepadType` | `GamepadTypeXbox`, `GamepadTypePlayStation` or `GamepadTypeNintendo`: the labels in the table below |
+| `PlayingWithGamepad` | `PlayingWithGamepad() bool`: the player is playing with a gamepad, which is what decides whether a game's prompts show gamepad buttons or keys. False until a gamepad button is pressed or a stick tilted; false again at the next key, mouse move or finger. Between the two it holds its answer, so the prompts don't change while the player does nothing. True under `golib shot` when the `--input` script has gamepad items in it |
 | `Input.GamepadDown` | `GamepadDown(pad int, button GamepadButton) bool`: the button is held down. |
 | `Input.GamepadPressed` | `GamepadPressed(pad int, button GamepadButton) bool`: the button went down since the previous update; true in one update per press. |
 | `Input.GamepadLeftStick` | `GamepadLeftStick(pad int) (x, y float32)`: each from -1 to 1, with y growing downwards like the screen. 0, 0 at rest: a small dead zone around the center is removed. |
 | `Input.GamepadRightStick` | `GamepadRightStick(pad int) (x, y float32)`: the same for the right stick. |
 | `GamepadButton` | A gamepad button: one of the constants below. |
 
-| Constant | Xbox | PlayStation | Usual use |
-| --- | --- | --- | --- |
-| `GamepadA` | A, bottom | Cross | Jump, confirm |
-| `GamepadB` | B, right | Circle | Back, cancel |
-| `GamepadX` | X, left | Square | Second action |
-| `GamepadY` | Y, top | Triangle | Third action |
-| `GamepadUp` `GamepadDown` `GamepadLeft` `GamepadRight` | D-pad | D-pad | Move, menus |
-| `GamepadLeftBumper` `GamepadRightBumper` | LB, RB | L1, R1 | |
-| `GamepadLeftTrigger` `GamepadRightTrigger` | LT, RT, read as buttons | L2, R2 | |
-| `GamepadStart` | Menu | Options | Pause |
-| `GamepadBack` | View | Share, Select | |
-| `GamepadLeftStickButton` `GamepadRightStickButton` | Pressing a stick in | L3, R3 | |
+Buttons are read by where they are, not by what is printed on them: `GamepadA` is always the bottom face button, whatever it says. So a Nintendo gamepad's B, at the bottom, is `GamepadA`, and its A, on the right, is `GamepadB`. To show a button as the player sees it, ask `Input.GamepadType` and use its column:
+
+| Constant | Xbox | PlayStation | Nintendo | Usual use |
+| --- | --- | --- | --- | --- |
+| `GamepadA` | A, bottom | Cross | B | Jump, confirm |
+| `GamepadB` | B, right | Circle | A | Back, cancel |
+| `GamepadX` | X, left | Square | Y | Second action |
+| `GamepadY` | Y, top | Triangle | X | Third action |
+| `GamepadUp` `GamepadDown` `GamepadLeft` `GamepadRight` | D-pad | D-pad | D-pad | Move, menus |
+| `GamepadLeftBumper` `GamepadRightBumper` | LB, RB | L1, R1 | L, R | |
+| `GamepadLeftTrigger` `GamepadRightTrigger` | LT, RT, read as buttons | L2, R2 | ZL, ZR | |
+| `GamepadStart` | Menu | Options | + | Pause |
+| `GamepadBack` | View | Share, Select | − | |
+| `GamepadLeftStickButton` `GamepadRightStickButton` | Pressing a stick in | L3, R3 | Pressing a stick in | |
+
+```go
+// The prompt for building: the key, or the bottom button as it is labeled.
+func buildPrompt(input *golib.Input) string {
+	if !golib.PlayingWithGamepad() {
+		return "Space: build"
+	}
+	switch input.GamepadType(0) {
+	case golib.GamepadTypePlayStation:
+		return "Cross: build"
+	case golib.GamepadTypeNintendo:
+		return "B: build"
+	}
+	return "A: build"
+}
+```
 
 ## Drawing
 

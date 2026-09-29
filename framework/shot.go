@@ -411,8 +411,11 @@ func runShots(game Game, config Config, plan *shotPlan) error {
 	// A script with fingers in it is played with fingers, as a script with
 	// gamepad items has that gamepad connected: a game that draws its on-screen
 	// controls only for a player using them draws them in these shots, in every
-	// frame and not only in the ones a finger is down in.
+	// frame and not only in the ones a finger is down in. A script with gamepad
+	// items is played with the gamepad in the same way, so the game's prompts
+	// show its buttons from the first frame.
 	playingWithTouch.Store(len(plan.input.touches) > 0)
+	playingWithGamepad.Store(len(plan.input.gamepadButtons) > 0 || len(plan.input.sticks) > 0)
 	if device.WritesFiles {
 		if err := os.MkdirAll(plan.dir, 0o755); err != nil {
 			return fmt.Errorf("golib.Run: cannot create the screenshot folder: %w", err)
