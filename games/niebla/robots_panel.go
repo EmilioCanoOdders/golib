@@ -304,11 +304,14 @@ func robotPanelActivity(s *State, r Robot) string {
 	task := r.taskNow(s).name
 	switch task {
 	case taskBuild:
-		if job, _, ok := priorityJob(s); ok {
-			return "building " + string(job.Kind)
-		}
-		if b, ok := nearestDemolition(s, r); ok {
-			return "taking down " + string(b.Kind)
+		if work, ok := constructionFor(s, r); ok {
+			switch work.kind {
+			case constructionSite:
+				return "building " + string(s.Jobs[work.index].Kind)
+			case constructionDemolition:
+				return "taking down " +
+					string(s.Buildings[work.id].Kind)
+			}
 		}
 		return "laying pipe"
 	case taskCollect:

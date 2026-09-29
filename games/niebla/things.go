@@ -381,11 +381,13 @@ func robotCaption(s *State, r Robot) string {
 		}
 		return "loading " + postWord(r)
 	case taskBuild:
-		if _, _, hasJob := priorityJob(s); hasJob {
-			return "building"
-		}
-		if _, ok := nearestDemolition(s, r); ok {
-			return "taking down"
+		if task, ok := constructionFor(s, r); ok {
+			switch task.kind {
+			case constructionSite:
+				return "building"
+			case constructionDemolition:
+				return "taking down"
+			}
 		}
 		return "laying pipe"
 	case taskRepair:

@@ -13,10 +13,10 @@ import (
 // player's clicks, paid in lilac by the section and laid by the robots,
 // a section each.
 const (
-	pumpLitersPerSecond = 2.0                       // L/s a pump draws, shared by its pipes
-	pipeLitersPerSecond = 4.0                       // L/s one pipe carries at the most
+	pumpLitersPerSecond = 2.0 // L/s a pump draws, shared by its pipes
+	pipeLitersPerSecond = 4.0 // L/s one pipe carries at the most
 	// Maximum pipe inflow each tank absorbs before passing excess onward.
-	tankFillPerSecond   = 0.8 * pumpLitersPerSecond
+	tankFillPerSecond = 0.8 * pumpLitersPerSecond
 
 	pipePorts     = 3 // the pipes a building takes, in and out together
 	corePipePorts = 6 // and the core
@@ -332,58 +332,6 @@ func sectionSpot(path []PipePoint, section int64) PipePoint {
 	from := float64(section) * pipeSectionMeters
 	to := math.Min(from+pipeSectionMeters, pathLength(path))
 	return pathPointAt(path, (from+to)/2)
-}
-
-// freeSection returns the section of pipe a robot lays next: of the
-// oldest unlaid pipe's sections nobody else has claimed, the one nearest
-// to it, the lower one on a tie. A robot's claim is in the state
-// (Robot.Pipe, Robot.Section), which is how the others know.
-func freeSection(s *State, r Robot) (pipe, section int64, ok bool) {
-	for _, id := range sortedPipeIDs(s) {
-		p := s.Pipes[id]
-		if p.Left <= 0 {
-			continue
-		}
-		taken := make([]bool, p.Sections)
-		free := int64(0)
-		for i := range taken {
-			taken[i] = sectionLeft(p, int64(i)) <= 0
-		}
-		for _, other := range s.Robots {
-			claims := other.ID != r.ID && other.Pipe == id
-			if claims && other.Section >= 0 && other.Section < p.Sections {
-				taken[other.Section] = true
-			}
-		}
-		for _, is := range taken {
-			if !is {
-				free++
-			}
-		}
-		path, stands := pipeSpine(s, p)
-		if free == 0 || !stands {
-			continue
-		}
-		best := math.Inf(1)
-		for i := int64(0); i < p.Sections; i++ {
-			if taken[i] {
-				continue
-			}
-			gap := pointGap(PipePoint{r.X, r.Y}, sectionSpot(path, i))
-			if gap < best {
-				best, section = gap, i
-			}
-		}
-		return id, section, true
-	}
-	return 0, 0, false
-}
-
-// claimStands reports whether the section a robot claimed still asks for
-// work.
-func claimStands(s *State, r Robot) bool {
-	p, ok := s.Pipes[r.Pipe]
-	return ok && r.Pipe != 0 && sectionLeft(p, r.Section) > 0
 }
 
 // workSection puts a tick of robot work into a pipe's section.

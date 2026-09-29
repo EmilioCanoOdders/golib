@@ -342,6 +342,9 @@ func TestASquadsMarkPicksItsSquad(t *testing.T) {
 	if got, ok := scene.squadMarkAt(at.X, at.Y); !ok || got != home.ID {
 		t.Errorf("the ring picked squad %d, %v; want %d", got, ok, home.ID)
 	}
+	if !scene.pickSquadMark(at.X, at.Y) || scene.pickedSquad != home.ID {
+		t.Fatal("the attack ring did not open the squad card")
+	}
 	if _, ok := scene.squadMarkAt(4, 4); ok {
 		t.Errorf("a mark answered at the screen's corner")
 	}
@@ -351,6 +354,10 @@ func TestSquadMarkOpensItsCardAndTheCardArmsOrdering(t *testing.T) {
 	s := newGame()
 	noRivals(s)
 	home := squadOfTroopers(t, s, 2)
+	x, y := cellCenterUnits(home.Col+5, home.Row)
+	s.Squads[home.ID] = Squad{
+		Home: home.ID, Order: OrderGuard, X: x, Y: y,
+	}
 	scene := newPlayScene(s)
 
 	mark, ok := scene.squadMarkScreen(home.ID)
@@ -361,7 +368,9 @@ func TestSquadMarkOpensItsCardAndTheCardArmsOrdering(t *testing.T) {
 		got != home.ID {
 		t.Fatalf("the mark selected squad %d, %v; want %d", got, found, home.ID)
 	}
-	scene.selectSquad(home.ID)
+	if !scene.pickSquadMark(mark.X, mark.Y) {
+		t.Fatal("the pennant did not take the click")
+	}
 	if !scene.picked || scene.pickedSquad != home.ID || scene.ordering != 0 {
 		t.Fatal("selecting the squad mark should open its card without arming an order")
 	}
@@ -384,6 +393,33 @@ func TestSquadMarkOpensItsCardAndTheCardArmsOrdering(t *testing.T) {
 	scene.pressButton(*button)
 	if scene.ordering != home.ID {
 		t.Fatal("the give order button did not arm this squad")
+	}
+}
+
+func TestBuildingUnderGuardPennantWinsTheClick(t *testing.T) {
+	s := newGame()
+	noRivals(s)
+	home := squadOfTroopers(t, s, 2)
+	scene := newPlayScene(s)
+	mark, ok := scene.squadMarkScreen(home.ID)
+	if !ok {
+		t.Fatal("the war factory's guard pennant is missing")
+	}
+	if !scene.pickSquadMark(mark.X, mark.Y) {
+		t.Fatal("the pennant did not take the click")
+	}
+	if !scene.picked || scene.pickedSquad != 0 ||
+		scene.pickedThing != buildingThing(home).ID {
+		t.Fatalf("the pennant opened squad %d and thing %q, want the war factory",
+			scene.pickedSquad, scene.pickedThing)
+	}
+	button := scene.inspectionPanel().findButton(buttonOrder)
+	if button == nil || button.thing.Type != TypeWarFactory {
+		t.Fatal("the war factory card has no give order button")
+	}
+	scene.pressButton(*button)
+	if scene.ordering != home.ID {
+		t.Fatal("the war factory's button did not arm its squad")
 	}
 }
 

@@ -87,7 +87,7 @@ func (a AssignRobot) apply(s *State) {
 	}
 	r.PostCol, r.PostRow = a.Col, a.Row
 	r.WorkTicks, r.Pile = 0, 0
-	r.Pipe, r.Section = 0, 0
+	r.clearConstruction()
 	s.Robots[r.ID] = r
 }
 

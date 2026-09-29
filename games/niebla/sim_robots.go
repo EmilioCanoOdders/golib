@@ -12,9 +12,9 @@ import (
 // coming back for more, so a worked deposit shows a constant coming and
 // going.
 const (
-	startingBuilders        = 1    // builder the core gives the colony
-	robotBuilderHealth      = 60.0 // hull points for builders
-	robotWorkerHealth       = 60.0 // hull points for workers
+	startingBuilders   = 1    // builder the core gives the colony
+	robotBuilderHealth = 60.0 // hull points for builders
+	robotWorkerHealth  = 60.0 // hull points for workers
 
 	robotSpeed       = 30.0      // units (m) per second
 	robotLoadTicks   = 150       // ticks of loading at a deposit: 2.5 s
@@ -151,9 +151,7 @@ func (r *Robot) taskNow(s *State) robotTask {
 }
 
 // stepRobot burns the tank and gives the tick to the robot's task. The
-// robot carries no plan: the task is derived from the state every tick.
-// The one thing it remembers is the section of pipe it claimed, so the
-// others take another, and only while it builds.
+// robot carries no plan beyond its reserved construction task.
 func stepRobot(s *State, r *Robot) {
 	// A post with nothing left to give holds nobody: it ran dry under
 	// another robot's hands, or an old save names ground the region has
@@ -164,6 +162,11 @@ func stepRobot(s *State, r *Robot) {
 	if r.WorkTicks > 0 && r.Pile == 0 && r.hasPost() &&
 		oilPoolInFog(s, r.PostCol, r.PostRow) {
 		r.WorkTicks = 0
+	}
+	if r.Kind == RobotBuilder {
+		if _, valid := claimedConstruction(s, *r); !valid {
+			r.clearConstruction()
+		}
 	}
 	if r.Kind == RobotCombat {
 		r.shoot(s)
@@ -178,9 +181,6 @@ func stepRobot(s *State, r *Robot) {
 		r.Tank = math.Max(0, r.Tank-burn)
 	}
 	task := r.taskNow(s)
-	if task.name != taskBuild {
-		r.Pipe, r.Section = 0, 0
-	}
 	startX, startY := r.X, r.Y
 	task.step(r, s)
 	moved := math.Hypot(r.X-startX, r.Y-startY) > 1e-4
@@ -270,71 +270,44 @@ func (r *Robot) building(s *State) bool {
 	if r.Kind != RobotBuilder {
 		return false
 	}
-	if _, _, hasJob := priorityJob(s); hasJob {
+	if _, ok := claimedConstruction(s, *r); ok {
 		return true
 	}
-	if _, ok := nearestDemolition(s, *r); ok {
-		return true
-	}
-	if claimStands(s, *r) {
-		return true
-	}
-	_, _, free := freeSection(s, *r)
-	return free
+	_, ok := freeConstruction(s, *r)
+	return ok
 }
 
-// Builders stand on their cell's edge, spread by ID, so the rising body
-// doesn't swallow them. Sites come first, then buildings ordered down,
-// and with none of either they lay pipe.
 func (r *Robot) stepBuild(s *State) {
-	job, index, hasJob := priorityJob(s)
-	if hasJob {
-		r.Pipe, r.Section = 0, 0
-		cx, cy := cellCenterUnits(job.Col, job.Row)
-		angle := float64(r.ID) * goldenAngle
-		if r.walkTowards(s, cx+math.Cos(angle)*11, cy+math.Sin(angle)*11) {
-			s.workJob(index)
-		}
-		return
-	}
-	if b, ok := nearestDemolition(s, *r); ok {
-		r.Pipe, r.Section = 0, 0
-		cx, cy := cellCenterUnits(b.Col, b.Row)
-		angle := float64(r.ID) * goldenAngle
-		if r.walkTowards(s, cx+math.Cos(angle)*11, cy+math.Sin(angle)*11) {
-			s.workDemolish(b.ID)
-		}
-		return
-	}
-	r.stepLayPipe(s)
-}
-
-// stepLayPipe lays one section of pipe: the robot claims the next one
-// nobody has, walks to it and stands by it until it is laid, then claims
-// another. The claim is in the state, so every robot takes its own
-// section and a pipe is laid by as many hands as there are.
-func (r *Robot) stepLayPipe(s *State) {
-	if !claimStands(s, *r) {
-		pipe, section, free := freeSection(s, *r)
-		if !free {
-			r.Pipe, r.Section = 0, 0
+	task, ok := claimedConstruction(s, *r)
+	if !ok {
+		task, ok = freeConstruction(s, *r)
+		if !ok {
+			r.clearConstruction()
 			return
 		}
-		r.Pipe, r.Section = pipe, section
+		r.reserveConstruction(task)
 	}
-	path, ok := pipeSpine(s, s.Pipes[r.Pipe])
-	if !ok {
-		r.Pipe, r.Section = 0, 0
-		return
-	}
-	spot := sectionSpot(path, r.Section)
 	angle := float64(r.ID) * goldenAngle
-	x := spot.X + math.Cos(angle)*pipeLayStandoff
-	y := spot.Y + math.Sin(angle)*pipeLayStandoff
+	standoff := 11.0
+	if task.kind == constructionPipe {
+		standoff = pipeLayStandoff
+	}
+	x := task.spot.X + math.Cos(angle)*standoff
+	y := task.spot.Y + math.Sin(angle)*standoff
 	if r.walkTowards(s, x, y) {
-		s.workSection(r.Pipe, r.Section)
-		if !claimStands(s, *r) {
-			r.Pipe, r.Section = 0, 0
+		switch task.kind {
+		case constructionSite:
+			s.workJob(task.index)
+		case constructionDemolition:
+			s.workDemolish(task.id)
+		case constructionPipe:
+			s.workSection(task.id, task.section)
+		}
+	}
+	if _, valid := claimedConstruction(s, *r); !valid {
+		r.clearConstruction()
+		if next, free := freeConstruction(s, *r); free {
+			r.reserveConstruction(next)
 		}
 	}
 }
@@ -616,20 +589,6 @@ func parkCenter() (x, y float64) {
 	cx, cy := tileCenterUnits(coreCol, coreRow)
 	lines := float64(parkSlots/parkRankSize - 1)
 	return cx + parkFromCore + lines*parkSpacing/2, cy
-}
-
-// priorityJob returns the oldest protector job, or otherwise the oldest
-// build job, along with its place in the queue.
-func priorityJob(s *State) (Job, int, bool) {
-	if len(s.Jobs) == 0 {
-		return Job{}, 0, false
-	}
-	for i, job := range s.Jobs {
-		if job.Kind == BuildingProtector {
-			return job, i, true
-		}
-	}
-	return s.Jobs[0], 0, true
 }
 
 // remainingAt returns what is left in the deposit patch a tile belongs

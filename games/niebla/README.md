@@ -342,23 +342,24 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | `menu.go` | The title screen: the game's name, the player's number, Play and Quit; the `menuButton` hit-testing both scenes' menus use |
 | `identity.go` | Who is playing: the machine's ID (registry value, platform UUID or `/etc/machine-id`), hashed with the game's salt into `player`, the number the menu shows and a later server hands tokens out by |
 | `store.go` | The local database (SQLite): players, saves and the machine table; `saveBase`/`resumeState`, the scenes' door into it; the DB path, `:memory:` under `golib shot` |
-| `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); camera, selection, open cards, robot roster, individual assignment and pointer modes live here, never serialized; unit cards follow a directly selected robot or rival vehicle, squad cards follow their pennant or target ring; the cell under a guard pennant selects instead of opening the build menu; the schematics callout and one-use building placement mode, rivals' HUD, reach overlays, floating cost numbers and autosave are view state too |
+| `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); camera, selection, open cards, robot roster, individual assignment and pointer modes live here, never serialized; unit cards follow a directly selected robot or rival vehicle, squad cards follow their pennant on free ground or target ring; a guard pennant on a building selects the building, and its cell selects instead of opening the build menu; the schematics callout and one-use building placement mode, rivals' HUD, reach overlays, floating cost numbers and autosave are view state too |
 | `radial.go` | The build menu: the two rings a click on empty ground opens - the build groups (industry, military, logistics), then the group's blueprints - laid out around the cell every frame, and `backRadial`/`closeRadial`/`openRadial` for the scene |
 | `glyphs.go` | The marks the build menu wears: a group's own glyph, a blueprint's body in miniature - the very `drawBuilding` the region draws, scaled into the menu's circle, so one graphic serves both - and the pipe's mark, the tube the region lifts on posts |
-| `state.go` | The simulation's state and save-schema version 12: builders, workers, troopers, mechanics and rivals with saved hull, facing and stillness ticks; rival-city crawler reconstruction and refounding timers; active older city forces gain a crawler when they lack antimist; the first scout's saved core-bubble crossing tick; buildings, jobs, piles and pipes with mite wear; stock, deposits, weather and rival tables; one-tick unit, building-death and resource-cost receipts feed view effects without being saved; `newGame` gives the colony one fueled builder |
+| `state.go` | The simulation's state and save-schema version 12: builders, workers, troopers, mechanics and rivals with saved hull, facing and stillness ticks; builders keep site, demolition or pipe-section reservations; rival-city crawler reconstruction and refounding timers; active older city forces gain a crawler when they lack antimist; the first scout's saved core-bubble crossing tick; buildings, jobs, piles and pipes with mite wear; stock, deposits, weather and rival tables; one-tick unit, building-death and resource-cost receipts feed view effects without being saved; `newGame` gives the colony one fueled builder |
 | `costs.go` | Transient resource-cost receipts from placement, production, repairs, upkeep and weapons; never saved |
 | `actions.go` | The actions (`Tick`, `SendRobot`, ID-specific `AssignRobot` and `RecallRobot`, `MarkBuilding`, typed `QueueRobot`, `QueueMechanic`, `Demolish`, `CancelJob`, `LayPipe`, `RemovePipe`, `AckTech`, the dev tools' city and visit actions, and `OrderSquad`) and `Apply`, the only door into the state |
-| `sim_robots.go` | The robots' rules and tuning: `robotDay`, common priorities, builders alone claiming construction and pipe work, workers mining posts, builders and unassigned workers collecting piles, oil-pool waits under fog, stationary hull damage and tank wear, `postRobots` and worker-only `pickRobot`, movement, pipe-section claims and idle ranks |
+| `sim_robots.go` | The robots' rules and tuning: `robotDay`, common priorities, builders working their reserved tasks, workers mining posts, builders and unassigned workers collecting piles, oil-pool waits under fog, stationary hull damage and tank wear, `postRobots` and worker-only `pickRobot`, movement and idle ranks |
+| `sim_construction.go` | One construction queue for builder reservations: nearest available site, demolition or pipe section, protector sites first; claims persist across refueling and release on completion, cancellation or death |
 | `sim_piles.go` | Demolition, unit wrecks and loose items: `canDemolish`, the 25% unit recovery (`dropRobotWreck`), the piles (`dropPile`, `pileOffer`, `nearestPile`, `takeFromPile`), the stores' free room and `storeSpot`, where a load is unloaded |
 | `sim_buildings.go` | The buildings' rules and tuning: blueprints' costs, placement and safe zones, protector upkeep, storage, refueling and production eligibility for builders, workers, troopers and mechanics; `canQueueUnit` is shared by the cards and queue action |
 | `sim_oil.go` | Oil's spendable tanks and dedicated protector reserves: `oilTotal`, `oilCap`, `payOil`, all physical tank capacity, and `haulTank` and `refuelTank`, where a robot carries oil to and refills from |
-| `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the robots' work on it, `stepPipes` and `pumpStatus`; fog-covered oil pools stop pumps without losing oil, protectors clear them, tanks fill from pipes at a shared 1.6 L/s limit and pass excess onward, while protectors keep their reserve and upkeep; each pipe records offered, moved and cumulative liters for the view |
+| `sim_pipes.go` | Pumps and pipes: the `Pipe`, its curve (`pipePath`, a centripetal Catmull-Rom spline through the bends), sections and cost, `canJoin` and the ports, the sections' remaining work, `stepPipes` and `pumpStatus`; fog-covered oil pools stop pumps without losing oil, protectors clear them, tanks fill from pipes at a shared 1.6 L/s limit and pass excess onward, while protectors keep their reserve and upkeep; each pipe records offered, moved and cumulative liters for the view |
 | `sim_fog.go` | The fog's law and tuning: cycles, swells, local exposure (`fogExposureAt`), oil pools covered outside bubbles, where the line stands now (`fogLineNow`), and the drag a walker keeps (`fogDrag`) |
 | `sim_enemies.go` | The rivals' timing and movement: `Enemy` with its saved facing octant and mite-stillness ticks, `Party`, `Raids`, `Mark` and `Report`; the one-minute scout and follow-up clocks, the first no-camp attack, raider growth by visit up to four, city arrivals, party stages, siphoning and return, the first scout's saved outward crossing tick of the core bubble, mite damage and wrecks, guard posts whose shots report oil costs, the shared 130 m small-arms reach, repair-protocol battle markers and legacy trigger migration |
 | `sim_cities.go` | Rival cities: serializable production, crawler-first replacement, sequential rebuilding and refounding, construction-site mite damage, deterministic 45-second crawler and building steps and 30-second sortie-vehicle steps, finite local oil/mineral reserves, city arrival and old-save migration, city battalions assembled one vehicle at a time to five before artillery replaces the crawler, antimist replacement, unloading, 90-second rests and squad replacement; records the pressure city's first sortie |
 | `sim_tech.go` | The schematics: the robot factory is the opening drop, first delivery unlocks infrastructure, the guard post follows the first scout's return past the core bubble, and the frontier kit follows one minute after that crossing (old saves keep the 5:30 trigger); the war factory follows the first-city founding; artillery follows three ended normal attacks (old saves keep the rival-factory trigger); the repair protocol waits for rival building damage and a city-force lull (minute 12 if no first force is produced); `stepTech`, `kindUnlocked`, `dropArrived` and `techPending` derive arrivals and `State.Tech` keeps which drops were opened |
 | `sim_squads.go` | The military units' law and tuning: troopers (`RobotCombat`) and mechanics (`RobotRepair`), the `Squad` and its orders (`squadOf`, `stepSquads`), a trooper's line of the day (`stepSquad`) and its gun (`shoot`), which reports ammunition oil costs, the shared 130 m small-arms reach, the war factory's capacity (`squadRoom`, `mechanicRoom`), and rivals targeting defenders (`stepEnemyGuns`) |
-| `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right with a trooper icon, unit count and key (`drawSquadStrip`, `drawTrooperIcon`, `squadBoxRect`, `squadBoxAt`), selection of the pennant or target ring and the squad card's `give order` button (`selectSquad`, `squadMarkAt`, `squadMarkScreen`), guard-pennant cell hit-testing (`squadPennantInCell`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
+| `squads.go` | The squads on the screen: the number keys that call one (`squadSlots`, 1 the oldest war factory), the boxes at the top right with a trooper icon, unit count and key (`drawSquadStrip`, `drawTrooperIcon`, `squadBoxRect`, `squadBoxAt`), selection of the pennant or target ring with priority for a building under a guard pennant (`pickSquadMark`, `selectSquad`, `squadMarkAt`, `squadMarkScreen`), guard-pennant cell hit-testing (`squadPennantInCell`), the pointer's mode that gives an order (`updateOrdering`, `enemyUnder`), the pennant and the ring (`drawSquadMarks`) and `squadWords` for the cards |
 | `sim_shots.go` | Shots as state: bullets that follow their target and shells that burst on a spot (`fire`, `stepShots`, `land`), vulnerable colony units, rival-shot building damage markers, building health, proportional repair charges and mechanic fuel with cost receipts, what the colony sees (`seen`) and its artillery with shell cost receipts (`stepArtillery`) |
 | `shots.go` | Shots and building collapses on the screen, for looks only: bullets as streaks, shells on their arc over a shadow, pools of light added over the ground and what stands on it (`lightPool`), guns' flashes, and bursts of sparks, embers, smoke and metal shards; unit and building death effects scale to their kind, and projectile impacts merge with nearby falls; `fxField` learns from transient events and shots; view, never state |
 | `spending.go` | Floating oil and lilac costs above the building, pipe or robot that spent them; recurring expenses become one-second totals, while robot carrying/fog fuel burn and refills stay hidden; view, never state |
@@ -399,8 +400,9 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | `unit_picking_test.go` | Opaque bounds for every model and facing, frontmost sprite targeting, direct unit cards following movement, rival health details and closing cards for units that disappear |
 | `shots_test.go` | Small-arms reach limits, the first raid against one guard post over three seeds, bullet and shell impacts, building damage and collapse effects, proportional repair costs and mechanic fuel, transient death receipts, explosion scaling/merging, defender damage and wrecks, and old war-factory saves |
 | `repair_tech_test.go` | Repair-protocol triggers and lull boundaries, rival-fire markers that survive building destruction, rejected locked mechanic orders, and legacy-save compatibility |
-| `squads_test.go` | Trooper production and squad behavior, mechanic limits, target selection, health and wrecks; pennants open squad cards whose order button arms the pointer, while their ground cells select instead of opening construction; squads can attack the first incoming crawler without a camp delay |
+| `squads_test.go` | Trooper production and squad behavior, mechanic limits, target selection, health and wrecks; pennants on free ground open squad cards, pennants on buildings open building cards, and both offer the order button; their ground cells select instead of opening construction; squads can attack the first incoming crawler without a camp delay |
 | `world_test.go` | The simulation driven directly: the starting builder, explicit individual assignment, worker-only auto-assignment, role-specific carrying, loot and construction priorities, migration, dry deposits, determinism and JSON round trip |
+| `sim_construction_test.go` | Parallel building reservations, protector priority without interrupting a current task, nearest pipe sections beside building sites, reclaiming cancelled or lost tasks, and continued work after loading a save |
 | `economy_test.go` | The deterministic economy probe: four legal opening policies over three seeds, sampled each minute into an opt-in CSV with the scout's core crossing tick, protector fuel, party and city production, repair milestones, artillery's arrival tick, mechanic count and outstanding building damage |
 | `buildings_test.go` | The buildings driven directly: five-second marked construction, payment, fog placement, factory robots, refueling, digestion, full stores, silos and the protector's bubble |
 | `costs_test.go` | Placement and production receipts, mechanic repair oil, excluded robot fuel, one-second grouping of regular costs, four-second protector totals, and the optional `NIEBLA_COST_SHOT_STATE` visual fixture |
@@ -443,13 +445,15 @@ robot-sized form:
   `RecallRobot`, typed `QueueRobot`, `QueueMechanic`);
   `Apply` mutates the state it is given — one owner, no copies — and is
   total and deterministic, so a seed plus an action log replays a game.
-- Robots carry no task plan: `stepRobot` (`sim_robots.go`) derives each
-  tick from `robotDay`. Everyone brings carried loads home and minds its
-  tank first. Builders then finish loading, build protector jobs before
-  other sites, lay pipe, collect piles and work an explicitly assigned
-  post; workers skip construction and pipe work, returning to an assigned
-  post or collecting piles when unassigned. Mechanics and troopers use
-  their own task lines.
+- `stepRobot` (`sim_robots.go`) derives each tick from `robotDay`. Everyone
+  brings carried loads home and minds its tank first. Builders then finish
+  loading and continue a reserved construction task or claim the nearest
+  available one, prioritizing protector sites over other sites, demolitions
+  and pipe sections; they collect piles and work an assigned post only
+  when no construction remains. Workers skip construction, returning to
+  a post or collecting piles when unassigned. Mechanics and troopers use
+  their own task lines. The claim is saved on the robot and survives
+  refueling, but not cancellation, death or an explicit assignment.
   Captions read the same priority (`Robot.taskNow`), and actions change
   saved assignments.
   Anything that iterates entities iterates them in sorted ID order.
@@ -520,9 +524,10 @@ returns with that square dimmed and disabled, and closes automatically when
 its last building is used. Pipes are informational there and are still laid
 from an oil tank's card.
 
-The job joins the queue; builders raise protector jobs before other jobs,
-oldest first within each group, standing on the cell's edge
-(spread by ID) where the rising body can't swallow them, and the site
+The job joins the queue; each builder reserves a different site, demolition
+or pipe section, choosing the nearest free task with protector sites first.
+It completes its claim before choosing another, and stands on the cell's edge
+(spread by ID) where the rising body can't swallow it. The site
 shows the part already built in solid colors inside a **wireframe** of
 the whole body, with the work's progress bar under the cell, drawn over
 the fog so a site in the mist stays visible.
@@ -608,18 +613,17 @@ cut into `pipeSpanSamples` pieces a span, with a `sagPoint` when there
 are no bends - so the sim (length, sections, where the robots stand) and
 the view (the drawing, the bands) read the same line. `Sections` is what
 was paid and `Left` the robot work owed, which goes in a section at a
-time, by many hands: once no site is left, `stepLayPipe` has a robot
-claim a section (`freeSection`: of the oldest unlaid pipe's sections
-nobody else holds, the nearest), walk to its middle (`sectionSpot`) and
-stand by it for its `pipeSectionWorkTicks`, then claim another. The
-claim is state - `Robot.Pipe`, `Robot.Section` - because the other
-robots read it; it is dropped the tick the robot's task stops being the
-build line, and it dies with the robot. `Pipe.SectionLeft` holds the
+time, by many hands: `stepBuild` reserves the nearest available task,
+including pipe sections, walks to its middle (`sectionSpot`) and stands
+by it for its `pipeSectionWorkTicks`, then reserves another. The claim is
+state - `Robot.Pipe`, `Robot.Section` - because the other robots read it;
+it survives refueling but releases when the section is finished or
+removed, or when the robot dies. `Pipe.SectionLeft` holds the
 work left by section, and is nil before the first tick of work and once
 the pipe is laid, when `Left` alone reads as work put in from the source
 out (`sectionLeft`), which is how a save from before the sections
-loads. `building` claims a robot only while it holds a section or one is
-free, so the robots a pipe has no section for go on with their day.
+loads. `building` claims a robot only while its construction task remains
+or another is free, so robots with nothing to build go on with their day.
 `stepPipes` runs after the factories, in source-to-destination order. A
 source divides its available oil equally among laid outlets that can
 accept it; each pipe carries up to `pipeLitersPerSecond`. Every tank takes
@@ -794,7 +798,7 @@ was building, and what the stores lose the roof for (`spillOverflow`).
 A pile holds its cell against `canPlace` until its last item leaves,
 which deletes it. A protector can't go while it alone shelters another
 building or a site (`canDemolish`, on `shelteredWithout`). Builders and
-unassigned workers pick piles up after build jobs and before their posts:
+unassigned workers pick piles up after construction and before their posts:
 the nearest pile that holds something the stores have free room for
 (`freeRoom` counts what is already on its way home, so nobody loads what
 won't fit), one kind per trip, lilac first, loading for `robotLoadTicks`;
@@ -977,14 +981,16 @@ squad, the same key again takes it back, and the click that pressed the
 key never orders by itself, since arming lands after the update's
 inspection. A squad's box at the top right calls it too, by click
 (`updateSquadBoxes`, taken with the dev tools' click before the region
-sees the pointer). Clicking a pennant or target ring selects the squad
-and opens its tooltip beside the mark (`selectSquad`,
-`tooltipLayoutForSquad`); it shows the current order and troop count.
-The card follows a moving attack ring. Its `give order` button arms the
-pointer, while clicking the mark alone only selects it.
+sees the pointer). Clicking a pennant on free ground or a target ring
+selects the squad and opens its tooltip beside the mark (`pickSquadMark`,
+`selectSquad`, `tooltipLayoutForSquad`); it shows the current order and
+troop count. The card follows a moving attack ring. A guard pennant on
+a building selects that building instead, including its own war factory;
+that card also offers `give order`. Clicking a mark alone never arms the
+pointer.
 The guard pennant's ground cell also selects as though a building occupied
-it, so a click there does not open the build menu; the pennant icon remains
-clickable for its squad card.
+it, so a click there does not open the build menu; the pennant icon opens
+the squad card only where no building stands underneath it.
 `drawSquadStrip` paints the squads' boxes at the top right.
 
 On the screen (`enemies.go`) the marks lie on the ground under

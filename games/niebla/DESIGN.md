@@ -142,18 +142,23 @@ player solves the layout, and the robots solve the walking. Builders and
 workers are separate roles, so a construction job never pulls a worker away
 from a deposit.
 
-When a protector site is waiting, robots build it before any other
-construction. Protectors keep their marked order, as do the remaining
-jobs.
+Each builder reserves one task: a building site, a demolition or one pipe
+section. Free builders choose the nearest unreserved task, with protector
+sites ahead of everything else. A reserved task stays with its builder
+until it is finished, even if a protector is marked meanwhile; hauling
+and refueling pause the work without giving the reservation away. Once a
+task finishes, the builder reserves the next available one immediately.
+Cancellation or the builder's loss releases the task. Equal distances use
+the jobs' marked order, then building IDs and pipe IDs and section numbers.
 
 ## Demolition and loose items
 What is built can be unbuilt, and nothing is lost but the walking. (What a rival shell brings down goes the same way with half the refund: see [The rivals](#the-rivals).)
 
 **The trash button.** The card of a building, and of a site still being raised, carries a small button with a trash can, at the right of the card's header. The core has none: it is indestructible both ways. The button asks twice: the first press arms it (the can turns red, the card says `demolish?`), the second orders the building taken down - or cancels the site at once, which is bookkeeping and needs no one - and a click anywhere else disarms it. Arming is view, not state; only the second press sends the action (`Demolish` for a building, `CancelJob` for a site). A building already ordered down wears no can: its headline counts the work down (`demolishing, 4 s`).
 
-**Taking it down is work, like raising it.** The order stands on the building (`Building.Demolish`, the ticks of work left) and a builder walks over and stands by it, working it down for `demolishWorkTicks` 300 - 5 s, half of raising's 10. The order joins the builders' line after the sites and before the pipes, so it waits its turn like a marking, and several builders stack on one takedown as they do on one site. The building works on until it falls: a factory whose robot is nearly done may well roll it out before the builder arrives. The fall itself is a view-only event: metal fragments, sparks and dust fly from its footprint, and its tasks are canceled as it leaves the ground:
+**Taking it down is work, like raising it.** The order stands on the building (`Building.Demolish`, the ticks of work left) and one builder reserves it, walks over and stands by it, working it down for `demolishWorkTicks` 300 - 5 s. It competes with ordinary sites and pipe sections by proximity, after unreserved protector sites. The building works on until it falls: a factory whose robot is nearly done may well roll it out before the builder arrives. The fall itself is a view-only event: metal fragments, sparks and dust fly from its footprint, and its tasks are canceled as it leaves the ground:
 1. The building leaves the state - no ruin left behind. A site leaves the job queue at the button, no work asked.
-2. Every task it had under way is cancelled: a factory's half-built robot never rolls out, a site's progress is gone. Robots carry no plan, so nobody has to be told: a builder finds no job the next tick, a robot refueling at a charger that is gone walks to the next nearest post.
+2. Every task it had under way is cancelled: a factory's half-built robot never rolls out, a site's progress is gone. A builder with a claim on the building finds another construction task on the next tick; a robot refueling at a charger that is gone walks to the next nearest post.
 3. Everything the building was made of or held falls to the ground where it stood, as one **pile**: its whole blueprint cost (`demolishRefund` 1.0, a dial), plus the cost of the robot a factory was building, plus whatever the stores no longer have a roof for - the stores are one stock under many roofs, so a silo or a warehouse "contains" the part of the stock that stops fitting when its roof goes, and that overflow leaves `State.Stock` and joins the pile. Nothing goes straight back to the stores: a refund is a haul.
 
 Weapons and mites make a louder fall than an ordered dismantling. The audio
@@ -239,7 +244,7 @@ only its upkeep; nothing is lost.
 
 **Laying a pipe** is drawing it. The card of a pump, a silo, a charger, a protector or the core carries `lay pipe` while it has a port free, which arms the pointer: every left click on the ground adds a **bend**, a click on a tank - anywhere on its body; every one the pipe may end at wears a ring, and the label by the pointer says `to silo` before the click - ends the pipe there and marks it, and a right click takes the last bend back, or puts the pointer away when there is none. A building within reach wins over the core beside it, whose monolith is tall and would steal the click. A click on the pipe's **last node** (its last bend, or its source while it has none) opens a small menu around it: `connect`, which ends the pipe at the tank nearest that node, the curve, the price and the tank's name showing it before the pick; `undo`, which takes the node back; and `cancel`, which drops the pipe in hand. The pipe is a curve through the clicks - a centripetal Catmull-Rom spline, which passes through every bend and never loops between a short span and a long one - and with no bends at all it sags a little to one side instead of running like a ruler's line.
 
-**The price is by the section** (`pipeSectionMeters` 25 m, a cell's side; `pipeSectionLilac` 5 kg apiece), paid when the pipe is marked. Marking is building here too, and it is work for many hands: a robot **claims a section** - of the oldest unlaid pipe's sections nobody else holds, the nearest to it -, tells the others by the claim itself, which is state (`Robot.Pipe`, `Robot.Section`), walks to the section's middle and **stands by it** for two seconds of work (`pipeSectionWorkTicks` 120), then claims another. So a pipe is laid in patches, by as many robots as it has free sections, the laid sections standing on their posts among the ghost of the rest, and the robots a pipe has no section for go on with their day. A claim lasts while the robot's task is the build line and dies with the robot, so a section is never orphaned. A pipe through the mist costs what walking and standing in the mist costs. Laying pipe is part of the build line of the robot's day, after the sites and the takedowns.
+**The price is by the section** (`pipeSectionMeters` 25 m, a cell's side; `pipeSectionLilac` 5 kg apiece), paid when the pipe is marked. Marking is building here too, and it is work for many hands: a robot **claims a section** - the nearest unclaimed construction task after protector sites -, tells the others by the claim itself, which is state (`Robot.Pipe`, `Robot.Section`), walks to the section's middle and **stands by it** for two seconds of work (`pipeSectionWorkTicks` 120), then claims another available task. So a pipe is laid in patches, by as many robots as it has free sections, the laid sections standing on their posts among the ghost of the rest, and the robots a pipe has no section for go on with their day. A claim survives refueling, is released when the task disappears and dies with the robot, so a section is never orphaned. A pipe through the mist costs what walking and standing in the mist costs.
 
 **It shows.** A pipe runs above the ground (`pipeLiftUnits` 9 m, never
 under 5 px), on posts a section apart, and casts its shadow on the ground,
@@ -465,9 +470,11 @@ static data generated from `State.Seed`, never state. `play.go` and
     show their remaining health and say mechanics can repair them; picked
     guard posts and artillery show their reach; bullets and shells fly
     with their light.
-   - A squad's pennant or attack ring opens its card beside the mark. It
-    shows the current order and troop count; `give order` arms the pointer.
-    Selecting the mark alone never enters order mode.
+   - A squad's pennant on free ground or its attack ring opens its card
+     beside the mark. It shows the current order and troop count;
+     `give order` arms the pointer. A pennant on a building selects the
+     building instead, whose card also has `give order`. Selecting a
+     mark alone never enters order mode.
     The ground cell under a guard pennant selects as though a building
     occupied it, instead of opening the build menu; the pennant itself
     remains clickable.
@@ -518,7 +525,7 @@ report may each have a guide at once, with all guides kept apart.
 | Mouse left, after a pump's `lay pipe` | On the ground: a bend of the pipe. On a ringed tank (silo, charger, core): the pipe's end, which marks it. On the pipe's last node: its menu (`connect` to the nearest store, `undo`, `cancel`). Right click: the menu away, the last bend back, or out of the mode |
 | Mouse left, after `give order` on a war factory or squad card | On a rival vehicle's body: the squad attacks its party, that vehicle first. On the ground: the squad guards that spot. A translucent pennant previews where the green guard pennant will stand. Right click cancels; the mode also expires after 20 seconds without an order |
 | 1-9 | Call a squad: 1 is the first war factory raised, 2 the next. The key arms the order the same way `give order` does (one click orders, right click puts it away, or wait 20 seconds); the same key again takes it back. A squad's box at the top right - tank icon, unit count, the key below - calls it too |
-| Mouse left, on a squad's pennant or ring | Open its card beside the mark; press `give order` there to choose a target or guard spot |
+| Mouse left, on a squad's pennant or ring | Open its card beside the mark, except when a pennant stands on a building: select the building instead. Press `give order` on either card to choose a target or guard spot |
 | Mouse left, on a card's trash can | First press arms it (`demolish?`), the second orders the building taken down - a builder goes and works it - or cancels a site; a click anywhere else disarms |
 | Mouse right, clicked | Close the menu / deselect / close the schematics callout; during building placement, cancel and restore the callout |
 | Esc | In the region: save and return to the menu. In the menu: quit |
@@ -581,7 +588,7 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - Marking a colony building pays its cost immediately; one builder raises
   it in five seconds of work. Each rival city building takes 45 seconds.
 - Builders first bring home any load they already carry and refuel when
-  low, then raise buildings, take ordered ones down and lay pipes before
+  low, then work reserved sites, demolitions and pipe sections before
   collecting piles or working their own deposit post. Workers carry loads
   home, refuel and finish loading; assigned workers return to their post,
   while unassigned workers collect piles. Workers never build or lay pipes.
@@ -934,8 +941,9 @@ once during migration. Only an active protector shelters buildings outside
 the core bubble. The fog slows every robot by `fogSpeedFactor` 0.5 at full
 exposure; bubbles cancel the drag.
 
-Robots carry no task plan: `stepRobot` derives their work from the saved
-state each tick. Positions are floats in world units, and deposits are
+Robots keep only their current construction reservation: `stepRobot`
+derives the rest of their work from the saved state each tick. Positions
+are floats in world units, and deposits are
 patches whose remaining resources live in `State.Drain`. Several robots
 may work one patch; each still gets its own post position.
 
@@ -1034,6 +1042,16 @@ all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+- 2026-09-30: a guard pennant on a building now selects that building,
+  including the war factory it guards by default. Its `give order` button
+  still places the squad's waypoint; pennants on free ground and attack
+  rings still open squad cards. Pinned by `TestBuildingUnderGuardPennantWinsTheClick`.
+- 2026-09-29: builders reserve independent building sites, demolitions and
+  pipe sections from one construction queue. Protectors take priority when
+  choosing a new task; otherwise proximity wins. A task already claimed
+  finishes first, even when a new protector appears, and the next task is
+  reserved as soon as work ends. Refueling preserves claims, while cancelled
+  work and dead builders release them. Pinned by `sim_construction_test.go`.
 - 2026-09-28: rival cities now rely on their resident crawler to build. A
   replacement crawler takes priority over missing structures, while a city
   without any surviving structures is razed. The resident uses a distinct

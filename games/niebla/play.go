@@ -535,10 +535,7 @@ func (s *playScene) updateInspection(input *golib.Input, clickTaken bool) {
 		if s.pickPumpAt(mx, my) {
 			return
 		}
-		// A squad's mark opens its card: the pennant of a guarding one,
-		// or the ring around an attack's focus.
-		if home, ok := s.squadMarkAt(mx, my); ok {
-			s.selectSquad(home)
+		if s.pickSquadMark(mx, my) {
 			return
 		}
 		if hit, ok := s.hoveredUnit(); ok {

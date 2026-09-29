@@ -172,6 +172,28 @@ func (s *playScene) squadMarkAt(mx, my float32) (int64, bool) {
 	return best, found
 }
 
+func (s *playScene) pickSquadMark(mx, my float32) bool {
+	home, ok := s.squadMarkAt(mx, my)
+	if !ok {
+		return false
+	}
+	sq := squadOf(s.state, home)
+	if sq.Order == OrderGuard {
+		gx, gy := project(float32(sq.X), float32(sq.Y))
+		col, row, inside := cellAtWorld(float64(gx), float64(gy))
+		if inside {
+			if b, stands := buildingAt(s.state, col, row); stands {
+				s.pickCellOrBuild(col, row, true)
+				s.pickedThing = buildingThing(b).ID
+				s.closeRadial()
+				return true
+			}
+		}
+	}
+	s.selectSquad(home)
+	return true
+}
+
 func (s *playScene) syncPickedSquad() {
 	if s.pickedSquad == 0 {
 		return

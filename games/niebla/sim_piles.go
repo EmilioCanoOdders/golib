@@ -118,24 +118,6 @@ func canDemolish(s *State, b Building) bool {
 	return true
 }
 
-// nearestDemolition returns the closest building ordered down, the
-// lower ID on a tie, as the pipe claims spread their work.
-func nearestDemolition(s *State, r Robot) (Building, bool) {
-	var best Building
-	found, bestDist := false, 0.0
-	for _, id := range sortedBuildingIDs(s) {
-		b := s.Buildings[id]
-		if b.Demolish <= 0 {
-			continue
-		}
-		x, y := cellCenterUnits(b.Col, b.Row)
-		if d := math.Hypot(r.X-x, r.Y-y); !found || d < bestDist {
-			best, found, bestDist = b, true, d
-		}
-	}
-	return best, found
-}
-
 // workDemolish puts a tick of a builder's work into taking a building
 // down: the work only goes in while the building may legally go, so a
 // protector whose bubble alone shelters something waits where it stands

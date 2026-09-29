@@ -143,7 +143,7 @@ const (
 // Robot is one colony unit. Builders raise buildings and lay pipes;
 // workers mine deposits. Their current task is derived from state every
 // tick, so a save reproduces its future. What a robot claims - a post or a
-// pipe section - is state too, since the other robots read it.
+// construction task or a post - is state too, since the other robots read it.
 type Robot struct {
 	ID         int64
 	Kind       RobotKind // builder, worker, combat or repair
@@ -157,6 +157,10 @@ type Robot struct {
 	Carry      float64   // what it carries, in the cargo's SI unit
 	Cargo      ThingType // oil, lilac, or "" while empty
 	Pile       int64     // the pile it is loading from; 0 while loading at its post
+	BuildJob   bool      // a marked building site is reserved
+	BuildCol   int       // the reserved site's cell
+	BuildRow   int       //
+	Demolition int64     // the building reserved for dismantling
 	Pipe       int64     // the pipe whose section it claimed to lay; 0 with no claim
 	Section    int64     // the claimed section, from the pipe's source out
 	Squad      int64     // troopers: the war factory whose squad it is in
