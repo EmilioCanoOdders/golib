@@ -228,6 +228,83 @@ func TestInputIgnoresUnknownGamepads(t *testing.T) {
 	}
 }
 
+// The type of a gamepad comes from its name, as the desktop and the browsers
+// give it, and anything unknown has GoLib's own labels, Xbox's.
+func TestGamepadTypeComesFromItsName(t *testing.T) {
+	tests := []struct {
+		name string
+		want GamepadType
+	}{
+		{"Xbox Wireless Controller", GamepadTypeXbox},
+		{"Xbox 360 Controller (XInput STANDARD GAMEPAD)", GamepadTypeXbox},
+		{"8BitDo Pro 2", GamepadTypeXbox},
+		{"", GamepadTypeXbox},
+		{"DualSense Wireless Controller", GamepadTypePlayStation},
+		{"PS4 Controller", GamepadTypePlayStation},
+		{"Wireless Controller", GamepadTypePlayStation},
+		{"Sony Interactive Entertainment Wireless Controller", GamepadTypePlayStation},
+		{"Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 09cc)", GamepadTypePlayStation},
+		{"054c-0ce6-DualSense Wireless Controller", GamepadTypePlayStation},
+		{"Pro Controller", GamepadTypeNintendo},
+		{"Nintendo Switch Pro Controller", GamepadTypeNintendo},
+		{"Joy-Con (L/R)", GamepadTypeNintendo},
+		{"Horipad Nintendo Switch Controller", GamepadTypeNintendo},
+		{"Pro Controller (STANDARD GAMEPAD Vendor: 057e Product: 2009)", GamepadTypeNintendo},
+		{"057e-2009-Pro Controller", GamepadTypeNintendo},
+		{"HORIPAD S", GamepadTypeNintendo},
+		{"HORIPAD S (Vendor: 0f0d Product: 00c1)", GamepadTypeNintendo},
+		{"0f0d-00c1-HORIPAD S", GamepadTypeNintendo},
+	}
+	for _, tt := range tests {
+		if got := gamepadTypeOf(tt.name); got != tt.want {
+			t.Errorf("gamepadTypeOf(%q) = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+
+	var queue inputQueue
+	var input Input
+	queue.readGamepads(func(pad int) gamepadFrame {
+		if pad != 1 {
+			return gamepadFrame{}
+		}
+		return gamepadFrame{connected: true, name: "DualSense Wireless Controller"}
+	})
+	queue.next(&input)
+	if input.GamepadType(1) != GamepadTypePlayStation || input.GamepadType(0) != GamepadTypeXbox || input.GamepadType(9) != GamepadTypeXbox {
+		t.Errorf("GamepadType: pad 1 = %v, pad 0 = %v, pad 9 = %v; want PlayStation, then Xbox for no gamepad and for no such pad",
+			input.GamepadType(1), input.GamepadType(0), input.GamepadType(9))
+	}
+}
+
+// Whether the player plays with a gamepad follows what they last used, and
+// holds while they use nothing.
+func TestPlayingWithGamepadFollowsThePlayer(t *testing.T) {
+	t.Cleanup(func() { playingWithGamepad.Store(false) })
+	tests := []struct {
+		name                              string
+		fingers, keyboard, mouse, gamepad bool
+		want                              bool
+	}{
+		{name: "nothing is used yet", want: false},
+		{name: "a gamepad button", gamepad: true, want: true},
+		{name: "nothing is used, so the answer holds", want: true},
+		{name: "the gamepad, with a key held down", gamepad: true, keyboard: true, want: true},
+		{name: "the keyboard takes over", keyboard: true, want: false},
+		{name: "nothing is used, so that holds too", want: false},
+		{name: "the gamepad again", gamepad: true, want: true},
+		{name: "the mouse", mouse: true, want: false},
+		{name: "the gamepad once more", gamepad: true, want: true},
+		{name: "a finger", fingers: true, want: false},
+	}
+	playingWithGamepad.Store(false)
+	for _, tt := range tests {
+		followGamepadPlaying(tt.fingers, tt.keyboard, tt.mouse, tt.gamepad)
+		if got := PlayingWithGamepad(); got != tt.want {
+			t.Errorf("%s: PlayingWithGamepad() = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
 func TestApplyDeadZone(t *testing.T) {
 	tests := []struct {
 		name         string

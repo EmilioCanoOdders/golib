@@ -59,7 +59,7 @@ Before writing code, read [framework/README.md](../../framework/README.md), the 
 | --- | --- |
 | Window | 1280x720, resizable; F11 or Alt+Enter for fullscreen |
 | Timing | 60 FPS target; movement scaled by frame time |
-| Input | Keyboard (arrow keys and WASD) and gamepad 0 (d-pad or left stick, A to act, Start to pause) together; mouse when the genre needs it |
+| Input | Keyboard (arrow keys and WASD) and gamepad 0 (d-pad or left stick, A to act, Start to pause) together; mouse when the genre needs it. Prompts on screen show the keys, or the gamepad's buttons while `golib.PlayingWithGamepad`, labeled as `Input.GamepadType` says |
 | Art | Simple shapes and a small, coherent color palette drawn in code, or sprites when the user provides art (PNG or Aseprite files). No downloaded files; files you make for the game, such as Tiled maps, `.jfxr` sounds and a tileset (see [Content](#content)), are fine |
 | Audio | Sound effects for every action that needs feedback, made in code with `golib.NewSound`, from `.jfxr` files you write, or from files the user provides, both with `golib.NewSoundFile`; a sound that lasts, such as an engine, loops with `Sound.Loop`; music from a file the user provides, with `golib.NewMusic`, or from notes with `golib.NewTune` when they have no file. The game must stay fully playable muted |
 | Saving | A game with a score keeps the best one with `golib.SaveData`; settings and progress too, when the game has them |
