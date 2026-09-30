@@ -45,6 +45,9 @@ window.golib = (function () {
 	let nextID = 1;
 
 	let frameTime = 0, wake = null, closed = false;
+	// frameGap is the seconds at least between two frames the game draws, as
+	// setFrameRate asks; 0 draws at every frame the browser offers.
+	let frameGap = 0, lastWake = -1;
 	let wantFullscreen = false, fullscreenAsked = false;
 	let fullscreenTarget = null; // the element the game asked to show fullscreen
 	let fullscreenHeld = false;  // the browser granted that ask
@@ -1402,11 +1405,24 @@ void main() {
 
 	function askForFrame() {
 		requestAnimationFrame(function (stamp) {
+			// Too soon for the frame rate asked for: wait for the next frame.
+			// A millisecond's slack keeps 60 on a 60 Hz screen from halving.
+			if (frameGap > 0 && lastWake >= 0 && stamp / 1000 - lastWake < frameGap - 0.001) {
+				askForFrame();
+				return;
+			}
+			lastWake = stamp / 1000;
 			frameTime = stamp / 1000;
 			followFullscreen();
 			resize();
 			if (wake) wake();
 		});
+	}
+
+	// setFrameRate draws fps frames a second at most, or at every frame the
+	// browser offers for 0.
+	function setFrameRate(fps) {
+		frameGap = fps > 0 ? 1 / fps : 0;
 	}
 
 	function frame() {
@@ -1528,7 +1544,7 @@ void main() {
 		newTarget: newTarget, unloadTarget: unloadTarget, readTarget: readTarget,
 		inputBuffer: inputBuffer, snapshotInput: snapshotInput, takeTyped: takeTyped, gamepadName: gamepadName,
 		touchScreen: touchScreen,
-		onFrame: onFrame, askForFrame: askForFrame,
+		onFrame: onFrame, askForFrame: askForFrame, setFrameRate: setFrameRate,
 		setFullscreen: setFullscreen, fullscreenLost: fullscreenLost,
 		setCursorVisible: setCursorVisible, cursorVisible: cursorVisible,
 		showError: showError,

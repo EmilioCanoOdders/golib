@@ -197,9 +197,12 @@ func WindowFocused() bool {
 	return frame.focused
 }
 
-// SetTargetFPS is nothing here: the browser decides when to draw, and the
-// game waits for it in EndFrame.
-func SetTargetFPS(fps int) {}
+// SetTargetFPS asks for fps frames per second at most: the browser decides
+// when it can draw, and web.js lets frames go by until 1/fps seconds have
+// passed since the last one the game drew.
+func SetTargetFPS(fps int) {
+	js_().Call("setFrameRate", fps)
+}
 
 // Time returns the seconds since the page opened, the same value for the
 // whole frame, so a game's clock doesn't drift within one frame.
@@ -260,6 +263,37 @@ func MeasureWindow() {}
 // around it to measure.
 func MonitorBounds() (x, y, width, height int) {
 	return 0, 0, frame.width, frame.height
+}
+
+// MonitorCount is 1: a page sees the one screen it is shown on.
+func MonitorCount() int {
+	return 1
+}
+
+// Monitor returns the screen the page is shown on, as the browser measures
+// it, at 0, 0, with no name and the refresh rate it reports as 0.
+func Monitor(i int) (name string, x, y, width, height, refresh int) {
+	screen := js.Global().Get("screen")
+	return "", 0, 0, screen.Get("width").Int(), screen.Get("height").Int(), 0
+}
+
+// CurrentMonitor is 0: the only one.
+func CurrentMonitor() int {
+	return 0
+}
+
+// DisplayScale is the browser's devicePixelRatio: how many of the screen's
+// pixels, across, a CSS pixel is, the unit Monitor measures the screen in.
+func DisplayScale() float32 {
+	if ratio := js.Global().Get("devicePixelRatio"); ratio.Type() == js.TypeNumber && ratio.Float() > 0 {
+		return float32(ratio.Float())
+	}
+	return 1
+}
+
+// OpenURL opens url in a new tab, or the mail program for a mailto link.
+func OpenURL(url string) {
+	js.Global().Call("open", url, "_blank", "noopener")
 }
 
 // SetCursorVisible shows or hides the mouse pointer over the canvas.

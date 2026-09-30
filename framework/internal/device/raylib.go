@@ -160,6 +160,30 @@ func MonitorBounds() (x, y, width, height int) {
 	return int(corner.X), int(corner.Y), rl.GetMonitorWidth(monitor), rl.GetMonitorHeight(monitor)
 }
 
+// MonitorCount returns how many monitors are connected.
+func MonitorCount() int {
+	return rl.GetMonitorCount()
+}
+
+// Monitor returns monitor i's name, the position of its top-left corner on
+// the desktop, its size and its refresh rate, in frames per second.
+func Monitor(i int) (name string, x, y, width, height, refresh int) {
+	corner := rl.GetMonitorPosition(i)
+	return rl.GetMonitorName(i), int(corner.X), int(corner.Y), rl.GetMonitorWidth(i), rl.GetMonitorHeight(i), rl.GetMonitorRefreshRate(i)
+}
+
+// CurrentMonitor returns the monitor the window is on, as an index for
+// Monitor.
+func CurrentMonitor() int {
+	return rl.GetCurrentMonitor()
+}
+
+// OpenURL opens url, a web page or a mail to write, in the program the
+// player's system opens such links with.
+func OpenURL(url string) {
+	rl.OpenURL(url)
+}
+
 // SetCursorVisible shows or hides the mouse pointer over the window.
 func SetCursorVisible(visible bool) {
 	if visible {

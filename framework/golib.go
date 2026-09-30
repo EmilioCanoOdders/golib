@@ -230,8 +230,11 @@ func runWindow(game Game, config Config) error {
 		return err
 	}
 	defer device.CloseWindow()
+	windowOpen.Store(true)
+	defer windowOpen.Store(false)
 	showGameIcon()
 	device.SetTargetFPS(targetFPS)
+	lookAtMonitors()
 	audio.open()
 	defer audio.close()
 	render := newRenderer(config)
@@ -244,7 +247,9 @@ func runWindow(game Game, config Config) error {
 		queue     inputQueue
 		input     Input
 		display   window
-		updates   int     // run so far, for the time uniform of shaders
+		updates   int // run so far, for the time uniform of shaders
+		frames    int // drawn so far
+		counter   frameCounter
 		touches   []Touch // this frame's fingers, kept between frames to reuse
 
 		// The mouse pointer as the frame before saw it, for whether it moved.
@@ -259,6 +264,9 @@ func runWindow(game Game, config Config) error {
 	last := device.Time()
 	for !device.WindowShouldClose() {
 		display.apply(queue.held())
+		if frames++; frames%targetFPS == 0 {
+			lookAtMonitors() // once a second, for a monitor plugged in or out
+		}
 		focused := device.WindowFocused()
 		windowUnfocused.Store(!focused)
 		device.MeasureWindow() // on macOS, raylib can keep a wrong size from while the window opened
@@ -266,6 +274,7 @@ func runWindow(game Game, config Config) error {
 		fit := fitScreen(screenWidth, screenHeight, float32(windowWidth), float32(windowHeight), config.PixelArt)
 
 		now := device.Time()
+		counter.count(now)
 		queue.readKeyboard(deviceKeyDown, deviceKeyPressed)
 		queue.readText(device.TypedText())
 		pointerX, pointerY := device.MousePosition()
