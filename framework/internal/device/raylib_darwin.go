@@ -9,7 +9,7 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-// macOS needs three things of the raylib backend that Windows and Linux
+// macOS needs four things of the raylib backend that Windows and Linux
 // don't. The first two, about the window, were found on a Retina iMac, 2560
 // by 1440 points on a 5120 by 2880 screen:
 //
@@ -26,6 +26,8 @@ import (
 //   - A debug build is a bare executable, which the Dock shows with the
 //     generic icon for programs, and raylib's SetWindowIcon does nothing on
 //     macOS. SetAppIcon gives the Dock the game's icon.
+//   - macOS measures windows and monitors in points, two pixels across on a
+//     Retina screen. DisplayScale says how many.
 //
 // They ask AppKit through purego's Objective-C calls, as raylib-go reaches
 // raylib through purego.
@@ -35,6 +37,7 @@ var (
 	selContentView             = objc.RegisterName("contentView")
 	selFrame                   = objc.RegisterName("frame")
 	selConvertRectToBacking    = objc.RegisterName("convertRectToBacking:")
+	selBackingScaleFactor      = objc.RegisterName("backingScaleFactor")
 	selStyleMask               = objc.RegisterName("styleMask")
 	selToggleFullScreen        = objc.RegisterName("toggleFullScreen:")
 	selSharedApplication       = objc.RegisterName("sharedApplication")
@@ -122,6 +125,19 @@ func SetAppIcon(png []byte) {
 		return
 	}
 	objc.ID(objc.GetClass("NSApplication")).Send(selSharedApplication).Send(selSetApplicationIconImage, image)
+}
+
+// DisplayScale returns how many of the screen's pixels, across, a point is
+// where the window is: 2 on a Retina screen, 1 on others. It asks the window
+// for its backingScaleFactor, the screen's, and not the content view to
+// convert to its backing: raylib draws in points, so after the window has
+// been in macOS's fullscreen, the view's backing counts one pixel a point,
+// even on a Retina screen.
+func DisplayScale() float32 {
+	if scale := objc.Send[float64](nsWindow(), selBackingScaleFactor); scale > 0 {
+		return float32(scale)
+	}
+	return 1
 }
 
 // inSystemFullscreen reports whether the window is in macOS's fullscreen, or

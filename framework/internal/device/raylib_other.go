@@ -21,6 +21,12 @@ func SetSystemFullscreen(on bool) {}
 // executables, and Linux builds don't carry one yet.
 func SetAppIcon(png []byte) {}
 
+// DisplayScale is 1 here: Windows and Linux measure windows and monitors in
+// the screen's own pixels.
+func DisplayScale() float32 {
+	return 1
+}
+
 // FullscreenLost is always false here: fullscreen is a window GoLib sizes
 // itself, and nothing but the game takes it away again. A browser is where a
 // player leaves fullscreen on their own, with Esc or a phone's gesture, and

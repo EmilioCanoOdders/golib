@@ -97,12 +97,14 @@ type window struct {
 	fullscreen          bool // what is applied now
 	x, y, width, height int  // the window before it went fullscreen
 	mouseHidden         bool // the mouse pointer is hidden now
+	moveTo              int  // the monitor SetMonitor asked for, plus one, still to move to; 0 for none
 }
 
 // apply switches the window to match fullscreenWanted, and shows or hides the
 // mouse pointer to match mouseHiddenWanted. held is whether a key or a mouse
 // button was down when the input was last read.
 func (w *window) apply(held bool) {
+	w.placeWindow(held)
 	if hide := mouseHiddenWanted.Load(); hide != w.mouseHidden {
 		device.SetCursorVisible(!hide)
 		w.mouseHidden = hide
@@ -117,8 +119,8 @@ func (w *window) apply(held bool) {
 		fullscreenWanted.Store(false)
 	}
 	want := fullscreenWanted.Load()
-	if want == w.fullscreen {
-		return
+	if want == w.fullscreen || w.moveTo != 0 {
+		return // a move to another monitor comes first
 	}
 	// Where the system has a fullscreen of its own that games should use,
 	// macOS's, the backend switches it; elsewhere golib covers the monitor.

@@ -97,6 +97,7 @@ On hold since 2026-09-15: Windows comes first, and the owner doesn't prioritize 
 - Windows on ARM: the ffi module ships libffi for Windows amd64 and macOS only, so games would stop at startup, in debug and dist builds alike (the startup check would at least say that `libffi-8.dll` is missing). The icon resources have been linked and read back by Windows, but not seen in a running game. Not tested.
 - The GoLib window, `golib-ui.cmd`, is Windows only; on Linux and macOS, people use the CLI or the VS Code tasks.
 - Web build: no longer on hold, and no longer a platform port; see [Web build](#web-build-started) below.
+- The window's monitor, size and frame rate cap (`golib.SetMonitor`, `golib.SetWindowSize`, `golib.SetFrameRate`), added on 2026-09-30, were tried on macOS with one monitor only: moving to another monitor, in a window and in fullscreen, and macOS leaving its fullscreen to move and entering it again, are untried, as is all of it on Windows and Linux. `golib.DisplayScale` was tried on a Retina iMac only; on Windows and Linux it says 1, since they measure windows in pixels, which a Linux desktop on Wayland with scaling may not.
 
 ## M6: 2D essentials (done, 2026-09-18)
 
