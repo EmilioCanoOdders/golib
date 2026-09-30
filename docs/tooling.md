@@ -51,7 +51,7 @@ While a game started by `run` or `shot` is open, the program is running too, and
 - A debug build copies `raylib.dll` and `libffi-8.dll` next to the game only when they differ from the ones there, and `go build` moves a running executable aside (as `<game>.exe~`) to write the new one. So `build` and `shot` work while `run` has the game open; the build fails only if the game was built again and both older copies are still open.
 - `golib clean` can't delete a running program's files: it stops with `cannot delete build/ completely` and exit code 1. Close the games golib started, then run it again.
 
-Linux and macOS replace and delete running programs' files, so `golib.sh` needs only the `clean` message, which it prints when `rm` fails for any other reason.
+Linux and macOS delete a running program's file without complaint, but linking onto it is refused ("text file busy"), so on those systems `buildGame` links the new executable to a sibling (`.<game>.new`) and renames it over the old one, which a running game survives; the libraries' `syncFile` skips the ones the running game already holds. So `build` and `shot` also work while `run` has the game open. `golib.sh` needs only the `clean` message, which it prints when `rm` fails for any other reason.
 
 To move a command into it:
 
