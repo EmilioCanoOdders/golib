@@ -12,6 +12,7 @@ import (
 // growing downwards. Later drawing covers earlier drawing.
 type Screen struct {
 	width, height float32
+	fills         bool    // Config.FillWindow: the size follows the window
 	time          float32 // seconds of game time, for animated map tiles
 
 	// camera is the camera SetCamera set in this Draw, or nil, and view the
@@ -37,12 +38,14 @@ const (
 	BlendAdd
 )
 
-// Width returns the screen width in pixels.
+// Width returns the screen width in pixels: Config.Width, or with
+// Config.FillWindow, what the window's shape makes it in this Draw.
 func (s *Screen) Width() float32 {
 	return s.width
 }
 
-// Height returns the screen height in pixels.
+// Height returns the screen height in pixels: Config.Height, or with
+// Config.FillWindow, what the window's shape makes it in this Draw.
 func (s *Screen) Height() float32 {
 	return s.height
 }
@@ -180,7 +183,9 @@ func (s *Screen) SetCamera(camera *Camera) {
 		}
 		return
 	}
-	if camera.width != s.width || camera.height != s.height {
+	if s.fills {
+		camera.width, camera.height = s.width, s.height // the screen changes with the window
+	} else if camera.width != s.width || camera.height != s.height {
 		reportError(fmt.Errorf("golib: Screen.SetCamera got a camera for a %g by %g screen, but the screen is %g by %g: pass the screen's size to NewCamera", camera.width, camera.height, s.width, s.height))
 	}
 	center := camera.Center()

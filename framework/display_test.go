@@ -58,6 +58,41 @@ func TestToScreen(t *testing.T) {
 	}
 }
 
+func TestScreenInWindow(t *testing.T) {
+	tests := []struct {
+		name                      string
+		config                    Config
+		windowWidth, windowHeight float32
+		wantWidth, wantHeight     float32
+		want                      device.Rectangle
+	}{
+		{name: "without FillWindow the screen keeps its size", config: Config{Width: 1280, Height: 720},
+			windowWidth: 1920, windowHeight: 1200, wantWidth: 1280, wantHeight: 720,
+			want: device.Rectangle{X: 0, Y: 60, Width: 1920, Height: 1080}},
+		{name: "a 16:10 monitor makes it taller", config: Config{Width: 1280, Height: 720, FillWindow: true},
+			windowWidth: 1920, windowHeight: 1200, wantWidth: 1280, wantHeight: 800,
+			want: device.Rectangle{Width: 1920, Height: 1200}},
+		{name: "an ultrawide monitor makes it wider", config: Config{Width: 1280, Height: 720, FillWindow: true},
+			windowWidth: 3440, windowHeight: 1440, wantWidth: 1720, wantHeight: 720,
+			want: device.Rectangle{Width: 3440, Height: 1440}},
+		{name: "an uneven shape rounds up and cuts under a pixel", config: Config{Width: 1280, Height: 720, FillWindow: true},
+			windowWidth: 2560, windowHeight: 1080, wantWidth: 1707, wantHeight: 720,
+			want: device.Rectangle{X: -1, Width: 2560.5, Height: 1080}},
+		{name: "pixel art keeps a whole scale", config: Config{Width: 320, Height: 180, FillWindow: true, PixelArt: true},
+			windowWidth: 1366, windowHeight: 768, wantWidth: 342, wantHeight: 192,
+			want: device.Rectangle{X: -1, Width: 1368, Height: 768}},
+		{name: "a minimized window keeps the Config's size", config: Config{Width: 1280, Height: 720, FillWindow: true},
+			windowWidth: 0, windowHeight: 0, wantWidth: 1280, wantHeight: 720,
+			want: device.Rectangle{}},
+	}
+	for _, tt := range tests {
+		width, height, fit := screenInWindow(tt.config, tt.windowWidth, tt.windowHeight)
+		if width != tt.wantWidth || height != tt.wantHeight || fit != tt.want {
+			t.Errorf("%s: screenInWindow() = %v, %v, %+v, want %v, %v, %+v", tt.name, width, height, fit, tt.wantWidth, tt.wantHeight, tt.want)
+		}
+	}
+}
+
 func TestSetFullscreen(t *testing.T) {
 	t.Cleanup(func() { SetFullscreen(false) })
 	SetFullscreen(true)

@@ -30,6 +30,21 @@ func (r *renderer) loadTarget() device.Target {
 	return device.NewTarget(int(r.width), int(r.height), !r.pixelArt)
 }
 
+// resize makes the screen's textures width by height pixels, for a game with
+// Config.FillWindow whose window changed shape. Nothing happens at the size
+// they have.
+func (r *renderer) resize(width, height float32) {
+	if width == r.width && height == r.height {
+		return
+	}
+	device.UnloadTarget(r.scene)
+	for _, pass := range r.passes {
+		device.UnloadTarget(pass)
+	}
+	r.width, r.height, r.passes = width, height, nil
+	r.scene = r.loadTarget()
+}
+
 // drawScene draws scene into the scene texture, and returns the first mistake
 // found while it drew, or while it updated before.
 func (r *renderer) drawScene(scene Game, screen *Screen) error {

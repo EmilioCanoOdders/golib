@@ -77,7 +77,7 @@ func main() {
 3. **A scene must be ready to draw as soon as it is made.** Set its state in its constructor, not in its first `Update`: `Run` can draw a scene before updating it, on the first frame and on the frame a `SwitchScene` lands.
 4. **Pressed happens once, Down lasts.** `KeyPressed`, `MousePressed` and `GamepadPressed` are true in exactly one update per press: use them for jumping, firing and menus. `KeyDown`, `MouseDown` and `GamepadDown` stay true while held: use them for walking and thrust.
 5. **Use `Input` only in `Update`, and `Screen` only in `Draw`.** Don't keep them in the game's state.
-6. **Draw in screen pixels, or through a camera.** The screen is `Config.Width` by `Config.Height` pixels, with 0, 0 at the top-left corner and y growing downwards, whatever the window's size. `Run` scales it to the window, with black bars where the shapes differ, and reports the mouse in the same pixels. After `screen.SetCamera(camera)`, positions are in the world instead, until `screen.SetCamera(nil)`.
+6. **Draw in screen pixels, or through a camera.** The screen is `Config.Width` by `Config.Height` pixels, with 0, 0 at the top-left corner and y growing downwards, whatever the window's size. `Run` scales it to the window, with black bars where the shapes differ, and reports the mouse in the same pixels. With `Config.FillWindow` the screen takes the window's shape instead, so there are no bars, and `screen.Width()` and `screen.Height()` say its size. After `screen.SetCamera(camera)`, positions are in the world instead, until `screen.SetCamera(nil)`.
 7. **Make sprites, maps, fonts, sounds, music and shaders once, and keep them.** Create them as package variables or in `main`, never in `Update`, in `Draw` or in a scene that is made again for every new game: each one loads the first time it is used and stays loaded until `Run` returns.
 8. **Random numbers come from `RandomInt` and `RandomFloat`**, never from `math/rand`: `golib shot` starts them from the same seed, so its screenshots repeat.
 9. **No key quits on its own, not even Esc.** Call `Quit` when the game should end; the game decides what Esc does.
@@ -98,10 +98,11 @@ func main() {
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `Config.Title` | `"GoLib"` | Window title |
-| `Config.Width`, `Config.Height` | 1280, 720 | Size of the screen the game draws on, in pixels. It never changes; the window scales it. |
+| `Config.Width`, `Config.Height` | 1280, 720 | Size of the screen the game draws on, in pixels. It never changes, unless `Config.FillWindow` is set; the window scales it. |
 | `Config.Fullscreen` | `false` | Start in fullscreen |
 | `Config.PauseUnfocused` | `false` | Stop the game while its window doesn't have the player's attention, such as while they work in another program, and carry on where it was. `Draw` keeps running, so the window still shows the game, and sound and music play on. Ask `WindowFocused` to draw a sign or quieten the music. |
 | `Config.PixelArt` | `false` | Scale the screen by whole numbers only, without smoothing, so pixels stay square and sharp. Use it with a small screen, such as 320 by 180: the window opens as many times larger as fits in most of the monitor, 1280 by 720 on a 1920 by 1080 monitor. |
+| `Config.FillWindow` | `false` | The screen takes the window's shape, in a window and in fullscreen, so there are no black bars: `Width` by `Height` is the smallest it gets, and it grows wider or taller at the same scale, 1280 by 800 on a 1920 by 1200 monitor and 1720 by 720 on an ultrawide one. For tools, editors and games whose layout can stretch. Lay the game out from `screen.Width()` and `screen.Height()` in each `Draw`, and keep them for `Update`, which runs first; a camera passed to `screen.SetCamera` takes the screen's size. With `PixelArt` the scale stays whole, and less than one screen pixel is cut at the edges. `golib shot` takes `Width` by `Height` pictures. |
 
 ## Time
 
@@ -1049,7 +1050,7 @@ var theme = golib.NewTune(themeSpec)
 
 | Name | What it does |
 | --- | --- |
-| `SetFullscreen` | `SetFullscreen(on bool)`: fullscreen or a window, from the next frame. Fullscreen covers the monitor without changing its resolution, and the screen keeps its size. On macOS it is the system's own fullscreen, the one the window's green button enters, which slides into a space of its own without the menu bar or the Dock; the switch waits until no key or mouse button is held, because macOS loses a release that comes while the window slides. Call it from `Update`; to start in fullscreen, set `Config.Fullscreen`, because `Run` replaces an earlier call with it. |
+| `SetFullscreen` | `SetFullscreen(on bool)`: fullscreen or a window, from the next frame. Fullscreen covers the monitor without changing its resolution, and the screen keeps its size, unless `Config.FillWindow` lets it take the monitor's shape. On macOS it is the system's own fullscreen, the one the window's green button enters, which slides into a space of its own without the menu bar or the Dock; the switch waits until no key or mouse button is held, because macOS loses a release that comes while the window slides. Call it from `Update`; to start in fullscreen, set `Config.Fullscreen`, because `Run` replaces an earlier call with it. |
 | `IsFullscreen` | `IsFullscreen() bool`: the game is in fullscreen, or will be from the next frame. It turns false by itself when the player leaves fullscreen on their own: with Esc in a browser, or the green button on macOS. |
 | `WindowFocused` | `WindowFocused() bool`: the window has the player's attention. False while they work in another program, so a game can draw a sign over itself or quieten its music; with `Config.PauseUnfocused`, `Run` stops updating the game meanwhile and keeps drawing it. Always true under `golib shot` and in tests. |
 
@@ -1292,7 +1293,7 @@ A web build is what a phone plays, so a game meant for one is a game meant for t
 
 - **Fingers, not keys.** A phone has no keyboard: everything the player does has to be reachable by tapping. A tap already works the mouse (see [Touch screen](#touch-screen)); a game whose only way into play is "press Enter" can't be started on a phone at all.
 - **Fullscreen comes from a tap.** A browser only grants fullscreen while it handles a key, a click or a touch, so `SetFullscreen(true)` takes effect at the next one of those. The whole page goes fullscreen and the game fills the screen, however the phone is turned.
-- **The screen is landscape or portrait, and the player chooses.** The screen the game draws on keeps its size and is scaled to fit, with black bars where the shapes differ, so a game designed for 1280 by 720 played in portrait gets thick bars. Put the controls inside the screen, not against the window's edges, and they stay where the thumbs are either way.
+- **The screen is landscape or portrait, and the player chooses.** The screen the game draws on keeps its size and is scaled to fit, with black bars where the shapes differ, so a game designed for 1280 by 720 played in portrait gets thick bars; with `Config.FillWindow` it grows taller instead, and the game lays itself out for it. Put the controls inside the screen, not against the window's edges, and they stay where the thumbs are either way.
 - **`golib web <game> --lan`** serves the game to the network, so a phone on the same Wi-Fi can open it and play while the game is still being written; the terminal prints the address to type.
 
 ## What GoLib doesn't have yet

@@ -12,7 +12,7 @@ The promise: someone downloads the template, runs a couple of commands, and buil
 
 Keep this section true: update it in the same change that lands or removes a feature. Never describe planned work as if it existed.
 
-Last updated: 2026-09-30 (the window's monitor, size and frame rate, `golib.DisplayScale`, `golib.FPS` and `golib.OpenURL`, for a game's graphics settings; on Linux and macOS, `build` and `shot` work while `run` has the game open); before it, 2026-09-29 (gamepad prompts, `golib.PlayingWithGamepad` and `Input.GamepadType`; typed text, `Input.TypedText`; milestones M5, Shipping, and M6, 2D essentials, done; Linux and macOS ran GoLib for the first time; the web build is at stage 4, phones, after a game published on itch.io was played on one; M7, 3D, comes after it).
+Last updated: 2026-09-30 (the window's monitor, size and frame rate, `golib.DisplayScale`, `golib.FPS` and `golib.OpenURL`, for a game's graphics settings; `Config.FillWindow`, a screen that takes the window's shape, with no black bars; on Linux and macOS, `build` and `shot` work while `run` has the game open); before it, 2026-09-29 (gamepad prompts, `golib.PlayingWithGamepad` and `Input.GamepadType`; typed text, `Input.TypedText`; milestones M5, Shipping, and M6, 2D essentials, done; Linux and macOS ran GoLib for the first time; the web build is at stage 4, phones, after a game published on itch.io was played on one; M7, 3D, comes after it).
 
 | Area | State |
 | --- | --- |
@@ -41,6 +41,7 @@ Last updated: 2026-09-30 (the window's monitor, size and frame rate, `golib.Disp
 | A game's graphics settings: the monitors connected and moving the window to one (`golib.Monitors`, `golib.CurrentMonitor`, `golib.SetMonitor`), how many of the screen's pixels a point is on a Retina Mac (`golib.DisplayScale`), the window's size (`golib.SetWindowSize`), a frame rate cap (`golib.SetFrameRate`, 60 by default), the frames drawn a second (`golib.FPS`), and opening a web page or a mail to write (`golib.OpenURL`) | Done (2026-09-30), tried on macOS with one monitor; untried with several monitors and on Windows and Linux. In a browser, the frame rate cap works, the monitor and the window's size don't apply, and a link opens in a new tab |
 | Typed text, as the player's keyboard layout makes it (`Input.TypedText`, and `Type@` in `golib shot --input`), and the keys Delete, Home, End, Page Up and Page Down | Done (2026-09-27), for text a game lets the player type: names, code |
 | Screen scaled to any window size, fullscreen (`golib.SetFullscreen`), post-processing shaders (`golib.NewShader`, `golib.SetPostProcess`) | Done (M2) |
+| A screen that takes the window's shape, with no black bars in a window or in fullscreen, for tools and games whose layout stretches (`Config.FillWindow`) | Done (2026-09-30), tried on Windows |
 | Random numbers: `golib.RandomInt`, `golib.RandomFloat`, `golib.SetRandomSeed` | Done (M2) |
 | Sound effects made in code, with no sound files: `golib.NewSound`, `golib.SoundSpec`, the ready-made recipes and `golib.SetVolume` | Done (M2) |
 | Music streamed from the game's `assets/` folder: `golib.NewMusic` (OGG, MP3, WAV, QOA, XM, MOD; not IT) | Done (M2) |

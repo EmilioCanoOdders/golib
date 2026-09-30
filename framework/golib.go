@@ -62,7 +62,8 @@
 // # Window, fullscreen and post-processing
 //
 // The game draws on a screen of Config.Width by Config.Height pixels, which Run
-// scales to fit the window, so games never deal with the window's size.
+// scales to fit the window, so games never deal with the window's size; with
+// Config.FillWindow it takes the window's shape instead, with no black bars.
 // [SetFullscreen] switches to fullscreen and back. [SetPostProcess] runs
 // shaders made with [NewShader] over the whole picture, for effects such as
 // scanlines or a glow.
@@ -137,10 +138,11 @@ const (
 // default shown in their comment.
 //
 // Width and Height are the size of the screen the game draws on, which never
-// changes. The window opens at that size, or with PixelArt at the largest
-// whole multiple of it that fits the monitor, and the player can resize it or go
-// fullscreen: Run scales the screen to fit, with black bars where the shapes
-// differ, and reports mouse positions in screen pixels.
+// changes unless FillWindow is set. The window opens at that size, or with
+// PixelArt at the largest whole multiple of it that fits the monitor, and the
+// player can resize it or go fullscreen: Run scales the screen to fit, with
+// black bars where the shapes differ, and reports mouse positions in screen
+// pixels.
 type Config struct {
 	Title      string // Window title. Default: "GoLib".
 	Width      int    // Screen width in pixels. Default: 1280.
@@ -162,6 +164,20 @@ type Config struct {
 	// times larger than the screen as fits the monitor. Use it with a small
 	// screen, such as 320 by 180. Default: smooth scaling to any size.
 	PixelArt bool
+
+	// FillWindow makes the screen take the window's shape, so there are no
+	// black bars, in a window or in fullscreen: Width by Height is the
+	// smallest it gets, and it grows wider or taller to match the window,
+	// scaled as it would be without the option. A 1280 by 720 screen is 1280
+	// by 800 on a 1920 by 1200 monitor, and 1720 by 720 on an ultrawide one.
+	// Screen.Width and Screen.Height say its size in each Draw: lay the game
+	// out from them, not from the Config, and keep them for Update, which
+	// runs before Draw. A camera used with Screen.SetCamera follows the
+	// screen's size. With PixelArt, the scale stays a whole number and the
+	// screen covers the window, cutting less than one of its pixels at the
+	// edges. Screenshots from golib shot are Width by Height. Default: the
+	// screen keeps its size and shape.
+	FillWindow bool
 }
 
 // Game is the interface every GoLib game implements.
@@ -240,8 +256,7 @@ func runWindow(game Game, config Config) error {
 	render := newRenderer(config)
 	defer render.close()
 
-	screenWidth, screenHeight := float32(config.Width), float32(config.Height)
-	screen := &Screen{width: screenWidth, height: screenHeight}
+	screen := &Screen{width: float32(config.Width), height: float32(config.Height), fills: config.FillWindow}
 	var (
 		gameClock clock
 		queue     inputQueue
@@ -271,7 +286,9 @@ func runWindow(game Game, config Config) error {
 		windowUnfocused.Store(!focused)
 		device.MeasureWindow() // on macOS, raylib can keep a wrong size from while the window opened
 		windowWidth, windowHeight := device.WindowSize()
-		fit := fitScreen(screenWidth, screenHeight, float32(windowWidth), float32(windowHeight), config.PixelArt)
+		screenWidth, screenHeight, fit := screenInWindow(config, float32(windowWidth), float32(windowHeight))
+		screen.width, screen.height = screenWidth, screenHeight
+		render.resize(screenWidth, screenHeight)
 
 		now := device.Time()
 		counter.count(now)

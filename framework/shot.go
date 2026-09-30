@@ -434,7 +434,7 @@ func runShots(game Game, config Config, plan *shotPlan) error {
 	defer device.UnloadTarget(picture)
 	whole := device.Rectangle{Width: float32(config.Width), Height: float32(config.Height)}
 
-	screen := &Screen{width: float32(config.Width), height: float32(config.Height)}
+	screen := &Screen{width: float32(config.Width), height: float32(config.Height), fills: config.FillWindow}
 	scene := game
 	var input Input
 	next := 0

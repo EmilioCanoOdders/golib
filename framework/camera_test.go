@@ -235,4 +235,18 @@ func TestCameraInAWindow(t *testing.T) {
 	capture(func() { screen.SetCamera(NewCamera(320, 180)) })
 	screen.endDraw()
 	wantError(t, "golib: Screen.SetCamera got a camera for a 320 by 180 screen, but the screen is 16 by 8")
+
+	// With Config.FillWindow, the screen changes with the window, and the
+	// camera takes its size.
+	screen.fills = true
+	defer func() { screen.fills = false }()
+	wide := NewCamera(320, 180)
+	capture(func() { screen.SetCamera(wide) })
+	screen.endDraw()
+	if err := takeError(); err != nil {
+		t.Fatal(err)
+	}
+	if wide.width != 16 || wide.height != 8 {
+		t.Errorf("a camera on a screen that fills the window is %g by %g, want 16 by 8", wide.width, wide.height)
+	}
 }

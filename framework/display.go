@@ -19,7 +19,8 @@ var fullscreenWanted atomic.Bool
 // button too. There the switch waits until no key or mouse button is held,
 // such as the Enter that asked for it, because macOS loses a release that
 // comes while the window slides. The screen games draw on keeps its size
-// either way: Run scales it to fit, with black bars where the shapes differ.
+// either way: Run scales it to fit, with black bars where the shapes differ,
+// unless Config.FillWindow lets it take the monitor's shape.
 // Call it from Update, for example on F11 or Alt+Enter:
 //
 //	altEnter := input.KeyDown(golib.KeyLeftAlt) && input.KeyPressed(golib.KeyEnter)
@@ -165,6 +166,35 @@ func fitScreen(screenWidth, screenHeight, windowWidth, windowHeight float32, pix
 		Y:      float32(math.Floor(float64(windowHeight-height) / 2)),
 		Width:  width,
 		Height: height,
+	}
+}
+
+// screenInWindow returns the size of the screen a game draws on in a window of
+// windowWidth by windowHeight pixels, and where it goes in the window. It is
+// Config.Width by Config.Height, fitted with fitScreen, unless the game has
+// Config.FillWindow: then it grows wider or taller, at the scale fitScreen
+// would use, until it covers the window. A minimized window, with no room,
+// keeps the Config's size.
+func screenInWindow(config Config, windowWidth, windowHeight float32) (width, height float32, fit device.Rectangle) {
+	width, height = float32(config.Width), float32(config.Height)
+	if !config.FillWindow || windowWidth <= 0 || windowHeight <= 0 {
+		return width, height, fitScreen(width, height, windowWidth, windowHeight, config.PixelArt)
+	}
+	scale := min(windowWidth/width, windowHeight/height)
+	if config.PixelArt {
+		scale = max(1, float32(math.Floor(float64(scale))))
+	}
+	// Rounded up, so the screen covers the window: a thousandth of a pixel
+	// less keeps float error from adding a whole column.
+	cover := func(window, least float32) float32 {
+		return max(least, float32(math.Ceil(float64(window/scale)-0.001)))
+	}
+	width, height = cover(windowWidth, width), cover(windowHeight, height)
+	return width, height, device.Rectangle{
+		X:      float32(math.Floor(float64(windowWidth-width*scale) / 2)),
+		Y:      float32(math.Floor(float64(windowHeight-height*scale) / 2)),
+		Width:  width * scale,
+		Height: height * scale,
 	}
 }
 
