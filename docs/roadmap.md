@@ -98,6 +98,7 @@ On hold since 2026-09-15: Windows comes first, and the owner doesn't prioritize 
 - The GoLib window, `golib-ui.cmd`, is Windows only; on Linux and macOS, people use the CLI or the VS Code tasks.
 - Web build: no longer on hold, and no longer a platform port; see [Web build](#web-build-started) below.
 - The window's monitor, size and frame rate cap (`golib.SetMonitor`, `golib.SetWindowSize`, `golib.SetFrameRate`), added on 2026-09-30, were tried on macOS with one monitor only: moving to another monitor, in a window and in fullscreen, and macOS leaving its fullscreen to move and entering it again, are untried, as is all of it on Windows and Linux. `golib.DisplayScale` was tried on a Retina iMac only; on Windows and Linux it says 1, since they measure windows in pixels, which a Linux desktop on Wayland with scaling may not.
+- Building while the game runs on Linux and macOS, fixed on 2026-09-30 by a contributor who hit it: `go build` refused to link onto the executable `golib run` had open ("text file busy"), so `build` and `shot` failed until the game was closed. `buildGame` now links to `.<game>.new` beside it and renames that over the old one, which a running game survives (see [tooling.md](tooling.md#the-go-program)). Windows keeps its own way; `golib test` passes there with the change. Which system the fix was tried on wasn't recorded.
 
 ## M6: 2D essentials (done, 2026-09-18)
 
