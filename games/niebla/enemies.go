@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 
 	"golib"
 )
@@ -400,6 +401,22 @@ func drawReport(s *State, screen *golib.Screen) {
 		return
 	}
 	words := reportWords(r)
+	if screen.Width() < 1000 {
+		plain := strings.ReplaceAll(words, "[danger]", "")
+		plain = strings.ReplaceAll(plain, "[/]", "")
+		lines := techWrap(screen, plain, screen.Width()-40, 13)
+		plate := golib.Rectangle{
+			X: 8, Y: 174, Width: screen.Width() - 16,
+			Height: float32(len(lines))*16 + 12,
+		}
+		screen.DrawRectangle(plate, panelColor)
+		screen.DrawRectangleOutline(plate, 1, dangerColor)
+		for i, line := range lines {
+			screen.DrawText(line, 18, plate.Y+6+float32(i)*16,
+				13, panelTextColor, uiText)
+		}
+		return
+	}
 	width := float32(0)
 	for _, span := range parseMarkup(words, panelTextColor) {
 		width += screen.TextWidth(span.text, 13, uiText)

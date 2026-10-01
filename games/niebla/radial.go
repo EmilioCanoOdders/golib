@@ -74,7 +74,11 @@ const (
 // radialCenter is where the menu's cell lands on the screen.
 func radialCenter(s *playScene) golib.Vector2 {
 	cx, cy := projectBuilding(Building{Col: s.radialCol, Row: s.radialRow})
-	return s.camera.ToScreen(golib.Vector2{X: cx, Y: cy})
+	center := s.camera.ToScreen(golib.Vector2{X: cx, Y: cy})
+	margin := float32(radialRadius + radialItemR + 24)
+	center.X = clampf(center.X, margin, float32(screenWidth)-margin)
+	center.Y = clampf(center.Y, margin, float32(screenHeight)-margin)
+	return center
 }
 
 // radialSpot is where the i-th of n options sits on the ring around a
@@ -412,11 +416,13 @@ func drawRadialTip(screen *golib.Screen, item radialLeafItem, tip radialTip) {
 		h += row
 	}
 	x := item.x + radialItemR + offset
-	if x+w > screenWidth-tooltipMargin {
+	if x+w > float32(screenWidth)-tooltipMargin {
 		x = item.x - radialItemR - offset - w
 	}
-	x = clampf(x, tooltipMargin, screenWidth-tooltipMargin-w)
-	y := clampf(item.y-h/2, tooltipMargin, screenHeight-tooltipMargin-h)
+	x = clampf(x, tooltipMargin,
+		float32(screenWidth)-tooltipMargin-w)
+	y := clampf(item.y-h/2, tooltipMargin,
+		float32(screenHeight)-tooltipMargin-h)
 	plate := golib.Rectangle{X: x, Y: y, Width: w, Height: h}
 	screen.DrawRectangle(plate, panelColor)
 	screen.DrawRectangleOutline(plate, 1, panelEdgeColor)

@@ -1,6 +1,9 @@
 package golib
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestConfigResolve(t *testing.T) {
 	tests := []struct {
@@ -29,6 +32,11 @@ func TestConfigResolve(t *testing.T) {
 			config:  Config{Height: -1},
 			wantErr: true,
 		},
+		{
+			name:    "negative window scale is rejected",
+			config:  Config{WindowScale: -1},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -42,7 +50,7 @@ func TestConfigResolve(t *testing.T) {
 			if err != nil {
 				t.Fatalf("resolve() error = %v", err)
 			}
-			if got != tt.want {
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("resolve() = %+v, want %+v", got, tt.want)
 			}
 		})

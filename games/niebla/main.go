@@ -59,14 +59,20 @@ import (
 	"golib"
 )
 
-// The screen's size in pixels: half of 2K, so a 2K monitor scales it by two
-// whole numbers. With PixelArt the scaling stays in whole numbers and
-// without smoothing, so shapes and text keep their pixels. GoLib scales it
-// to any window; 2K/4 (640x360) would be the step for pixel-art sprites.
-const (
+// Screenshots use this size. In a window these values follow half of its
+// drawing area, so text and shapes stay two physical pixels per screen pixel.
+var (
 	screenWidth  = 1280
 	screenHeight = 720
+	activeResize func(width, height int)
 )
+
+func resizeScreen(width, height int) {
+	screenWidth, screenHeight = width, height
+	if activeResize != nil {
+		activeResize(width, height)
+	}
+}
 
 // The game's colors, in one place so the look is easy to change: cold ground,
 // amber oil, lilac veins, pale fog.
@@ -215,7 +221,7 @@ func main() {
 
 	config := golib.Config{
 		Title: "niebla", Width: screenWidth, Height: screenHeight,
-		PixelArt: true,
+		PixelArt: true, WindowScale: 2, OnScreenResize: resizeScreen,
 		// The game waits while the player is in another program. Take it out
 		// for a game that should keep playing in the background.
 		PauseUnfocused: true,

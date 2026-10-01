@@ -14,6 +14,11 @@ From the GoLib repository root:
 ./golib shot niebla 120 --input "Enter@1"   # reach the region: Play is Enter
 ```
 
+In a normal window the render buffer is half the window's drawing area in
+each dimension. It follows resizes and fullscreen; the menu and camera follow
+it too. `golib shot` keeps its fixed 1280x720 screen, so the scripted click
+coordinates below remain valid.
+
 The economy probe plays four headless opening policies over seeds 0, 1 and
 2 for an hour, sampling the real state every game minute. It respects the
 schematics each policy has actually earned. The plans are safe harvesting,

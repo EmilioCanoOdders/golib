@@ -208,7 +208,7 @@ func TestWriteProtectorShotState(t *testing.T) {
 	b.Oil = protectorOilCap * protectorRadiusFadeBelow / 2
 	s.Buildings[b.ID] = b
 
-	camera := golib.NewCamera(screenWidth, screenHeight)
+	camera := golib.NewCamera(float32(screenWidth), float32(screenHeight))
 	camera.Bounds = regionOnScreen()
 	camera.Zoom = zoomOfStop(zoomOut)
 	camera.Snap()

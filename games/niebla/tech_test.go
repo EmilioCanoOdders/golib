@@ -835,7 +835,7 @@ func TestDevNextTechBringsTheLadderInOrder(t *testing.T) {
 func TestCardButtonsWaitForTheirSchematics(t *testing.T) {
 	s := newGame()
 	seedStock(s)
-	camera := golib.NewCamera(screenWidth, screenHeight)
+	camera := golib.NewCamera(float32(screenWidth), float32(screenHeight))
 	col, row := groundNearCore()
 	raised(t, s, BuildingSilo, col, row)
 	// The silo's lay pipe waits for the frontier kit, the pool's build

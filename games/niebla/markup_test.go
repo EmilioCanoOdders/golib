@@ -78,7 +78,7 @@ func TestParseMarkupUnclosed(t *testing.T) {
 
 func TestTooltipLayoutRowsAndCards(t *testing.T) {
 	s := newGame()
-	camera := golib.NewCamera(screenWidth, screenHeight)
+	camera := golib.NewCamera(float32(screenWidth), float32(screenHeight))
 	coreCellCol, coreCellRow := tileCell(coreCol, coreRow)
 	panel := tooltipLayout(s, camera, coreCellCol, coreCellRow, map[string]bool{})
 	titles := 0
@@ -118,7 +118,7 @@ func TestTooltipLayoutRowsAndCards(t *testing.T) {
 }
 
 func TestPrimaryCardsStartOpen(t *testing.T) {
-	camera := golib.NewCamera(screenWidth, screenHeight)
+	camera := golib.NewCamera(float32(screenWidth), float32(screenHeight))
 	s := newGame()
 	addWorker(s)
 	// The core's card starts open with no clicks: its details are there.
@@ -169,7 +169,7 @@ func TestPrimaryCardsStartOpen(t *testing.T) {
 }
 
 func TestTooltipOffersRobotButtons(t *testing.T) {
-	camera := golib.NewCamera(screenWidth, screenHeight)
+	camera := golib.NewCamera(float32(screenWidth), float32(screenHeight))
 	s := newGame()
 	addWorker(s)
 	addWorker(s)
@@ -268,7 +268,7 @@ func TestWarFactoryCardWaitsForRepairProtocolBeforeOfferingMechanic(t *testing.T
 	s.Stock = Stock{Oil: 1000, Lilac: 2500}
 	col, row := groundNearCore()
 	home := raised(t, s, BuildingWarFactory, col, row)
-	camera := golib.NewCamera(screenWidth, screenHeight)
+	camera := golib.NewCamera(float32(screenWidth), float32(screenHeight))
 	hasMechanicDetails := func(panel tooltip) bool {
 		for _, row := range panel.rows {
 			if row.detail.Label == "mechanic cost" {
@@ -363,7 +363,7 @@ func TestRobotFactoryButtonsShowTheirCostsAndAvailability(t *testing.T) {
 	s := newGame()
 	col, row := groundNearCore()
 	home := raised(t, s, BuildingFactory, col, row)
-	camera := golib.NewCamera(screenWidth, screenHeight)
+	camera := golib.NewCamera(float32(screenWidth), float32(screenHeight))
 	panel := tooltipLayout(s, camera, col, row, map[string]bool{})
 	for _, label := range []string{buttonBuildBuilder, buttonBuildWorker} {
 		button := panel.findButton(label)
@@ -419,7 +419,7 @@ func TestDamagedBuildingCardShowsItsRemainingRepairCost(t *testing.T) {
 	building.Damage = buildingHealthPoints / 2
 	s.Buildings[building.ID] = building
 
-	camera := golib.NewCamera(screenWidth, screenHeight)
+	camera := golib.NewCamera(float32(screenWidth), float32(screenHeight))
 	panel := tooltipLayout(s, camera, col, row, map[string]bool{})
 	wantLilac, wantOil := buildingRepairCost(
 		building.Kind, building.Damage,

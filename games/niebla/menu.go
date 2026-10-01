@@ -32,18 +32,27 @@ type menuScene struct {
 // same ones the play scene runs under.
 func newMenuScene() *menuScene {
 	setFilters(true)
-	x := (screenWidth - menuButtonWidth) / 2
-	mid := float32(screenHeight) / 2
-	return &menuScene{
-		buttons: []menuButton{
-			playButton: {label: "Play", bounds: golib.Rectangle{
-				X: float32(x), Y: mid + 30, Width: menuButtonWidth, Height: menuButtonHeight,
-			}},
-			quitButton: {label: "Quit", bounds: golib.Rectangle{
-				X: float32(x), Y: mid + 30 + menuButtonStep, Width: menuButtonWidth, Height: menuButtonHeight,
-			}},
-		},
-		selected: playButton,
+	s := &menuScene{selected: playButton}
+	activeResize = s.resize
+	s.resize(screenWidth, screenHeight)
+	return s
+}
+
+func (s *menuScene) resize(width, height int) {
+	x := (width - menuButtonWidth) / 2
+	mid := float32(height) / 2
+	buttonY := mid + 30
+	if height < 360 {
+		buttonY = mid + 12
+	}
+	s.buttons = []menuButton{
+		playButton: {label: "Play", bounds: golib.Rectangle{
+			X: float32(x), Y: buttonY, Width: menuButtonWidth, Height: menuButtonHeight,
+		}},
+		quitButton: {label: "Quit", bounds: golib.Rectangle{
+			X: float32(x), Y: buttonY + menuButtonStep,
+			Width: menuButtonWidth, Height: menuButtonHeight,
+		}},
 	}
 }
 
@@ -104,8 +113,11 @@ func (s *menuScene) Draw(screen *golib.Screen) {
 	for i, button := range s.buttons {
 		button.draw(screen, i == s.selected)
 	}
-	drawCentered(screen, "Enter or click to play, up, down or the wheel to choose, Esc quits",
-		float32(screenHeight)-30, 13, groundColor)
+	help := "Enter or click to play, up, down or the wheel to choose, Esc quits"
+	if screenWidth < 600 {
+		help = "Enter / click: play   Esc: quit"
+	}
+	drawCentered(screen, help, float32(screenHeight)-18, 13, groundColor)
 }
 
 // drawCentered draws text centered on the screen's width.

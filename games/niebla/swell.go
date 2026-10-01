@@ -96,8 +96,8 @@ func drawSwellStatic(s *State, screen *golib.Screen, camera *golib.Camera) {
 	beat := uint32(s.Ticks / swellStaticTicks)
 	clear := clearDiscs(s)
 	for i := 0; i < swellStaticSpecks; i++ {
-		x := hashUnit(beat, uint32(i), 1) * screenWidth
-		y := hashUnit(beat, uint32(i), 2) * screenHeight
+		x := hashUnit(beat, uint32(i), 1) * float32(screenWidth)
+		y := hashUnit(beat, uint32(i), 2) * float32(screenHeight)
 		world := camera.ToWorld(x, y)
 		if inDiscs(clear, world.X, world.Y) {
 			continue

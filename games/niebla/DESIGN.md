@@ -686,8 +686,12 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - No win condition in the MVP; the region is the tutorial for the arc.
 
 ## Art
-The screen is 1280x720 with `Config.PixelArt`, scaling by whole numbers on
-a larger monitor. Three monitor filters run in order (`shaders/glow.fs`,
+The screen follows the window's drawing area at half width and height,
+with `Config.PixelArt` keeping each screen pixel two physical pixels wide.
+Resizing the window (including a Sway resize) recreates the screen buffer,
+updates the camera and repositions the UI. This keeps text legible on
+lower-resolution monitors. Screenshots retain a fixed 1280x720 screen.
+Three monitor filters run in order (`shaders/glow.fs`,
 `shaders/crt.fs`, `shaders/soft.fs`): restrained glow, a faint tube screen
 and a small blur that rounds pixel corners. F2 turns them all off.
 
@@ -1042,6 +1046,8 @@ all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+
+- 2026-10-01: the screen buffer follows half the window's drawing area on resize; the camera, menu, panels, HUD and help adjust to the smaller viewport, so text is no longer shrunk or clipped on a low-resolution monitor.
 - 2026-09-30: a guard pennant on a building now selects that building,
   including the war factory it guards by default. Its `give order` button
   still places the squad's waypoint; pennants on free ground and attack

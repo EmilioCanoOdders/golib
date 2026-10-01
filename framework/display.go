@@ -18,9 +18,9 @@ var fullscreenWanted atomic.Bool
 // without the menu bar or the Dock, and the player can leave it with that
 // button too. There the switch waits until no key or mouse button is held,
 // such as the Enter that asked for it, because macOS loses a release that
-// comes while the window slides. The screen games draw on keeps its size
-// either way: Run scales it to fit, with black bars where the shapes differ,
-// unless Config.FillWindow lets it take the monitor's shape.
+// comes while the window slides. The screen keeps its size unless the game
+// requests Config.WindowScale or Config.FillWindow; Run scales it to fit the
+// window, with black bars where the shapes differ.
 // Call it from Update, for example on F11 or Alt+Enter:
 //
 //	altEnter := input.KeyDown(golib.KeyLeftAlt) && input.KeyPressed(golib.KeyEnter)
@@ -174,9 +174,18 @@ func fitScreen(screenWidth, screenHeight, windowWidth, windowHeight float32, pix
 // Config.Width by Config.Height, fitted with fitScreen, unless the game has
 // Config.FillWindow: then it grows wider or taller, at the scale fitScreen
 // would use, until it covers the window. A minimized window, with no room,
-// keeps the Config's size.
+// keeps the Config's size. Config.WindowScale takes precedence over FillWindow.
 func screenInWindow(config Config, windowWidth, windowHeight float32) (width, height float32, fit device.Rectangle) {
 	width, height = float32(config.Width), float32(config.Height)
+	if config.WindowScale != 0 {
+		if windowWidth > 0 && windowHeight > 0 {
+			w, h := windowScreenSize(config, int(windowWidth), int(windowHeight))
+			width, height = float32(w), float32(h)
+		}
+		return width, height, fitScreen(
+			width, height, windowWidth, windowHeight, config.PixelArt,
+		)
+	}
 	if !config.FillWindow || windowWidth <= 0 || windowHeight <= 0 {
 		return width, height, fitScreen(width, height, windowWidth, windowHeight, config.PixelArt)
 	}
