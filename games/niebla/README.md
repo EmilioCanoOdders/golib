@@ -14,10 +14,19 @@ From the GoLib repository root:
 ./golib shot niebla 120 --input "Enter@1"   # reach the region: Play is Enter
 ```
 
-In a normal window the render buffer is half the window's drawing area in
-each dimension. It follows resizes and fullscreen; the menu and camera follow
-it too. `golib shot` keeps its fixed 1280x720 screen, so the scripted click
-coordinates below remain valid.
+In a normal window the render buffer uses native resolution when the drawing
+area is at most 1024 pixels wide. Above that, it uses half the width and height
+for 2x retro pixels. The whole image, including text, follows this threshold
+on resizes and fullscreen changes; the menu and camera follow the buffer too.
+The squad boxes sit 12 screen pixels from the top, with the robots button
+6 pixels below them; the resource HUD wraps to their left.
+Rival notices sit 8 pixels below the wrapped resource HUD, or below the last
+dev-tool row while those controls are open, with no resolution-specific
+vertical offset.
+Status and notice text grows from 15 to 18 pixels below 1000 drawing pixels
+wide, then to a maximum of 20 below 750. Dev tools follow the wrapped HUD too.
+`golib shot` keeps its fixed 1280x720 screen, so the scripted click coordinates
+below remain valid.
 
 The economy probe plays four headless opening policies over seeds 0, 1 and
 2 for an hour, sampling the real state every game minute. It respects the
@@ -220,11 +229,11 @@ To inspect the colony-wide roster after starting a game:
 
 ```text
 ./golib shot niebla 80 \
-  --input "Enter@1 Mouse@5:1194,112 MouseLeft@6"
+  --input "Enter@1 Mouse@5:1194,78 MouseLeft@6"
 ```
 
 The roster button sits beneath the squad boxes, at screen position
-1194, 112. It opens the panel with the starting builder and its current
+1194, 78. It opens the panel with the starting builder and its current
 task. The X or the roster button closes it.
 
 To inspect the roster's builder, free-worker, deposit and mechanic groups:
@@ -234,7 +243,7 @@ NIEBLA_ROBOT_ROSTER_SHOT_STATE=../../build/niebla/roster.json \
   ./golib go -C games/niebla test \
   -run TestWriteRobotRosterShotState
 ./golib shot niebla 80 --save build/niebla/roster.json \
-  --input "Enter@1 Mouse@5:1194,112 MouseLeft@6"
+  --input "Enter@1 Mouse@5:1194,78 MouseLeft@6"
 ```
 
 To inspect two pages of portraits, write a state with ten robots assigned

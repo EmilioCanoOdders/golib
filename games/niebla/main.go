@@ -59,8 +59,8 @@ import (
 	"golib"
 )
 
-// Screenshots use this size. In a window these values follow half of its
-// drawing area, so text and shapes stay two physical pixels per screen pixel.
+const retroMinWindowWidth = 1025
+
 var (
 	screenWidth  = 1280
 	screenHeight = 720
@@ -221,7 +221,9 @@ func main() {
 
 	config := golib.Config{
 		Title: "niebla", Width: screenWidth, Height: screenHeight,
-		PixelArt: true, WindowScale: 2, OnScreenResize: resizeScreen,
+		PixelArt: true, WindowScale: 2,
+		WindowScaleMinWidth: retroMinWindowWidth,
+		OnScreenResize:      resizeScreen,
 		// The game waits while the player is in another program. Take it out
 		// for a game that should keep playing in the background.
 		PauseUnfocused: true,

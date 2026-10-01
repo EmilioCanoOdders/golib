@@ -42,12 +42,10 @@ type robotPanelLayout struct {
 }
 
 func robotPanelButtonRect() golib.Rectangle {
-	y := float32(96)
-	if screenWidth < 1000 {
-		y = 146
-	}
+	squad := squadBoxRect(0)
 	return golib.Rectangle{
-		X: float32(screenWidth - 16 - 140), Y: y,
+		X:     float32(screenWidth - 16 - 140),
+		Y:     squad.Y + squad.Height + squadBoxGap,
 		Width: 140, Height: 32,
 	}
 }

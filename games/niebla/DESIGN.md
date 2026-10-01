@@ -830,6 +830,21 @@ fast-forward cannot swallow a short-lived shot between updates.
 Landed (2026-09-22), in `audio.go`, all of it view: the world speaks where it happens and the view weighs it. Every world sound is multiplied by how close the view stands (`nearness`: a whisper at stop 0, whole from stop 3, never nothing) and by its distance to the view's middle (a little past the view's width on screen), so far out the world whispers under the wind. The wind loop and the oil pools' buried seethe are synthesized by `tools/soundgen` and read as files (`wind-loop.ogg`, `oil-bed.ogg`), so they loop with no seam; the wind is three layers driven by one long gust - a deep rumble always there, an air that swells with it, a whistle only the strongest gusts sing - so being far out sounds like the atmosphere and not like a fault. the bed lives at the nearest pool with oil left (never a dry one) and drops a bloop (`oil-drip.ogg`) every 5-20 s and a thicker gurgle (`oil-gurgle.ogg`, CC-BY) every 30-70 s, while the lilac veins, the minerals, sparkle: a soft crystal ping, one of three pitches varied by the play, every 0.4-2.5 s at the nearest vein with ore - and the more veins the view hears, the louder and the sooner the next ping, so the shimmer grows with the mineral in earshot. The war's shots are learned the way the lights learn them, by comparing the state's with the ones seen last: the colony's artillery its cannon recording (`artillery-fire.ogg`, CC0), a rival base's gun the filtered, echoing one of the same (`artillery-fire-distant.ogg`), small arms two short reports (`gun-a/b.ogg`, CC0) held to one sound every few ticks, a shell in the last second over the view falls whistling (a falling note made in code, once per shell), and its landing is a wide whump of noise, made in code too. The interface clicks (`click.ogg`, CC0): opening the build menu, picking a group or a blueprint, every card's button, the schematics' badge, calling a squad, the trash can's two presses. Still to come: the fog's own low loop outside bubbles, the repulsor hum, robot blips, a digestion crunch, a construction chime, sirens. Fully playable muted.
 
 ## Tuning
+The top-right squad strip starts at y=12 screen pixels. The robots button
+sits 6 pixels below its 44-pixel boxes at every resolution, at y=62.
+Resource text wraps to the left of these controls.
+Rival reports sit 8 pixels below the actual wrapped HUD height, within its
+column; with dev tools open, they move below the last visible button row.
+`statusTextSize` uses 15-pixel text at drawing widths of 1000 and above,
+18 pixels from 750 to 999, and 20 pixels below 750. Resource counters, general
+status and rival notices share these sizes. Dev tools follow the wrapped HUD.
+
+In `main.go`, `retroMinWindowWidth` 1025 enables 2x retro pixels at that
+drawing-area width and above. Smaller windows render at native resolution,
+including text and panels. Status font sizes follow the resulting drawing
+width; the world camera keeps its zoom across scale changes.
+The threshold follows resizes and fullscreen. Screenshots stay at 1280x720.
+
 In `spending.go`, `spendingPeriod` 1 s groups recurring costs and
 `protectorSpendingPeriod` 4 s groups each protector's upkeep;
 `spendingLife` 1.2 s sets how long their floating numbers remain visible;
@@ -1081,6 +1096,19 @@ all four probe policies.
 
 ## Changelog
 
+- 2026-10-01: general status and rival notices now grow as the drawing
+  resolution gets smaller, in 15/18/20-pixel steps capped at 20. The notices
+  and dev tools follow the resulting wrapped HUD height.
+- 2026-10-01: moved the tank squad boxes to the top-right edge and anchored
+  the robots button just 6 screen pixels below them, removing the low-screen
+  downward offset. The resource HUD wraps beside the controls.
+- 2026-10-01: rival notices now follow the actual resource HUD height instead
+  of fixed y=120/y=174 offsets. They wrap clear of the right-hand controls
+  and move below the dev tools only while those are open.
+- 2026-10-01: windows up to 1024 pixels wide now render at native resolution;
+  wider windows keep 2x retro pixels. Text and world share the same scale,
+  switching automatically on resize and fullscreen without shrinking glyphs
+  in the render buffer.
 - 2026-10-01: added player-facing Continue, New and Load. New starts an
   independent numbered save slot; Load lists all of the player's colonies
   with last save date and play time. The legacy save migrates to slot 1,

@@ -814,13 +814,23 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	drawIdleCount(s.state, screen, s.camera)
 	drawTechBadge(s, screen)
 	screen.DrawText("niebla", 16, 12, 24, textColor, uiText)
-	if screenWidth < 1000 {
-		drawMarkupWrapped(screen, s.hudLine(), 16, 44,
-			float32(screenWidth)-32, 13, textColor)
-	} else {
-		drawMarkup(screen, s.hudLine(), 16, 44, 15, textColor)
+	hudRight := robotPanelButtonRect().X - 8
+	if count := min(squadKeys, len(squadSlots(s.state))); count > 0 {
+		hudRight = min(hudRight, squadBoxRect(count-1).X-8)
 	}
-	drawReport(s.state, screen)
+	hudSize := statusTextSize()
+	hudBottom := drawMarkupWrapped(screen, s.hudLine(), 16, 44,
+		max(40, hudRight-16), hudSize, textColor)
+	s.dev.stripY = max(devStripY, hudBottom+8)
+	reportTop := hudBottom + 8
+	if devOpen {
+		for i := 0; i <= devSendBattalionButton; i++ {
+			button := s.dev.buttonBounds(i)
+			reportTop = max(reportTop, button.Y+button.Height+8)
+		}
+		hudRight = screen.Width() - 8
+	}
+	drawReport(s.state, screen, reportTop, hudRight)
 	drawTechCallout(s, screen)
 	drawSquadStrip(s, screen)
 	s.dev.draw(s, screen)
@@ -880,6 +890,17 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	}
 	drawEdgeGuides(s, screen)
 	drawRobotPanel(s, screen)
+}
+
+func statusTextSize() float32 {
+	switch {
+	case screenWidth < 750:
+		return 20
+	case screenWidth < 1000:
+		return 18
+	default:
+		return 15
+	}
 }
 
 // hudLine is the strip of stores and hands under the game's name, each
