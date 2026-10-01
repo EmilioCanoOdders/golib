@@ -100,6 +100,26 @@ func TestScreenInWindow(t *testing.T) {
 			wantWidth: 960, wantHeight: 600,
 			want: device.Rectangle{Width: 1920, Height: 1200},
 		},
+		{
+			name: "the threshold keeps native pixels at 1024",
+			config: Config{
+				Width: 1280, Height: 720, WindowScale: 2,
+				WindowScaleMinWidth: 1025, PixelArt: true, FillWindow: true,
+			},
+			windowWidth: 1024, windowHeight: 768,
+			wantWidth: 1024, wantHeight: 768,
+			want: device.Rectangle{Width: 1024, Height: 768},
+		},
+		{
+			name: "the threshold restores retro pixels above 1024",
+			config: Config{
+				Width: 1280, Height: 720, WindowScale: 2,
+				WindowScaleMinWidth: 1025, PixelArt: true, FillWindow: true,
+			},
+			windowWidth: 1025, windowHeight: 768,
+			wantWidth: 512, wantHeight: 384,
+			want: device.Rectangle{Width: 1024, Height: 768},
+		},
 	}
 	for _, tt := range tests {
 		width, height, fit := screenInWindow(tt.config, tt.windowWidth, tt.windowHeight)
@@ -176,6 +196,35 @@ func TestWindowScreenSize(t *testing.T) {
 			t.Errorf("window %dx%d: screen = %dx%d, want %dx%d",
 				tt.windowWidth, tt.windowHeight, width, height,
 				tt.wantWidth, tt.wantHeight)
+		}
+	}
+	config.WindowScaleMinWidth = 1025
+	for _, tt := range []struct {
+		windowWidth, windowHeight int
+		wantWidth, wantHeight     int
+	}{
+		{800, 600, 800, 600},
+		{1024, 768, 1024, 768},
+		{1025, 768, 512, 384},
+		{1280, 720, 640, 360},
+		{1024, 768, 1024, 768},
+		{0, 0, 1, 1},
+	} {
+		width, height := windowScreenSize(
+			config, tt.windowWidth, tt.windowHeight,
+		)
+		fit := fitScreen(float32(width), float32(height),
+			float32(tt.windowWidth), float32(tt.windowHeight), true)
+		if width != tt.wantWidth || height != tt.wantHeight {
+			t.Errorf("threshold window %dx%d: screen = %dx%d, want %dx%d",
+				tt.windowWidth, tt.windowHeight, width, height,
+				tt.wantWidth, tt.wantHeight)
+		}
+		if tt.windowWidth == 1024 && fit.Width != 1024 {
+			t.Errorf("native screen is still enlarged: fit = %+v", fit)
+		}
+		if tt.windowWidth == 1025 && fit.Width != 1024 {
+			t.Errorf("retro screen is not enlarged 2x: fit = %+v", fit)
 		}
 	}
 	config.WindowScale = 0

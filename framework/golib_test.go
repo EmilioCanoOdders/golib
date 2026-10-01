@@ -37,6 +37,11 @@ func TestConfigResolve(t *testing.T) {
 			config:  Config{WindowScale: -1},
 			wantErr: true,
 		},
+		{
+			name:    "negative window scale minimum width is rejected",
+			config:  Config{WindowScaleMinWidth: -1},
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -154,6 +154,10 @@ type Config struct {
 	// Width and Height fixed unless FillWindow is set. Takes precedence over
 	// FillWindow. Screenshots always use Width and Height.
 	WindowScale int
+	// WindowScaleMinWidth uses native resolution below this drawing-area
+	// width, and WindowScale at or above it. Zero disables the threshold.
+	// Ignored when WindowScale is zero, and for screenshots.
+	WindowScaleMinWidth int
 	// OnScreenResize is called before the first Update or Draw, and again
 	// whenever WindowScale changes the screen size. A game can update its
 	// layout and camera here. It is not called for screenshots.
@@ -383,8 +387,11 @@ func windowScreenSize(config Config, windowWidth, windowHeight int) (int, int) {
 	if config.WindowScale == 0 {
 		return config.Width, config.Height
 	}
-	return max(1, windowWidth/config.WindowScale),
-		max(1, windowHeight/config.WindowScale)
+	scale := config.WindowScale
+	if windowWidth < config.WindowScaleMinWidth {
+		scale = 1
+	}
+	return max(1, windowWidth/scale), max(1, windowHeight/scale)
 }
 
 // runUpdates runs updates updates of scene. Before each one, fill sets the
@@ -453,6 +460,13 @@ func (c Config) resolve() (Config, error) {
 	}
 	if c.WindowScale < 0 {
 		return c, fmt.Errorf("golib.Run: invalid window scale %d: use a positive scale, or 0 for a fixed screen", c.WindowScale)
+	}
+	if c.WindowScaleMinWidth < 0 {
+		return c, fmt.Errorf(
+			"golib.Run: invalid window scale minimum width %d: "+
+				"use a positive width, or 0 for no threshold",
+			c.WindowScaleMinWidth,
+		)
 	}
 	return c, nil
 }
