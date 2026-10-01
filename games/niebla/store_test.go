@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"golib"
 )
@@ -97,10 +98,10 @@ func TestSaveThenLoadRoundTripsTheBase(t *testing.T) {
 	for i := 0; i < 200; i++ {
 		Apply(want, Tick{})
 	}
-	if err := st.saveState(id, want); err != nil {
+	if err := st.saveState(id, regionSlot, want); err != nil {
 		t.Fatalf("saveState: %v", err)
 	}
-	got, found, err := st.loadState(id)
+	got, found, err := st.loadState(id, regionSlot)
 	if err != nil || !found {
 		t.Fatalf("loadState: found %v, err %v", found, err)
 	}
@@ -116,17 +117,17 @@ func TestSavingAgainReplacesTheBase(t *testing.T) {
 		t.Fatalf("player: %v", err)
 	}
 	first := newGame()
-	if err := st.saveState(id, first); err != nil {
+	if err := st.saveState(id, regionSlot, first); err != nil {
 		t.Fatalf("saveState: %v", err)
 	}
 	second := newGame()
 	for i := 0; i < 500; i++ {
 		Apply(second, Tick{})
 	}
-	if err := st.saveState(id, second); err != nil {
+	if err := st.saveState(id, regionSlot, second); err != nil {
 		t.Fatalf("saveState: %v", err)
 	}
-	got, found, err := st.loadState(id)
+	got, found, err := st.loadState(id, regionSlot)
 	if err != nil || !found {
 		t.Fatalf("loadState: found %v, err %v", found, err)
 	}
@@ -148,10 +149,10 @@ func TestAPlayerLoadsOnlyItsOwnBase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("player: %v", err)
 	}
-	if err := st.saveState(one, newGame()); err != nil {
+	if err := st.saveState(one, regionSlot, newGame()); err != nil {
 		t.Fatalf("saveState: %v", err)
 	}
-	if _, found, err := st.loadState(other); err != nil || found {
+	if _, found, err := st.loadState(other, regionSlot); err != nil || found {
 		t.Fatalf("another player's load: found %v, err %v, want none", found, err)
 	}
 }
@@ -200,5 +201,139 @@ func TestResumeStatePrefersTheShotSeed(t *testing.T) {
 	}
 	if got.Ticks != seeded.Ticks {
 		t.Fatalf("resumeState gave tick %d, want the seeded %d", got.Ticks, seeded.Ticks)
+	}
+}
+
+func TestSaveSlotsKeepIndependentColonies(t *testing.T) {
+	st, _ := openTestStore(t)
+	id, err := st.player("machine-one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldDB, oldPlayer, oldResize := db, player, activeResize
+	db, player = st, id
+	t.Cleanup(func() {
+		db, player, activeResize = oldDB, oldPlayer, oldResize
+	})
+	first := newPlayScene(newGameOn(17))
+	first.state.Ticks = 1234
+	first.saveNow()
+	if first.saveFailed {
+		t.Fatal("the first colony could not be saved")
+	}
+	slot, err := st.nextSlot(id)
+	if err != nil || slot != "2" {
+		t.Fatalf("next slot = %q, error = %v", slot, err)
+	}
+	second := newPlayScene(nil)
+	second.slot = slot
+	second.state.Ticks = 60
+	second.saveNow()
+	if second.saveFailed {
+		t.Fatal("the second colony could not be saved")
+	}
+	for _, scene := range []*playScene{first, second} {
+		loaded, found, err := st.loadState(id, scene.slot)
+		if err != nil || !found {
+			t.Fatalf("load %s: found = %v, error = %v", scene.slot, found, err)
+		}
+		if !reflect.DeepEqual(loaded, scene.state) {
+			t.Fatalf("Save %s was overwritten by another colony", scene.slot)
+		}
+	}
+	for slot, stamp := range map[string]string{
+		"1": "2026-10-01T12:00:00.987654321Z",
+		"2": "2026-10-01T12:00:00.123456789Z",
+	} {
+		if _, err := st.sql.Exec(
+			`UPDATE saves SET updated_at = ? WHERE player = ? AND slot = ?`,
+			stamp, id, slot,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+	saves, err := st.listSaves(id)
+	if err != nil || len(saves) != 2 {
+		t.Fatalf("list: %v, error = %v", saves, err)
+	}
+	if saves[0].Slot != "1" || saves[1].Slot != "2" ||
+		saves[0].Ticks != 1234 || saves[1].Ticks != 60 {
+		t.Fatalf("wrong list order or play times: %+v", saves)
+	}
+	if latestSave(saves).Slot != "1" {
+		t.Fatal("Continue chose the newest slot instead of the last played one")
+	}
+	resumed, found, err := resumeState()
+	if err != nil || !found || resumed.Seed != 17 {
+		t.Fatalf("resume: state = %+v, found = %v, error = %v",
+			resumed, found, err)
+	}
+	other, err := st.player("machine-two")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saves, err := st.listSaves(other); err != nil || len(saves) != 0 {
+		t.Fatalf("another player's list: %+v, error = %v", saves, err)
+	}
+	if slot, err := st.nextSlot(other); err != nil || slot != "1" {
+		t.Fatalf("another player's first slot = %q, error = %v", slot, err)
+	}
+}
+
+func TestLegacySaveBecomesTheFirstSlotAcrossRuns(t *testing.T) {
+	st, path := openTestStore(t)
+	id, err := st.player("machine-one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := newGameOn(23)
+	want.Ticks = 5678
+	if err := st.saveState(id, "region", want); err != nil {
+		t.Fatal(err)
+	}
+	st.close()
+	for range 2 {
+		reopened := openStoreAt(t, path)
+		got, found, err := reopened.loadState(id, "1")
+		if err != nil || !found || !reflect.DeepEqual(got, want) {
+			t.Fatalf("migrated colony: found = %v, error = %v", found, err)
+		}
+		saves, err := reopened.listSaves(id)
+		if err != nil || len(saves) != 1 || saves[0].Slot != "1" {
+			t.Fatalf("migration duplicated a save: %+v, error = %v", saves, err)
+		}
+		if slot, err := reopened.nextSlot(id); err != nil || slot != "2" {
+			t.Fatalf("next slot after migration = %q, error = %v", slot, err)
+		}
+		reopened.close()
+	}
+}
+
+func TestUnreadableSaveDoesNotStartANewColony(t *testing.T) {
+	st, _ := openTestStore(t)
+	id, err := st.player("machine-one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.sql.Exec(
+		`INSERT INTO saves (player, slot, state, ticks, updated_at)
+		 VALUES (?, '1', 'not JSON', 0, ?)`,
+		id, time.Now().UTC().Format(time.RFC3339),
+	); err != nil {
+		t.Fatal(err)
+	}
+	oldDB, oldPlayer, oldResize := db, player, activeResize
+	db, player = st, id
+	t.Cleanup(func() {
+		db, player, activeResize = oldDB, oldPlayer, oldResize
+	})
+	if err := loadGame("1"); err == nil {
+		t.Fatal("loading an unreadable save succeeded")
+	}
+	var data string
+	if err := st.sql.QueryRow(
+		`SELECT state FROM saves WHERE player = ? AND slot = '1'`, id,
+	).Scan(&data); err != nil || data != "not JSON" {
+		t.Fatalf("failed load replaced the save: %q, error = %v", data, err)
 	}
 }

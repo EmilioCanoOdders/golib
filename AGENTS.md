@@ -18,6 +18,11 @@ On 2026-10-01, `Config.WindowScale` and `Config.OnScreenResize` added a
 screen that follows the window's drawing area for games that request it;
 Niebla uses half the window size so its text stays readable on smaller monitors.
 
+On 2026-10-01, Niebla's title menu also gained Continue, New and Load:
+independent numbered colonies in its existing SQLite database, with the
+legacy save preserved as slot 1 and a scrollable list showing save dates
+and simulated play time. Play remains the first action before any save.
+
 | Area | State |
 | --- | --- |
 | `golib` CLI: `setup`, `doctor`, `clean`, `help` | Done |

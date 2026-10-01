@@ -39,6 +39,7 @@ const autosaveTicks = 900
 // renders the state and changes nothing.
 type playScene struct {
 	state *State
+	slot  string
 	mites *miteField // the fog's wear on what stands in it; looks only
 	fx    *fxField   // shots' light, flashes, sparks and smoke; looks only
 	costs *spendingField
@@ -100,6 +101,7 @@ func newPlayScene(state *State) *playScene {
 	state.enterRegion()
 	s := &playScene{
 		state:    state,
+		slot:     regionSlot,
 		mites:    newMiteField(),
 		fx:       newFxField(),
 		costs:    newSpendingField(),
@@ -214,7 +216,7 @@ func (s *playScene) saveNow() {
 	if db == nil {
 		return
 	}
-	s.saveFailed = saveBase(s.state) != nil
+	s.saveFailed = saveBase(s.slot, s.state) != nil
 }
 
 // updateSquadKeys calls a squad with the number keys: 1 arms the oldest

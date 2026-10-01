@@ -15,6 +15,21 @@ The fog breathes in cycles: every so often it swells, pressing its line in, then
    and every repair, lilac every shell, so war and growth draw on the
    same stores (see [The rivals](#the-rivals)).
 
+## Starting and loading games
+
+With no saved game, the title menu offers Play and Quit. Once a game is
+saved, it offers Continue, New, Load and Quit. Continue resumes the most
+recently saved colony. New restarts the default region in its own numbered
+slot, preserving every earlier colony. Load lists the player's slots with
+their last save date and simulated play time; keyboard, mouse and gamepad
+can choose one, and Back or Esc returns to the title.
+
+All slots stay in `niebla.db`. The old `region` slot becomes slot `1`;
+new slots count upwards. Autosave and leaving the region update only the
+slot being played. A failed load leaves the player on the menu with an
+error instead of silently starting over. Screenshot-seeded state still
+takes priority for Play under `golib shot --save`.
+
 ## Resources
 | Resource | What it is | What it is for |
 | --- | --- | --- |
@@ -413,7 +428,13 @@ static data generated from `State.Seed`, never state. `play.go` and
 [README.md](./README.md).
 
 ## Screens
-- **Menu:** the game's name over the fog, the player's number under it (`player #30E99076` - the machine's identity, hashed), Play and Quit. Play carries the player to their base as they left it, or deals a new region when there is none. Esc quits; it is the only screen where it does.
+- **Menu:** the game's name over the fog and the hashed player's number
+  (`player #30E99076`). Play and Quit before the first save; Continue, New,
+  Load and Quit afterwards. Continue resumes the last saved colony; New
+  starts another slot without replacing it. Esc quits only here.
+- **Load:** numbered colonies with last save date and simulated play time,
+  scrollable with keys, wheel or d-pad and selectable with a click. Esc or
+  Back returns to the menu; an unreadable save shows an error.
 - **Play:** the isometric region, the camera panning and zooming, the
   bubble drawn over the ground, robots shuttling, the fog line visible
   and creeping, and resource counters on top.
@@ -951,7 +972,20 @@ are floats in world units, and deposits are
 patches whose remaining resources live in `State.Drain`. Several robots
 may work one patch; each still gets its own post position.
 
-The colony saves itself, in `store.go` and `identity.go`: the machine's own ID (Windows' MachineGuid, macOS' IOPlatformUUID, Linux' `/etc/machine-id`), hashed with `playerIDSalt`, is the player identity - `playerIDSalt` "niebla player id v1", 64 hex characters, shown on the menu as its first eight (`#30E99076`) and never in raw form; a machine with no ID gets a random one kept in the database. The local database is SQLite (`modernc.org/sqlite`, pure Go - no C compiler here), at the player's settings folder in `GoLib games/niebla/niebla.db`, with the schema a server keeps: `players` (identity, source, created_at, `token` empty until a server hands one out), `saves` (the whole State as one JSON value per player and slot, `region` for now, with tick and timestamp) and `machine` (key-value for this machine alone, the fallback identity lives there). State version 3 migrates old `core` robots into fueled builders and old `built` robots into workers, including an in-progress factory product, and gives legacy builders and workers their initial hull. Autosave every `autosaveTicks` 900 (15 s of game time) and on leaving the region, so a window closed without ceremony loses less than 15 s. Under `golib shot` and `go test` the database is `:memory:`, so shots and tests never touch the player's base, and `golib shot --save` still starts a game deep in a state: `resumeState` takes the seeded value over the database. The driver doesn't build for `js/wasm`: a web build will take its store from a server or the browser's own.
+The colony saves itself, in `store.go` and `identity.go`. The machine's
+system ID is salted and hashed into the player identity, displayed only
+as its first eight hex characters; a machine with no ID keeps a random
+identity in the database. SQLite (`modernc.org/sqlite`, pure Go) lives at
+the settings folder's `GoLib games/niebla/niebla.db`, with `players`,
+`saves` and `machine` tables. Each save is the whole State as JSON per
+player and numbered slot, with tick and timestamp; the old `region` slot
+migrates to `1`. New games keep their own slots, and Continue chooses the
+last one saved. State migration still restores old robot roles, hull and
+later simulation changes. Autosave every `autosaveTicks` 900 (15 s of game
+time) and on leaving the region writes only the active slot. Under
+`golib shot` and tests the store is `:memory:`; Play still takes the seeded
+`state` from `golib shot --save` through `resumeState`. The driver does not
+build for `js/wasm`; web storage remains a later server or browser store.
 
 Demolition and loose items, in `sim_piles.go`: `demolishWorkTicks` 300 (5 s) of a builder's work to take an ordered building down (`Building.Demolish` counts the work left; it goes in only while `canDemolish` holds, so a protector waits where it stands), `demolishRefund` 1.0 (the part of the cost that falls to the ground; a site gives back the same), piles loaded with the deposits' `robotLoadTicks` and carry sizes, one kind per trip, lilac first. A robot never loads what the stores have no free room for, counting what is already on its way home (`freeRoom`), and unloads `storeStandoff` 11 u from its store's middle, spread by ID like the builders. State holds `Piles` (by ID: cell, oil, lilac) and `Robot.Pile` (the pile a loading robot stands at), the actions are `Demolish` (a building's ID: an order a builder works off) and `CancelJob` (a site's cell, at once), `canPlace` refuses a cell with a pile, and the catalog has the `site` and `pile` types, primary on their tile. The robot's day is a list now (`robotDay`), the shape the per-robot task list will filter. In `inspect.go`: the trash can, `trashWidth` by `trashHeight` 11 by 13 px at the end of a card's title, red and under `demolish?` while armed, gone while a building is being taken down.
 
@@ -1047,6 +1081,11 @@ all four probe policies.
 
 ## Changelog
 
+- 2026-10-01: added player-facing Continue, New and Load. New starts an
+  independent numbered save slot; Load lists all of the player's colonies
+  with last save date and play time. The legacy save migrates to slot 1,
+  autosave stays with the active colony, failed loads show an error, and
+  the menus fit small screens. Play and screenshot seeding keep their flow.
 - 2026-10-01: the screen buffer follows half the window's drawing area on resize; the camera, menu, panels, HUD and help adjust to the smaller viewport, so text is no longer shrunk or clipped on a low-resolution monitor.
 - 2026-09-30: a guard pennant on a building now selects that building,
   including the war factory it guards by default. Its `give order` button

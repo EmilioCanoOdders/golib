@@ -344,7 +344,8 @@ NIEBLA_CITY_REFOUNDING_SHOT_STATE=../../build/niebla/city-refounding.json \
 | File | Holds |
 | --- | --- |
 | `main.go` | `main` — who is playing, then the menu scene —, screen size, every color of the game, the monitor filters (made once, shared by the scenes) |
-| `menu.go` | The title screen: the game's name, the player's number, Play and Quit; the `menuButton` hit-testing both scenes' menus use |
+| `menu.go` | The title screen: Play before the first save, then Continue, New, Load and Quit; shared menu buttons and input |
+| `load.go` | The scrollable save-slot list, with date and simulated play time; choosing a colony or returning to the title |
 | `identity.go` | Who is playing: the machine's ID (registry value, platform UUID or `/etc/machine-id`), hashed with the game's salt into `player`, the number the menu shows and a later server hands tokens out by |
 | `store.go` | The local database (SQLite): players, saves and the machine table; `saveBase`/`resumeState`, the scenes' door into it; the DB path, `:memory:` under `golib shot` |
 | `play.go` | The play scene: input to actions plus one `Tick` per update (more while the dev tools fast forward); camera, selection, open cards, robot roster, individual assignment and pointer modes live here, never serialized; unit cards follow a directly selected robot or rival vehicle, squad cards follow their pennant on free ground or target ring; a guard pennant on a building selects the building, and its cell selects instead of opening the build menu; the schematics callout and one-use building placement mode, rivals' HUD, reach overlays, floating cost numbers and autosave are view state too |
@@ -1013,13 +1014,23 @@ existing small target around their foot.
 
 ### The lifecycle, identity and the local database
 
-The game boots on the **menu** (`menu.go`): the game's name, the player's
-number, Play and Quit. Play carries the player to their base as they left
-it — `resumeState` loads the last save, or deals a new region when there
-is none. Esc in the region saves and returns to the menu; the region also
-saves itself every `autosaveTicks` (900, 15 s), so a window closed without
-ceremony loses less than that. The menu is the only screen where Esc
-quits.
+The game boots on the **menu** (`menu.go`): the game's name and the player's
+number, with Play and Quit before the first save. Once a colony has been
+saved, the buttons become Continue, New, Load and Quit:
+
+- **Continue** resumes the most recently saved colony.
+- **New** starts the default region from scratch in a new numbered slot;
+  every earlier colony remains available. It needs no developer tools.
+- **Load** opens the scrollable list in `load.go`: Save 1, Save 2, and so
+  on, each with its last save date (local time) and simulated play time.
+  Arrows, W/S, the wheel, d-pad or pointer choose a row; Enter, Space,
+  gamepad A/Start or a click loads it. Back or Esc returns to the title.
+
+The play scene keeps its slot; autosave and Esc update only that colony.
+The first save in a new slot happens on Esc or after `autosaveTicks`
+(900, 15 s). A failed load shows an error without replacing the save with
+a fresh game. The main menu is the only screen where Esc quits. The
+four-button menu and the load list also fit the smaller resized screen.
 
 **Identity** (`identity.go`): the machine says who is playing. Its
 system ID — Windows' `MachineGuid`, macOS' `IOPlatformUUID`, Linux'
@@ -1041,16 +1052,19 @@ The schema is the schema a server keeps, on one machine for now:
   `random`), `created_at`, and a `token` column that stays empty until a
   server hands one out at first contact. The client is already shaped
   for that moment: resolve, register, then authenticate by identity.
-- `saves` — the whole `State` as one JSON value per player and slot
-  (`region` for now), with the tick and the time it was written. The
-  server will hold one authoritative region per player the same way.
+- `saves` — the whole `State` as one JSON value per player and numbered
+  slot, with the tick and the time it was written. On opening the database,
+  the legacy `region` slot becomes `1` without changing its state. New
+  slots use the next number; all stay in the same `niebla.db` file.
 - `machine` — key-value for what belongs to this machine alone (the
   fallback identity lives here).
 
 Under `golib shot` and `go test` the database is `:memory:`: shots and
 tests never touch the player's base, and `golib shot --save` still
 starts a game deep in a state — `resumeState` takes the seeded `state`
-value over whatever the database has. Two caveats: the driver doesn't
+value over whatever the database has. The empty screenshot database keeps
+Play first, so `Enter@1` still enters that seeded state or a fresh region.
+Two caveats: the driver doesn't
 build for the browser (`js/wasm`), so a web build of this game will get
 its store from a server or the browser's own, not this file; and the
 simulation itself never reads the clock — only the saves' timestamps do.
