@@ -1454,6 +1454,10 @@ void main() {
 		if (fullscreenHeld) {
 			fullscreenHeld = false;
 			fullscreenLeft = true;
+			// The ask is over: the player answered it. Nothing is wanted until
+			// the game asks again, and then that is a new ask.
+			wantFullscreen = false;
+			fullscreenAsked = false;
 		}
 	}
 
@@ -1464,8 +1468,9 @@ void main() {
 	}
 
 	// takeFullscreen makes the request golib.SetFullscreen asked for. A
-	// browser only allows it while it is handling a key, a click or a touch,
-	// which is why it waits here for one.
+	// browser only grants fullscreen for a moment after a key, a click or a
+	// touch, so the handlers of those call it, and setFullscreen does when one
+	// came a moment ago. Leaving needs none.
 	//
 	// The whole page goes fullscreen, not the canvas. A fullscreen canvas on a
 	// phone keeps the shape its box had when the phone turns, so the game ends
@@ -1478,6 +1483,7 @@ void main() {
 		fullscreenAsked = wantFullscreen;
 		if (!wantFullscreen) {
 			fullscreenTarget = null;
+			fullscreenHeld = false; // the game leaves, not the player
 			const leave = document.exitFullscreen || document.webkitExitFullscreen;
 			if (leave && fullscreenNow()) call(leave, document);
 			return;
@@ -1488,24 +1494,43 @@ void main() {
 		// the page, which is the whole screen there anyway.
 		if (!ask) return;
 		// A browser that says no leaves fullscreenNow as it was, so it is not
-		// the element asked for, and nothing here thinks the game is fullscreen.
+		// the element asked for, and nothing here thinks the game is fullscreen;
+		// the next key, click or touch asks again.
 		fullscreenTarget = whole;
-		call(ask, whole);
+		call(ask, whole, function () {
+			if (fullscreenAsked && fullscreenNow() !== whole) fullscreenAsked = false;
+		});
 	}
 
 	// call runs a method a browser may not have and may refuse, and swallows
-	// both: a browser that says no to fullscreen is no reason to stop the game.
-	function call(method, on) {
+	// both, after calling refused when there is one: a browser that says no to
+	// fullscreen is no reason to stop the game.
+	function call(method, on, refused) {
 		try {
 			const answer = method.call(on);
-			if (answer && answer.catch) answer.catch(function () { });
-		} catch (e) { /* nothing to do about it */ }
+			if (answer && answer.catch) answer.catch(function () { if (refused) refused(); });
+		} catch (e) {
+			if (refused) refused();
+		}
 	}
 
+	// setFullscreen is what golib.SetFullscreen asks for, a frame after the key
+	// or the click the game read it on, when that event's handler is over. The
+	// browser still counts that key or click for a moment, so the request is
+	// made at once, as it is to leave; otherwise it waits for the next one.
 	function setFullscreen(on) {
 		wantFullscreen = !!on;
 		// Asked again, whatever the player did before is past.
 		if (wantFullscreen) fullscreenLeft = false;
+		if (!wantFullscreen || justActed()) takeFullscreen();
+	}
+
+	// justActed reports whether the player pressed a key, clicked or touched a
+	// moment ago, which is when a browser grants fullscreen. A browser that
+	// can't say is answered by waiting for the next one.
+	function justActed() {
+		const activation = navigator.userActivation;
+		return !!(activation && activation.isActive);
 	}
 
 	function setCursorVisible(visible) {

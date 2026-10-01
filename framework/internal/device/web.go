@@ -230,8 +230,10 @@ func SetWindowPosition(x, y int) {}
 func SetWindowMinSize(width, height int) {}
 
 // SetWindowBorder asks the browser for fullscreen, without a border, or for
-// the page again. Browsers only allow it while handling a key or a click, so
-// web.js remembers the request and makes it at the next one.
+// the page again. Browsers grant fullscreen only for a moment after a key, a
+// click or a touch, so web.js makes the request at once when one came a moment
+// ago, such as the key the game is answering, and at the next one otherwise.
+// It leaves fullscreen at once.
 func SetWindowBorder(on bool) {
 	js_().Call("setFullscreen", !on)
 }

@@ -31,11 +31,13 @@ var fullscreenWanted atomic.Bool
 // No key switches by itself. To start in fullscreen, set Config.Fullscreen.
 // Screenshots from golib shot ignore fullscreen.
 //
-// In a browser it happens at the next key, click or touch, which is when a
-// browser allows it, and the player can leave it themselves with Esc or a
-// phone's gesture; IsFullscreen follows them when they do, there and on macOS,
-// so this call switches it back on. On a phone, that key, click or touch is a
-// tap, so a game meant for one needs something to tap.
+// In a browser, fullscreen comes only after a key, a click or a touch: on the
+// one the game read this call on, as a settings screen does, it comes at
+// once; otherwise, as with Config.Fullscreen, at the next one. Leaving is at
+// once. The player can leave it themselves with Esc or a phone's gesture;
+// IsFullscreen follows them when they do, there and on macOS, so this call
+// switches it back on. On a phone, that key, click or touch is a tap, so a
+// game meant for one needs something to tap.
 func SetFullscreen(on bool) {
 	fullscreenWanted.Store(on)
 }
