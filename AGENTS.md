@@ -12,18 +12,7 @@ The promise: someone downloads the template, runs a couple of commands, and buil
 
 Keep this section true: update it in the same change that lands or removes a feature. Never describe planned work as if it existed.
 
-Last updated: 2026-10-01 (the punctuation keys, `golib.KeyComma` and the rest, as places on the keyboard); before it, 2026-09-30 (the window's monitor, size and frame rate, `golib.DisplayScale`, `golib.FPS` and `golib.OpenURL`, for a game's graphics settings; `Config.FillWindow`, a screen that takes the window's shape, with no black bars; on Linux and macOS, `build` and `shot` work while `run` has the game open); before it, 2026-09-29 (gamepad prompts, `golib.PlayingWithGamepad` and `Input.GamepadType`; typed text, `Input.TypedText`; milestones M5, Shipping, and M6, 2D essentials, done; Linux and macOS ran GoLib for the first time; the web build is at stage 4, phones, after a game published on itch.io was played on one; M7, 3D, comes after it).
-
-On 2026-10-01, `Config.WindowScale` and `Config.OnScreenResize` added a
-screen that follows the window's drawing area for games that request it.
-`Config.WindowScaleMinWidth` optionally uses native resolution below a width
-threshold. Niebla renders at 1x up to 1024 drawing-area pixels wide and 2x
-above that, including text, on resizes and fullscreen changes.
-
-On 2026-10-01, Niebla's title menu also gained Continue, New and Load:
-independent numbered colonies in its existing SQLite database, with the
-legacy save preserved as slot 1 and a scrollable list showing save dates
-and simulated play time. Play remains the first action before any save.
+Last updated: 2026-10-01 (the punctuation keys, `golib.KeyComma` and the rest, as places on the keyboard; `Config.WindowScale`, a screen that follows the window's size at a fraction of it, with `Config.WindowScaleMinWidth` and `Config.OnScreenResize`); before it, 2026-09-30 (the window's monitor, size and frame rate, `golib.DisplayScale`, `golib.FPS` and `golib.OpenURL`, for a game's graphics settings; `Config.FillWindow`, a screen that takes the window's shape, with no black bars; on Linux and macOS, `build` and `shot` work while `run` has the game open); before it, 2026-09-29 (gamepad prompts, `golib.PlayingWithGamepad` and `Input.GamepadType`; typed text, `Input.TypedText`; milestones M5, Shipping, and M6, 2D essentials, done; Linux and macOS ran GoLib for the first time; the web build is at stage 4, phones, after a game published on itch.io was played on one; M7, 3D, comes after it).
 
 | Area | State |
 | --- | --- |
@@ -53,7 +42,7 @@ and simulated play time. Play remains the first action before any save.
 | Typed text, as the player's keyboard layout makes it (`Input.TypedText`, and `Type@` in `golib shot --input`), and the keys Delete, Home, End, Page Up and Page Down; the punctuation keys, such as `KeyComma`, by their place on a US keyboard | Done (2026-09-27; punctuation 2026-10-01, for controls laid out by hand, such as a piano on the keyboard's bottom rows), for text a game lets the player type: names, code |
 | Screen scaled to any window size, fullscreen (`golib.SetFullscreen`), post-processing shaders (`golib.NewShader`, `golib.SetPostProcess`) | Done (M2) |
 | A screen that takes the window's shape, with no black bars in a window or in fullscreen, for tools and games whose layout stretches (`Config.FillWindow`) | Done (2026-09-30), tried on Windows |
-| Optional screen resolution following window resizes (`Config.WindowScale`, `Config.WindowScaleMinWidth`, `Config.OnScreenResize`); Niebla renders at native resolution up to 1024 pixels wide, half resolution above it | Done (2026-10-01) |
+| A screen that follows the window's size at a fraction of it, 2 for half its width and height, at the window's full resolution below a width of the game's choosing, and a call when it changes, for a game's layout and camera (`Config.WindowScale`, `Config.WindowScaleMinWidth`, `Config.OnScreenResize`) | Done (2026-10-01), used by `games/niebla` |
 | Random numbers: `golib.RandomInt`, `golib.RandomFloat`, `golib.SetRandomSeed` | Done (M2) |
 | Sound effects made in code, with no sound files: `golib.NewSound`, `golib.SoundSpec`, the ready-made recipes and `golib.SetVolume` | Done (M2) |
 | Music streamed from the game's `assets/` folder: `golib.NewMusic` (OGG, MP3, WAV, QOA, XM, MOD; not IT) | Done (M2) |
