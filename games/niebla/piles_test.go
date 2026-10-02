@@ -324,7 +324,7 @@ func TestCardsCarryTheirTrashCan(t *testing.T) {
 	s := newGame()
 	seedStock(s)
 	arriveAll(s)
-	camera := golib.NewCamera(screenWidth, screenHeight)
+	camera := golib.NewCamera(float32(screenWidth), float32(screenHeight))
 	col, row := groundNearCore()
 	b := raised(t, s, BuildingSilo, col, row)
 	Apply(s, MarkBuilding{Kind: BuildingCharger, Col: col + 1, Row: row})
@@ -407,7 +407,7 @@ func TestWriteDemolishShotState(t *testing.T) {
 	col, row := groundNearCore()
 	raised(t, s, BuildingSilo, col, row)
 
-	camera := golib.NewCamera(screenWidth, screenHeight)
+	camera := golib.NewCamera(float32(screenWidth), float32(screenHeight))
 	camera.Bounds = regionOnScreen()
 	camera.Zoom = zoomOfStop(zoomOut)
 	camera.Snap()

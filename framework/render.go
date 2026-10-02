@@ -50,8 +50,8 @@ func (r *renderer) loadTarget() device.Target {
 }
 
 // resize makes the screen's textures width by height pixels, for a game with
-// Config.FillWindow whose window changed shape. Nothing happens at the size
-// they have.
+// Config.FillWindow or Config.WindowScale whose window changed size. Nothing
+// happens at the size they have.
 func (r *renderer) resize(width, height float32) {
 	if width == r.width && height == r.height {
 		return

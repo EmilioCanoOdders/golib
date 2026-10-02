@@ -39,8 +39,9 @@ const autosaveTicks = 900
 // renders the state and changes nothing.
 type playScene struct {
 	state *State
-	mites *miteField  // the fog's wear on what stands in it; looks only
-	fx    *fxField    // shots' light, flashes, sparks and smoke; looks only
+	slot  string
+	mites *miteField // the fog's wear on what stands in it; looks only
+	fx    *fxField   // shots' light, flashes, sparks and smoke; looks only
 	costs *spendingField
 	au    *audioField // the region's sound; looks and hears only
 	dev   devTools
@@ -100,18 +101,30 @@ func newPlayScene(state *State) *playScene {
 	state.enterRegion()
 	s := &playScene{
 		state:    state,
+		slot:     regionSlot,
 		mites:    newMiteField(),
 		fx:       newFxField(),
 		costs:    newSpendingField(),
 		au:       newAudioField(),
 		expanded: map[string]bool{},
 	}
-	s.camera = golib.NewCamera(screenWidth, screenHeight)
+	s.camera = golib.NewCamera(float32(screenWidth), float32(screenHeight))
 	s.camera.Bounds = regionOnScreen()
+	s.camera.Target = s.camera.Bounds.Center()
 	s.zoomStop, s.zoom = zoomOut, zoomOfStop(zoomOut)
 	s.camera.Zoom = s.zoom
 	s.camera.Snap()
+	activeResize = s.resize
 	return s
+}
+
+func (s *playScene) resize(width, height int) {
+	camera := golib.NewCamera(float32(width), float32(height))
+	camera.Bounds = s.camera.Bounds
+	camera.Target = s.camera.Target
+	camera.Zoom = s.zoom
+	camera.Snap()
+	s.camera = camera
 }
 
 func (s *playScene) Update(input *golib.Input, dt float32) {
@@ -127,8 +140,7 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 		return
 	}
 	s.tickOrdering()
-	// F11 or Alt+Enter switches fullscreen. The screen keeps its size: GoLib
-	// scales it to fit.
+	// F11 or Alt+Enter switches fullscreen; GoLib resizes the screen too.
 	altEnter := (input.KeyDown(golib.KeyLeftAlt) || input.KeyDown(golib.KeyRightAlt)) &&
 		input.KeyPressed(golib.KeyEnter)
 	if input.KeyPressed(golib.KeyF11) || altEnter {
@@ -204,7 +216,7 @@ func (s *playScene) saveNow() {
 	if db == nil {
 		return
 	}
-	s.saveFailed = saveBase(s.state) != nil
+	s.saveFailed = saveBase(s.slot, s.state) != nil
 }
 
 // updateSquadKeys calls a squad with the number keys: 1 arms the oldest
@@ -368,8 +380,10 @@ func (s *playScene) zoomCamera(input *golib.Input, dt float32) {
 		// Where the center must sit for the anchor to stay under the
 		// cursor: the anchor minus the cursor's offset from the middle.
 		s.camera.Target = golib.Vector2{
-			X: s.anchorWorld.X - (s.anchorScreen.X-screenWidth/2)/s.zoom,
-			Y: s.anchorWorld.Y - (s.anchorScreen.Y-screenHeight/2)/s.zoom,
+			X: s.anchorWorld.X -
+				(s.anchorScreen.X-float32(screenWidth)/2)/s.zoom,
+			Y: s.anchorWorld.Y -
+				(s.anchorScreen.Y-float32(screenHeight)/2)/s.zoom,
 		}
 	}
 }
@@ -744,7 +758,8 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	corner := s.camera.ToWorld(0, 0)
 	drawRegion(s.state, screen, s.camera, s.zoom, golib.Rectangle{
 		X: corner.X, Y: corner.Y,
-		Width: screenWidth / s.zoom, Height: screenHeight / s.zoom,
+		Width:  float32(screenWidth) / s.zoom,
+		Height: float32(screenHeight) / s.zoom,
 	})
 	s.mites.draw(screen, s.zoom)
 	s.fx.draw(s.state, screen, s.zoom)
@@ -799,8 +814,23 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	drawIdleCount(s.state, screen, s.camera)
 	drawTechBadge(s, screen)
 	screen.DrawText("niebla", 16, 12, 24, textColor, uiText)
-	drawMarkup(screen, s.hudLine(), 16, 44, 15, textColor)
-	drawReport(s.state, screen)
+	hudRight := robotPanelButtonRect().X - 8
+	if count := min(squadKeys, len(squadSlots(s.state))); count > 0 {
+		hudRight = min(hudRight, squadBoxRect(count-1).X-8)
+	}
+	hudSize := statusTextSize()
+	hudBottom := drawMarkupWrapped(screen, s.hudLine(), 16, 44,
+		max(40, hudRight-16), hudSize, textColor)
+	s.dev.stripY = max(devStripY, hudBottom+8)
+	reportTop := hudBottom + 8
+	if devOpen {
+		for i := 0; i <= devSendBattalionButton; i++ {
+			button := s.dev.buttonBounds(i)
+			reportTop = max(reportTop, button.Y+button.Height+8)
+		}
+		hudRight = screen.Width() - 8
+	}
+	drawReport(s.state, screen, reportTop, hudRight)
 	drawTechCallout(s, screen)
 	drawSquadStrip(s, screen)
 	s.dev.draw(s, screen)
@@ -836,7 +866,11 @@ func (s *playScene) Draw(screen *golib.Screen) {
 			name,
 		)
 	}
-	screen.DrawText(help, 16, float32(screen.Height())-30, 13, textColor, uiText)
+	helpLines := techWrap(screen, help, screen.Width()-32, 13)
+	for i, line := range helpLines {
+		y := screen.Height() - 16*float32(len(helpLines)-i) - 10
+		screen.DrawText(line, 16, y, 13, textColor, uiText)
+	}
 	if s.laying.on {
 		s.drawLayingLabel(screen)
 		if s.laying.menu {
@@ -856,6 +890,17 @@ func (s *playScene) Draw(screen *golib.Screen) {
 	}
 	drawEdgeGuides(s, screen)
 	drawRobotPanel(s, screen)
+}
+
+func statusTextSize() float32 {
+	switch {
+	case screenWidth < 750:
+		return 20
+	case screenWidth < 1000:
+		return 18
+	default:
+		return 15
+	}
 }
 
 // hudLine is the strip of stores and hands under the game's name, each

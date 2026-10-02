@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 
 	"golib"
 )
@@ -392,26 +393,28 @@ func reportWords(r Report) string {
 	return ""
 }
 
-// drawReport shows the latest report for a while, on a plate under the
-// HUD, in the middle of the screen.
-func drawReport(s *State, screen *golib.Screen) {
+func drawReport(s *State, screen *golib.Screen, top, right float32) {
 	r, visible := currentReport(s)
 	if !visible {
 		return
 	}
 	words := reportWords(r)
-	width := float32(0)
+	var plain strings.Builder
 	for _, span := range parseMarkup(words, panelTextColor) {
-		width += screen.TextWidth(span.text, 13, uiText)
+		plain.WriteString(span.text)
 	}
-	x := (float32(screen.Width()) - width) / 2
-	const y = 120 // under the dev tools' second row
+	size := statusTextSize()
+	width := min(screen.TextWidth(plain.String(), size, uiText),
+		max(40, right-36))
+	lines := techWrap(screen, plain.String(), width, size)
+	x := (16 + right - width) / 2
 	plate := golib.Rectangle{
-		X: x - 10, Y: y - 6, Width: width + 20, Height: textRow + 12,
+		X: x - 10, Y: top, Width: width + 20,
+		Height: float32(len(lines))*(size+3) + 12,
 	}
 	screen.DrawRectangle(plate, panelColor)
 	screen.DrawRectangleOutline(plate, 1, dangerColor)
-	drawMarkup(screen, words, x, y, 13, panelTextColor)
+	drawMarkupWrapped(screen, words, x, top+6, width, size, panelTextColor)
 }
 
 func currentReport(s *State) (Report, bool) {

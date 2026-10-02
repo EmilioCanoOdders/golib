@@ -336,8 +336,8 @@ func drawSquadStrip(s *playScene, screen *golib.Screen) {
 // screen's top right corner: the squad the 1 calls is the rightmost.
 func squadBoxRect(i int) golib.Rectangle {
 	return golib.Rectangle{
-		X:      screenWidth - 16 - float32(i+1)*squadBoxWidth - float32(i)*squadBoxGap,
-		Y:      44,
+		X:      float32(screenWidth-16) - float32(i+1)*squadBoxWidth - float32(i)*squadBoxGap,
+		Y:      12,
 		Width:  squadBoxWidth,
 		Height: squadBoxHeight,
 	}

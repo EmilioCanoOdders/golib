@@ -15,6 +15,21 @@ The fog breathes in cycles: every so often it swells, pressing its line in, then
    and every repair, lilac every shell, so war and growth draw on the
    same stores (see [The rivals](#the-rivals)).
 
+## Starting and loading games
+
+With no saved game, the title menu offers Play and Quit. Once a game is
+saved, it offers Continue, New, Load and Quit. Continue resumes the most
+recently saved colony. New restarts the default region in its own numbered
+slot, preserving every earlier colony. Load lists the player's slots with
+their last save date and simulated play time; keyboard, mouse and gamepad
+can choose one, and Back or Esc returns to the title.
+
+All slots stay in `niebla.db`. The old `region` slot becomes slot `1`;
+new slots count upwards. Autosave and leaving the region update only the
+slot being played. A failed load leaves the player on the menu with an
+error instead of silently starting over. Screenshot-seeded state still
+takes priority for Play under `golib shot --save`.
+
 ## Resources
 | Resource | What it is | What it is for |
 | --- | --- | --- |
@@ -413,7 +428,13 @@ static data generated from `State.Seed`, never state. `play.go` and
 [README.md](./README.md).
 
 ## Screens
-- **Menu:** the game's name over the fog, the player's number under it (`player #30E99076` - the machine's identity, hashed), Play and Quit. Play carries the player to their base as they left it, or deals a new region when there is none. Esc quits; it is the only screen where it does.
+- **Menu:** the game's name over the fog and the hashed player's number
+  (`player #30E99076`). Play and Quit before the first save; Continue, New,
+  Load and Quit afterwards. Continue resumes the last saved colony; New
+  starts another slot without replacing it. Esc quits only here.
+- **Load:** numbered colonies with last save date and simulated play time,
+  scrollable with keys, wheel or d-pad and selectable with a click. Esc or
+  Back returns to the menu; an unreadable save shows an error.
 - **Play:** the isometric region, the camera panning and zooming, the
   bubble drawn over the ground, robots shuttling, the fog line visible
   and creeping, and resource counters on top.
@@ -686,8 +707,12 @@ For whoever works on the game, not for the player: in the region, hold Control a
 - No win condition in the MVP; the region is the tutorial for the arc.
 
 ## Art
-The screen is 1280x720 with `Config.PixelArt`, scaling by whole numbers on
-a larger monitor. Three monitor filters run in order (`shaders/glow.fs`,
+The screen follows the window's drawing area at half width and height,
+with `Config.PixelArt` keeping each screen pixel two physical pixels wide.
+Resizing the window (including a Sway resize) recreates the screen buffer,
+updates the camera and repositions the UI. This keeps text legible on
+lower-resolution monitors. Screenshots retain a fixed 1280x720 screen.
+Three monitor filters run in order (`shaders/glow.fs`,
 `shaders/crt.fs`, `shaders/soft.fs`): restrained glow, a faint tube screen
 and a small blur that rounds pixel corners. F2 turns them all off.
 
@@ -805,6 +830,21 @@ fast-forward cannot swallow a short-lived shot between updates.
 Landed (2026-09-22), in `audio.go`, all of it view: the world speaks where it happens and the view weighs it. Every world sound is multiplied by how close the view stands (`nearness`: a whisper at stop 0, whole from stop 3, never nothing) and by its distance to the view's middle (a little past the view's width on screen), so far out the world whispers under the wind. The wind loop and the oil pools' buried seethe are synthesized by `tools/soundgen` and read as files (`wind-loop.ogg`, `oil-bed.ogg`), so they loop with no seam; the wind is three layers driven by one long gust - a deep rumble always there, an air that swells with it, a whistle only the strongest gusts sing - so being far out sounds like the atmosphere and not like a fault. the bed lives at the nearest pool with oil left (never a dry one) and drops a bloop (`oil-drip.ogg`) every 5-20 s and a thicker gurgle (`oil-gurgle.ogg`, CC-BY) every 30-70 s, while the lilac veins, the minerals, sparkle: a soft crystal ping, one of three pitches varied by the play, every 0.4-2.5 s at the nearest vein with ore - and the more veins the view hears, the louder and the sooner the next ping, so the shimmer grows with the mineral in earshot. The war's shots are learned the way the lights learn them, by comparing the state's with the ones seen last: the colony's artillery its cannon recording (`artillery-fire.ogg`, CC0), a rival base's gun the filtered, echoing one of the same (`artillery-fire-distant.ogg`), small arms two short reports (`gun-a/b.ogg`, CC0) held to one sound every few ticks, a shell in the last second over the view falls whistling (a falling note made in code, once per shell), and its landing is a wide whump of noise, made in code too. The interface clicks (`click.ogg`, CC0): opening the build menu, picking a group or a blueprint, every card's button, the schematics' badge, calling a squad, the trash can's two presses. Still to come: the fog's own low loop outside bubbles, the repulsor hum, robot blips, a digestion crunch, a construction chime, sirens. Fully playable muted.
 
 ## Tuning
+The top-right squad strip starts at y=12 screen pixels. The robots button
+sits 6 pixels below its 44-pixel boxes at every resolution, at y=62.
+Resource text wraps to the left of these controls.
+Rival reports sit 8 pixels below the actual wrapped HUD height, within its
+column; with dev tools open, they move below the last visible button row.
+`statusTextSize` uses 15-pixel text at drawing widths of 1000 and above,
+18 pixels from 750 to 999, and 20 pixels below 750. Resource counters, general
+status and rival notices share these sizes. Dev tools follow the wrapped HUD.
+
+In `main.go`, `retroMinWindowWidth` 1025 enables 2x retro pixels at that
+drawing-area width and above. Smaller windows render at native resolution,
+including text and panels. Status font sizes follow the resulting drawing
+width; the world camera keeps its zoom across scale changes.
+The threshold follows resizes and fullscreen. Screenshots stay at 1280x720.
+
 In `spending.go`, `spendingPeriod` 1 s groups recurring costs and
 `protectorSpendingPeriod` 4 s groups each protector's upkeep;
 `spendingLife` 1.2 s sets how long their floating numbers remain visible;
@@ -947,7 +987,20 @@ are floats in world units, and deposits are
 patches whose remaining resources live in `State.Drain`. Several robots
 may work one patch; each still gets its own post position.
 
-The colony saves itself, in `store.go` and `identity.go`: the machine's own ID (Windows' MachineGuid, macOS' IOPlatformUUID, Linux' `/etc/machine-id`), hashed with `playerIDSalt`, is the player identity - `playerIDSalt` "niebla player id v1", 64 hex characters, shown on the menu as its first eight (`#30E99076`) and never in raw form; a machine with no ID gets a random one kept in the database. The local database is SQLite (`modernc.org/sqlite`, pure Go - no C compiler here), at the player's settings folder in `GoLib games/niebla/niebla.db`, with the schema a server keeps: `players` (identity, source, created_at, `token` empty until a server hands one out), `saves` (the whole State as one JSON value per player and slot, `region` for now, with tick and timestamp) and `machine` (key-value for this machine alone, the fallback identity lives there). State version 3 migrates old `core` robots into fueled builders and old `built` robots into workers, including an in-progress factory product, and gives legacy builders and workers their initial hull. Autosave every `autosaveTicks` 900 (15 s of game time) and on leaving the region, so a window closed without ceremony loses less than 15 s. Under `golib shot` and `go test` the database is `:memory:`, so shots and tests never touch the player's base, and `golib shot --save` still starts a game deep in a state: `resumeState` takes the seeded value over the database. The driver doesn't build for `js/wasm`: a web build will take its store from a server or the browser's own.
+The colony saves itself, in `store.go` and `identity.go`. The machine's
+system ID is salted and hashed into the player identity, displayed only
+as its first eight hex characters; a machine with no ID keeps a random
+identity in the database. SQLite (`modernc.org/sqlite`, pure Go) lives at
+the settings folder's `GoLib games/niebla/niebla.db`, with `players`,
+`saves` and `machine` tables. Each save is the whole State as JSON per
+player and numbered slot, with tick and timestamp; the old `region` slot
+migrates to `1`. New games keep their own slots, and Continue chooses the
+last one saved. State migration still restores old robot roles, hull and
+later simulation changes. Autosave every `autosaveTicks` 900 (15 s of game
+time) and on leaving the region writes only the active slot. Under
+`golib shot` and tests the store is `:memory:`; Play still takes the seeded
+`state` from `golib shot --save` through `resumeState`. The driver does not
+build for `js/wasm`; web storage remains a later server or browser store.
 
 Demolition and loose items, in `sim_piles.go`: `demolishWorkTicks` 300 (5 s) of a builder's work to take an ordered building down (`Building.Demolish` counts the work left; it goes in only while `canDemolish` holds, so a protector waits where it stands), `demolishRefund` 1.0 (the part of the cost that falls to the ground; a site gives back the same), piles loaded with the deposits' `robotLoadTicks` and carry sizes, one kind per trip, lilac first. A robot never loads what the stores have no free room for, counting what is already on its way home (`freeRoom`), and unloads `storeStandoff` 11 u from its store's middle, spread by ID like the builders. State holds `Piles` (by ID: cell, oil, lilac) and `Robot.Pile` (the pile a loading robot stands at), the actions are `Demolish` (a building's ID: an order a builder works off) and `CancelJob` (a site's cell, at once), `canPlace` refuses a cell with a pile, and the catalog has the `site` and `pile` types, primary on their tile. The robot's day is a list now (`robotDay`), the shape the per-robot task list will filter. In `inspect.go`: the trash can, `trashWidth` by `trashHeight` 11 by 13 px at the end of a card's title, red and under `demolish?` while armed, gone while a building is being taken down.
 
@@ -1042,6 +1095,26 @@ all four probe policies.
 - **Text and translations:** all in-game text is English. Strings move to `assets/text/<lang>.json` (one flat key-to-string file per language, read once with `golib.ReadAsset`) when the first text-heavy screens land; the language is a player setting, not part of the simulation state.
 
 ## Changelog
+
+- 2026-10-01: general status and rival notices now grow as the drawing
+  resolution gets smaller, in 15/18/20-pixel steps capped at 20. The notices
+  and dev tools follow the resulting wrapped HUD height.
+- 2026-10-01: moved the tank squad boxes to the top-right edge and anchored
+  the robots button just 6 screen pixels below them, removing the low-screen
+  downward offset. The resource HUD wraps beside the controls.
+- 2026-10-01: rival notices now follow the actual resource HUD height instead
+  of fixed y=120/y=174 offsets. They wrap clear of the right-hand controls
+  and move below the dev tools only while those are open.
+- 2026-10-01: windows up to 1024 pixels wide now render at native resolution;
+  wider windows keep 2x retro pixels. Text and world share the same scale,
+  switching automatically on resize and fullscreen without shrinking glyphs
+  in the render buffer.
+- 2026-10-01: added player-facing Continue, New and Load. New starts an
+  independent numbered save slot; Load lists all of the player's colonies
+  with last save date and play time. The legacy save migrates to slot 1,
+  autosave stays with the active colony, failed loads show an error, and
+  the menus fit small screens. Play and screenshot seeding keep their flow.
+- 2026-10-01: the screen buffer follows half the window's drawing area on resize; the camera, menu, panels, HUD and help adjust to the smaller viewport, so text is no longer shrunk or clipped on a low-resolution monitor.
 - 2026-09-30: a guard pennant on a building now selects that building,
   including the war factory it guards by default. Its `give order` button
   still places the squad's waypoint; pennants on free ground and attack

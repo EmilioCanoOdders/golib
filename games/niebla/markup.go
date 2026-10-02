@@ -77,3 +77,28 @@ func drawMarkup(screen *golib.Screen, text string, x, y, size float32, base goli
 	}
 	return x
 }
+
+func drawMarkupWrapped(
+	screen *golib.Screen, text string, x, y, maxWidth, size float32,
+	base golib.Color,
+) float32 {
+	start := x
+	for _, span := range parseMarkup(text, base) {
+		for _, word := range strings.Fields(span.text) {
+			part := word
+			if x > start {
+				part = " " + word
+			}
+			width := screen.TextWidth(part, size, uiText)
+			if x > start && x+width > start+maxWidth {
+				x = start
+				y += size + 3
+				part = word
+				width = screen.TextWidth(part, size, uiText)
+			}
+			screen.DrawText(part, x, y, size, span.color, uiText)
+			x += width
+		}
+	}
+	return y + size
+}

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -16,11 +17,7 @@ import (
 	"golib"
 )
 
-// The local database. It is the schema a later server keeps, on one
-// player's machine for now: players by identity, each with its saves,
-// and a token column left empty until a server fills it. The whole
-// colony is one JSON value in the saves table, the way the server would
-// hold one authoritative region per player.
+// The local database keeps player identities and one JSON colony per slot.
 
 // db is the game's local database, nil when saving is off. resolvePlayer
 // opens it before the first scene; the scenes reach it through saveBase
@@ -30,9 +27,23 @@ var db *store
 // saveWarning says why saving is off, when it is, for the menu to show.
 var saveWarning string
 
-// regionSlot names the one save slot so far: the region as the player
-// left it.
-const regionSlot = "region"
+const regionSlot = "1"
+
+type saveInfo struct {
+	Slot      string
+	Ticks     int64
+	UpdatedAt time.Time
+}
+
+func latestSave(saves []saveInfo) saveInfo {
+	var latest saveInfo
+	for _, saved := range saves {
+		if !saved.UpdatedAt.Before(latest.UpdatedAt) {
+			latest = saved
+		}
+	}
+	return latest
+}
 
 // store is the local database.
 type store struct {
@@ -100,9 +111,8 @@ func (st *store) configure() error {
 	return nil
 }
 
-// migrate creates the tables the game needs, leaving any that exist.
-// The columns beyond what the game uses today — the players' token, the
-// saves' slot — are where the server grows into.
+// migrate creates the tables and renames the legacy save without replacing
+// an existing numbered slot, including when an older game build was run.
 func (st *store) migrate() error {
 	const schema = `
 CREATE TABLE IF NOT EXISTS players (
@@ -125,6 +135,14 @@ CREATE TABLE IF NOT EXISTS machine (
 );`
 	if _, err := st.sql.Exec(schema); err != nil {
 		return fmt.Errorf("making the tables: %w", err)
+	}
+	_, err := st.sql.Exec(`UPDATE saves SET slot = '1'
+		WHERE slot = 'region' AND NOT EXISTS (
+			SELECT 1 FROM saves AS other
+			WHERE other.player = saves.player AND other.slot = '1'
+		)`)
+	if err != nil {
+		return fmt.Errorf("migrating the first save slot: %w", err)
 	}
 	return nil
 }
@@ -162,8 +180,7 @@ func (st *store) player(machine string) (string, error) {
 	return id, nil
 }
 
-// saveState writes the whole colony over this player's save.
-func (st *store) saveState(id string, s *State) error {
+func (st *store) saveState(id, slot string, s *State) error {
 	data, err := json.Marshal(s)
 	if err != nil {
 		return fmt.Errorf("saving: state can't be written as JSON: %w", err)
@@ -172,7 +189,8 @@ func (st *store) saveState(id string, s *State) error {
 		`INSERT INTO saves (player, slot, state, ticks, updated_at) VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT (player, slot) DO UPDATE SET
 		   state = excluded.state, ticks = excluded.ticks, updated_at = excluded.updated_at`,
-		id, regionSlot, string(data), s.Ticks, time.Now().UTC().Format(time.RFC3339),
+		id, slot, string(data), s.Ticks,
+		time.Now().UTC().Format(time.RFC3339Nano),
 	)
 	if err != nil {
 		return fmt.Errorf("saving: %w", err)
@@ -180,11 +198,10 @@ func (st *store) saveState(id string, s *State) error {
 	return nil
 }
 
-// loadState reads this player's save, and says whether there was one.
-func (st *store) loadState(id string) (*State, bool, error) {
+func (st *store) loadState(id, slot string) (*State, bool, error) {
 	var data string
 	err := st.sql.QueryRow(
-		`SELECT state FROM saves WHERE player = ? AND slot = ?`, id, regionSlot,
+		`SELECT state FROM saves WHERE player = ? AND slot = ?`, id, slot,
 	).Scan(&data)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, false, nil
@@ -197,6 +214,46 @@ func (st *store) loadState(id string) (*State, bool, error) {
 		return nil, false, fmt.Errorf("loading: the save can't be read: %w", err)
 	}
 	return &s, true, nil
+}
+
+func (st *store) listSaves(id string) ([]saveInfo, error) {
+	rows, err := st.sql.Query(
+		`SELECT slot, ticks, updated_at FROM saves WHERE player = ?
+		 ORDER BY CAST(slot AS INTEGER), slot`, id,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("listing saves: %w", err)
+	}
+	defer rows.Close()
+	var saves []saveInfo
+	for rows.Next() {
+		var saved saveInfo
+		var stamp string
+		if err := rows.Scan(&saved.Slot, &saved.Ticks, &stamp); err != nil {
+			return nil, fmt.Errorf("reading save details: %w", err)
+		}
+		saved.UpdatedAt, err = time.Parse(time.RFC3339Nano, stamp)
+		if err != nil {
+			return nil, fmt.Errorf("reading save date: %w", err)
+		}
+		saves = append(saves, saved)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("listing saves: %w", err)
+	}
+	return saves, nil
+}
+
+func (st *store) nextSlot(id string) (string, error) {
+	var last int64
+	err := st.sql.QueryRow(
+		`SELECT COALESCE(MAX(CAST(slot AS INTEGER)), 0)
+		 FROM saves WHERE player = ?`, id,
+	).Scan(&last)
+	if err != nil {
+		return "", fmt.Errorf("choosing a new save slot: %w", err)
+	}
+	return strconv.FormatInt(last+1, 10), nil
 }
 
 func (st *store) close() error {
@@ -241,11 +298,11 @@ func randomID() (string, error) {
 }
 
 // saveBase writes the colony to the local database, when saving is on.
-func saveBase(s *State) error {
+func saveBase(slot string, s *State) error {
 	if db == nil {
 		return errors.New("saving is off")
 	}
-	return db.saveState(player, s)
+	return db.saveState(player, slot, s)
 }
 
 // resumeState returns the state the player comes back to: the one a
@@ -260,5 +317,9 @@ func resumeState() (*State, bool, error) {
 	if db == nil {
 		return nil, false, nil
 	}
-	return db.loadState(player)
+	saves, err := db.listSaves(player)
+	if err != nil || len(saves) == 0 {
+		return nil, false, err
+	}
+	return db.loadState(player, latestSave(saves).Slot)
 }

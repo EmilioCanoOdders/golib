@@ -389,12 +389,14 @@ func tooltipLayoutForThings(
 	middle := camera.ToScreen(golib.Vector2{X: sx, Y: sy})
 	half := float32(buildingCell) * unitW / 2 * camera.Zoom
 	panelX := middle.X + half + tooltipGap
-	if panelX+t.w > screenWidth-tooltipMargin {
+	if panelX+t.w > float32(screenWidth)-tooltipMargin {
 		panelX = middle.X - half - tooltipGap - t.w
 	}
-	panelX = clampf(panelX, tooltipMargin, screenWidth-tooltipMargin-t.w)
+	panelX = clampf(panelX, tooltipMargin,
+		float32(screenWidth)-tooltipMargin-t.w)
 	panelY := clampf(
-		middle.Y-titleRow/2, tooltipMargin, screenHeight-tooltipMargin-t.h,
+		middle.Y-titleRow/2, tooltipMargin,
+		float32(screenHeight)-tooltipMargin-t.h,
 	)
 	t.moveTo(panelX, panelY)
 	return t
@@ -420,12 +422,14 @@ func tooltipLayoutForSquad(
 		return t
 	}
 	x := anchor.X + tooltipGap
-	if x+t.w > screenWidth-tooltipMargin {
+	if x+t.w > float32(screenWidth)-tooltipMargin {
 		x = anchor.X - tooltipGap - t.w
 	}
-	x = clampf(x, tooltipMargin, screenWidth-tooltipMargin-t.w)
+	x = clampf(x, tooltipMargin,
+		float32(screenWidth)-tooltipMargin-t.w)
 	y := clampf(
-		anchor.Y-titleRow/2, tooltipMargin, screenHeight-tooltipMargin-t.h,
+		anchor.Y-titleRow/2, tooltipMargin,
+		float32(screenHeight)-tooltipMargin-t.h,
 	)
 	t.moveTo(x, y)
 	return t

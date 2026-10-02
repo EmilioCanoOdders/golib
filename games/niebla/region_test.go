@@ -17,7 +17,8 @@ func TestProjectionFitsTheRegionOnScreen(t *testing.T) {
 	}
 	for _, c := range corners {
 		x, y := projectTile(c[0], c[1])
-		if x < 0 || x > screenWidth || y < 0 || y > screenHeight {
+		if x < 0 || x > float32(screenWidth) ||
+			y < 0 || y > float32(screenHeight) {
 			t.Errorf("corner %v, %v projects at %v, %v, off the screen",
 				c[0], c[1], x, y)
 		}

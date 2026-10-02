@@ -93,7 +93,8 @@ func SetMonitor(i int) {
 // SetWindowSize makes the game's window width by height pixels, the area it
 // draws in, from the next frame, centered on its monitor and no larger than
 // it. In fullscreen it is the size the window comes back to. The screen the
-// game draws on keeps its size either way: Run scales it to fit the window.
+// game draws on keeps its size unless Config.WindowScale or Config.FillWindow
+// is set: Run scales it to fit the window.
 // A size below 1 is ignored, and so is the call in a browser, where the canvas
 // follows the page.
 //

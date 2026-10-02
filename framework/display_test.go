@@ -84,6 +84,42 @@ func TestScreenInWindow(t *testing.T) {
 		{name: "a minimized window keeps the Config's size", config: Config{Width: 1280, Height: 720, FillWindow: true},
 			windowWidth: 0, windowHeight: 0, wantWidth: 1280, wantHeight: 720,
 			want: device.Rectangle{}},
+		{
+			name:        "WindowScale follows the drawing area",
+			config:      Config{Width: 1280, Height: 720, WindowScale: 2},
+			windowWidth: 1920, windowHeight: 1200,
+			wantWidth: 960, wantHeight: 600,
+			want: device.Rectangle{Width: 1920, Height: 1200},
+		},
+		{
+			name: "WindowScale takes precedence over FillWindow",
+			config: Config{
+				Width: 1280, Height: 720, WindowScale: 2, FillWindow: true,
+			},
+			windowWidth: 1920, windowHeight: 1200,
+			wantWidth: 960, wantHeight: 600,
+			want: device.Rectangle{Width: 1920, Height: 1200},
+		},
+		{
+			name: "the threshold keeps native pixels at 1024",
+			config: Config{
+				Width: 1280, Height: 720, WindowScale: 2,
+				WindowScaleMinWidth: 1025, PixelArt: true, FillWindow: true,
+			},
+			windowWidth: 1024, windowHeight: 768,
+			wantWidth: 1024, wantHeight: 768,
+			want: device.Rectangle{Width: 1024, Height: 768},
+		},
+		{
+			name: "the threshold restores retro pixels above 1024",
+			config: Config{
+				Width: 1280, Height: 720, WindowScale: 2,
+				WindowScaleMinWidth: 1025, PixelArt: true, FillWindow: true,
+			},
+			windowWidth: 1025, windowHeight: 768,
+			wantWidth: 512, wantHeight: 384,
+			want: device.Rectangle{Width: 1024, Height: 768},
+		},
 	}
 	for _, tt := range tests {
 		width, height, fit := screenInWindow(tt.config, tt.windowWidth, tt.windowHeight)
@@ -139,6 +175,62 @@ func TestWindowScale(t *testing.T) {
 		if got := windowScale(tt.screenWidth, tt.screenHeight, tt.monitorWidth, tt.monitorHeight); got != tt.want {
 			t.Errorf("windowScale(%d, %d, %d, %d) = %d, want %d", tt.screenWidth, tt.screenHeight, tt.monitorWidth, tt.monitorHeight, got, tt.want)
 		}
+	}
+}
+
+func TestWindowScreenSize(t *testing.T) {
+	config := Config{Width: 1280, Height: 720, WindowScale: 2}
+	for _, tt := range []struct {
+		windowWidth, windowHeight int
+		wantWidth, wantHeight     int
+	}{
+		{1280, 720, 640, 360},
+		{1024, 600, 512, 300},
+		{1365, 767, 682, 383},
+		{0, 0, 1, 1},
+	} {
+		width, height := windowScreenSize(
+			config, tt.windowWidth, tt.windowHeight,
+		)
+		if width != tt.wantWidth || height != tt.wantHeight {
+			t.Errorf("window %dx%d: screen = %dx%d, want %dx%d",
+				tt.windowWidth, tt.windowHeight, width, height,
+				tt.wantWidth, tt.wantHeight)
+		}
+	}
+	config.WindowScaleMinWidth = 1025
+	for _, tt := range []struct {
+		windowWidth, windowHeight int
+		wantWidth, wantHeight     int
+	}{
+		{800, 600, 800, 600},
+		{1024, 768, 1024, 768},
+		{1025, 768, 512, 384},
+		{1280, 720, 640, 360},
+		{1024, 768, 1024, 768},
+		{0, 0, 1, 1},
+	} {
+		width, height := windowScreenSize(
+			config, tt.windowWidth, tt.windowHeight,
+		)
+		fit := fitScreen(float32(width), float32(height),
+			float32(tt.windowWidth), float32(tt.windowHeight), true)
+		if width != tt.wantWidth || height != tt.wantHeight {
+			t.Errorf("threshold window %dx%d: screen = %dx%d, want %dx%d",
+				tt.windowWidth, tt.windowHeight, width, height,
+				tt.wantWidth, tt.wantHeight)
+		}
+		if tt.windowWidth == 1024 && fit.Width != 1024 {
+			t.Errorf("native screen is still enlarged: fit = %+v", fit)
+		}
+		if tt.windowWidth == 1025 && fit.Width != 1024 {
+			t.Errorf("retro screen is not enlarged 2x: fit = %+v", fit)
+		}
+	}
+	config.WindowScale = 0
+	width, height := windowScreenSize(config, 1024, 600)
+	if width != 1280 || height != 720 {
+		t.Errorf("fixed screen = %dx%d, want 1280x720", width, height)
 	}
 }
 
