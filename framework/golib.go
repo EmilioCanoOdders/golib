@@ -140,8 +140,9 @@ const (
 //
 // Width and Height set the screen's size, fixed unless WindowScale or
 // FillWindow is used.
-// The window opens at that size, or with PixelArt at the largest whole
-// multiple of it that fits the monitor. Run scales the screen to the window
+// The window opens at that size, smaller with the same shape when it doesn't
+// fit the monitor, or with PixelArt, unless WindowScale is set, at the largest
+// whole multiple of it that fits the monitor. Run scales the screen to the window
 // and reports mouse positions in screen pixels.
 type Config struct {
 	Title      string // Window title. Default: "GoLib".
@@ -427,14 +428,6 @@ func openWindow(config Config, hidden bool) error {
 		return fmt.Errorf("golib.Run: could not open a %dx%d window: see the raylib warnings above", config.Width, config.Height)
 	}
 	if !hidden {
-		if config.WindowScale != 0 {
-			_, _, monitorWidth, monitorHeight := device.MonitorBounds()
-			if monitorWidth > 0 && monitorHeight > 0 {
-				width := min(config.Width, monitorWidth*4/5)
-				height := min(config.Height, monitorHeight*4/5)
-				device.SetWindowSize(max(2, width), max(2, height))
-			}
-		}
 		device.SetWindowMinSize(max(config.Width/4, 1), max(config.Height/4, 1))
 		if config.PixelArt && config.WindowScale == 0 {
 			enlargeWindow(config.Width, config.Height)
