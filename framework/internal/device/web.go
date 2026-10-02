@@ -367,3 +367,24 @@ func enlarge(picture *image.NRGBA, scale int) *image.NRGBA {
 func CursorVisible() bool {
 	return js_().Call("cursorVisible").Bool()
 }
+
+// SystemLanguages returns the languages the browser is set to, most
+// preferred first, as it names them, such as "es-ES": navigator.languages,
+// or navigator.language in a browser without the list. It reads the browser
+// itself, not the page's glue, so a game can ask before golib.Run.
+func SystemLanguages() []string {
+	navigator := js.Global().Get("navigator")
+	if !navigator.Truthy() {
+		return nil
+	}
+	var languages []string
+	if list := navigator.Get("languages"); list.Truthy() {
+		for i := range list.Length() {
+			languages = append(languages, list.Index(i).String())
+		}
+	}
+	if one := navigator.Get("language"); len(languages) == 0 && one.Truthy() {
+		languages = append(languages, one.String())
+	}
+	return languages
+}

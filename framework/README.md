@@ -24,6 +24,7 @@ For AI agents writing game code with GoLib, and for anyone who wants the whole f
 | Play music | `golib.NewMusic` | [Music](#music) |
 | Go fullscreen, add a CRT look | `golib.SetFullscreen`, `golib.NewShader`, `golib.SetPostProcess` | [Window, fullscreen and screen effects](#window-fullscreen-and-screen-effects) |
 | Remember high scores, settings and progress | `golib.SaveData`, `golib.LoadData` | [Saving data](#saving-data) |
+| Start in the player's language | `golib.ChooseLanguage`, `golib.SystemLanguages` | [The player's language](#the-players-language) |
 | Read a data file | `golib.ReadAsset` | [Files: the assets folder](#files-the-assets-folder) |
 | End the game | `golib.Quit` | [Quitting](#quitting) |
 
@@ -1177,6 +1178,29 @@ func main() {
 ```
 
 Let the player turn effects off, with `golib.SetPostProcess()`. `games/asteroids` has a glow and a CRT shader, switched with F2.
+
+## The player's language
+
+A game translated to several languages can start in the one the player's system speaks, until the player chooses another in its settings. GoLib says which languages those are; the text itself, and how to translate it, is the game's.
+
+| Name | What it does |
+| --- | --- |
+| `SystemLanguages` | `SystemLanguages() []string`: the languages the system shows its own text in, most preferred first, as tags: the language in lowercase, then its script and region when the system says them, such as `"es-ES"`, `"en"`, `"pt-BR"` or `"zh-Hans-CN"`. Windows's display languages, macOS's preferred languages, Linux's `LANGUAGE` and then `LC_ALL`, `LC_MESSAGES` or `LANG`, a browser's `navigator.languages`. Empty when the system says none, and under `golib shot`. |
+| `ChooseLanguage` | `ChooseLanguage(have []string, fallback string) string`: which of the game's languages, by their tags, to start in: the first of the system's it has, whole or by its language alone, so `"es-MX"` chooses `"es"`; or `fallback` with none. |
+
+```go
+func main() {
+	settings := loadSettings()
+	if settings.Language == "" { // the player hasn't chosen one yet
+		settings.Language = golib.ChooseLanguage([]string{"es", "en"}, "en")
+	}
+	// ...
+}
+```
+
+- Both work before `Run`, so the first screen is already in the right language. Save the language only once the player chooses one, so a game keeps following the system until then.
+- `golib shot` sees no system language, so its pictures are the same on every machine: shots show the game's fallback. Start a shot in another language with `--save` and the game's saved settings.
+- The built-in font draws the Latin alphabet: a language in another script needs a font from a file (see [Fonts](#fonts)).
 
 ## Saving data
 
