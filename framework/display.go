@@ -224,6 +224,35 @@ func enlargeWindow(screenWidth, screenHeight int) {
 	device.SetWindowPosition(cornerX+(monitorWidth-width)/2, cornerY+(monitorHeight-height)/2)
 }
 
+// shrinkWindow makes a window of width by height pixels smaller, keeping its
+// shape, when it doesn't fit in most of the monitor, and centers it there.
+// raylib centers a new window on the monitor's space without the taskbar, but
+// with unsigned sizes, so a window larger than that space would open far off
+// every monitor, at a y of 32767 on Windows.
+func shrinkWindow(width, height int) {
+	cornerX, cornerY, monitorWidth, monitorHeight := device.MonitorBounds()
+	fitWidth, fitHeight := windowFit(width, height, monitorWidth, monitorHeight)
+	if fitWidth == width && fitHeight == height {
+		return
+	}
+	device.SetWindowSize(fitWidth, fitHeight)
+	device.SetWindowPosition(cornerX+(monitorWidth-fitWidth)/2, cornerY+(monitorHeight-fitHeight)/2)
+}
+
+// windowFit returns the size of a window of width by height pixels made to fit
+// in nine tenths of a monitor, which leaves room for the title bar and the
+// taskbar: the same size if it fits, or else smaller, with the same shape.
+func windowFit(width, height, monitorWidth, monitorHeight int) (int, int) {
+	roomWidth, roomHeight := monitorWidth*9/10, monitorHeight*9/10
+	if width <= 0 || height <= 0 || roomWidth <= 0 || roomHeight <= 0 || (width <= roomWidth && height <= roomHeight) {
+		return width, height
+	}
+	if width*roomHeight <= height*roomWidth {
+		return max(1, width*roomHeight/height), roomHeight // the height decides
+	}
+	return roomWidth, max(1, height*roomWidth/width)
+}
+
 // windowScale returns how many times a screen fits in four fifths of a
 // monitor, as a whole number, and at least 1.
 func windowScale(screenWidth, screenHeight, monitorWidth, monitorHeight int) int {

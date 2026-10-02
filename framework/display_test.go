@@ -105,6 +105,24 @@ func TestSetFullscreen(t *testing.T) {
 	}
 }
 
+func TestWindowFit(t *testing.T) {
+	tests := []struct {
+		width, height, monitorWidth, monitorHeight, wantWidth, wantHeight int
+	}{
+		{1280, 720, 1920, 1080, 1280, 720},  // fits
+		{1920, 1080, 1920, 1080, 1728, 972}, // the monitor's size: nine tenths of it
+		{1920, 1080, 1366, 768, 1228, 691},  // larger than the monitor
+		{1000, 1200, 1920, 1080, 810, 972},  // the height decides
+		{1920, 1080, 0, 0, 1920, 1080},      // no monitor
+	}
+	for _, tt := range tests {
+		width, height := windowFit(tt.width, tt.height, tt.monitorWidth, tt.monitorHeight)
+		if width != tt.wantWidth || height != tt.wantHeight {
+			t.Errorf("windowFit(%d, %d, %d, %d) = %d, %d, want %d, %d", tt.width, tt.height, tt.monitorWidth, tt.monitorHeight, width, height, tt.wantWidth, tt.wantHeight)
+		}
+	}
+}
+
 func TestWindowScale(t *testing.T) {
 	tests := []struct {
 		screenWidth, screenHeight, monitorWidth, monitorHeight, want int

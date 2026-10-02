@@ -98,7 +98,7 @@ func main() {
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `Config.Title` | `"GoLib"` | Window title |
-| `Config.Width`, `Config.Height` | 1280, 720 | Size of the screen the game draws on, in pixels. It never changes, unless `Config.FillWindow` is set; the window scales it. |
+| `Config.Width`, `Config.Height` | 1280, 720 | Size of the screen the game draws on, in pixels. It never changes, unless `Config.FillWindow` is set; the window scales it. The window opens at this size, or, when that doesn't fit in nine tenths of the monitor, smaller with the same shape (1728 by 972 for 1920 by 1080 on a 1920 by 1080 monitor), so its title bar and the taskbar stay in sight. |
 | `Config.Fullscreen` | `false` | Start in fullscreen |
 | `Config.PauseUnfocused` | `false` | Stop the game while its window doesn't have the player's attention, such as while they work in another program, and carry on where it was. `Draw` keeps running, so the window still shows the game, and sound and music play on. Ask `WindowFocused` to draw a sign or quieten the music. |
 | `Config.PixelArt` | `false` | Scale the screen by whole numbers only, without smoothing, so pixels stay square and sharp. Use it with a small screen, such as 320 by 180: the window opens as many times larger as fits in most of the monitor, 1280 by 720 on a 1920 by 1080 monitor. |

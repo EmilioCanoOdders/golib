@@ -378,6 +378,8 @@ func openWindow(config Config, hidden bool) error {
 		device.SetWindowMinSize(max(config.Width/4, 1), max(config.Height/4, 1))
 		if config.PixelArt {
 			enlargeWindow(config.Width, config.Height)
+		} else {
+			shrinkWindow(config.Width, config.Height)
 		}
 	}
 	return nil
