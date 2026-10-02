@@ -112,8 +112,9 @@ func SetWindowSize(width, height int) {
 // SetFrameRate draws fps frames a second at most, from the next frame, from
 // 15 to 360; a game starts at 60. Updates stay at 60 a second of game time
 // whatever the frame rate: at 30, every frame runs two updates; above 60,
-// some frames run none and draw the same state again. A frame rate higher
-// than the monitor refreshes wastes nothing but power.
+// some frames run none and draw the same state again. Each frame waits for
+// the monitor to refresh (V-Sync), so a frame rate higher than the monitor's
+// draws no more often than it refreshes.
 func SetFrameRate(fps int) {
 	frameRateWanted.Store(int32(max(minFrameRate, min(maxFrameRate, fps))))
 }

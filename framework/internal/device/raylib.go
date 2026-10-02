@@ -72,12 +72,18 @@ func DeleteFromStore(name string) error { return nil }
 // OpenWindow opens the game window, hidden when hidden is true and resizable
 // otherwise, and reports whether it opened. No key closes it: Run decides when
 // the game ends.
+//
+// A window the player sees shows each frame when the monitor refreshes
+// (V-Sync). Without it, the monitor can show the top of one frame and the
+// bottom of the next, cut along a line across the screen that flickers while
+// the picture moves, most of all in fullscreen. A hidden window, for golib
+// shot, has no monitor to wait for.
 func OpenWindow(width, height int, title string, hidden bool) bool {
 	rl.SetTraceLogLevel(rl.LogWarning)
 	if hidden {
 		rl.SetConfigFlags(rl.FlagWindowHidden)
 	} else {
-		rl.SetConfigFlags(rl.FlagWindowResizable)
+		rl.SetConfigFlags(rl.FlagWindowResizable | rl.FlagVsyncHint)
 	}
 	rl.InitWindow(int32(width), int32(height), title)
 	if !rl.IsWindowReady() {
