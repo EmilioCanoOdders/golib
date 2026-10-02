@@ -12,7 +12,7 @@ The promise: someone downloads the template, runs a couple of commands, and buil
 
 Keep this section true: update it in the same change that lands or removes a feature. Never describe planned work as if it existed.
 
-Last updated: 2026-10-02 (on the desktop, frames wait for the monitor's refresh, V-Sync, so a moving picture doesn't tear); before it, 2026-09-30 (the window's monitor, size and frame rate, `golib.DisplayScale`, `golib.FPS` and `golib.OpenURL`, for a game's graphics settings; `Config.FillWindow`, a screen that takes the window's shape, with no black bars; on Linux and macOS, `build` and `shot` work while `run` has the game open).
+Last updated: 2026-10-02 (on the desktop, frames wait for the monitor's refresh, V-Sync, so a moving picture doesn't tear; tunes from notes get instruments' sounds and a room, and `Music.Preload` makes music before it plays); before it, 2026-09-30 (the window's monitor, size and frame rate, `golib.DisplayScale`, `golib.FPS` and `golib.OpenURL`, for a game's graphics settings; `Config.FillWindow`, a screen that takes the window's shape, with no black bars; on Linux and macOS, `build` and `shot` work while `run` has the game open).
 
 | Area | State |
 | --- | --- |
@@ -62,7 +62,7 @@ Last updated: 2026-10-02 (on the desktop, frames wait for the monitor's refresh,
 | Looping sounds and stopping them: `Sound.Loop`, `Sound.Stop` | Done (M6) |
 | Outlines, polygons, aligned text, a color's opacity, additive blending; hiding the mouse pointer | Done (M6) |
 | `games/skyraid` and `games/crates`: the test games, on the framework's camera, saving, tune and asset listing | Done (M6) |
-| Music from notes, with no music file: `golib.NewTune` | Done (M6) |
+| Music from notes, with no music file: `golib.NewTune`, with an instrument's sound for each voice (`Voice.Attack`, `Voice.Decay`, `Voice.Ring`, `Voice.LowPass`, `Voice.Detune`) and a room for the tune (`TuneSpec.Reverb`), and `Music.Preload` to make it before it plays | Done (M6); the instruments and `Preload` on 2026-10-02, measured and heard in a private game, whose author kept them, and a tune without them sounds as before, sample for sample |
 | `Map.Err` and `golib.ListAssets`: whether a map loaded, and what is in the assets folder | Done (M6) |
 | `golib.Timer` for cooldowns and intervals; `golib.Lerp`, `golib.Clamp` and the easings; `Sound.PlayWith` for one play's volume and pitch; `Config.PauseUnfocused` and `golib.WindowFocused` | Done (M6) |
 | Games in the browser: a web backend of GoLib's own, on WebGL 2 and Web Audio, with `golib web`, `golib dist --web` and `golib shot --web` | Done (2026-09-18, stages 0 to 3): the picture, the input, the sound, post-processing shaders, fonts from files, saved data in the browser's store, a zip for itch.io, and screenshots. `games/platformer`, `tetris` and `crates` draw byte for byte what they draw on the desktop. Not there: `.xm`, `.mod` and `.qoa`, which browsers can't decode, and text from a font file pixel for pixel as on the desktop. Music in `.xm` or `.mod` no longer stops a web build (2026-09-19): GoLib plays a file of the same name in `.ogg`, `.mp3` or `.wav` beside it, and without one the game runs on in silence and says so. A build was uploaded to itch.io and played by hand on 2026-09-19: it drew and sounded, and the keyboard reached it once the backend learned to take the focus inside itch.io's `<iframe>`. The stages are in [docs/roadmap.md](docs/roadmap.md#web-build-started-2026-09-18) |

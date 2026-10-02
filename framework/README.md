@@ -984,6 +984,7 @@ The settings, with the labels jfxr shows for them. "Over the sound" means from i
 | `Music.Stop` | `Stop()`: ends it; the next `Play` starts from the beginning. |
 | `Music.Playing` | `Playing() bool`: it is playing now, not paused, stopped or waiting for a sound device. |
 | `Music.SetVolume` | `SetVolume(volume float32)`: how loud this music is, from 0 to 1, under `SetVolume`. Around 0.2 to 0.4 keeps it under the sound effects. |
+| `Music.Preload` | `Preload()`: makes the tune, or reads the file, now rather than the first time it plays, which would hold the game up for a moment then. Call it on a title or loading screen, or in `main` before `Run`. A mistake it finds stops `Run`, as playing would. |
 | `Music.Err` | `Err() error`: what stopped the music from playing, or nil. For a tune it makes the tune, so a test can check its notes; for a file it tells only what playing it has found so far. |
 
 ```go
@@ -1017,12 +1018,18 @@ Music can also be made from notes, with no file at all, for a game whose user ha
 | `TuneSpec` | The recipe: the speed, and the voices that play together. |
 | `TuneSpec.Tempo` | Beats per minute, from 20 to 400. A beat is what a note with no length lasts, so a tune written in eighth notes at 110 beats per minute has a `Tempo` of 220. Default: 120. |
 | `TuneSpec.Voices` | The lines that play together, at most 8. |
+| `TuneSpec.Reverb` | The room the tune plays in, from 0 to 1: 0.2 a small room, 0.5 a hall, 1 a cave. Its echoes soften notes made in code, which sound dry on their own, and the echoes at the end carry over into the start, so the loop has no seam. Default: 0, no room. |
 | `Voice` | One line of the tune. |
 | `Voice.Wave` | Its sound, as in `SoundSpec`. Default: `WaveSquare`. |
 | `Voice.Volume` | How loud it is, from 0 to 1, before the music's own volume. Default: 0.5. |
 | `Voice.Duty` | Shapes a square wave, from 0.05 to 0.95, as in `SoundSpec`. Default: 0.5. |
 | `Voice.Vibrato`, `Voice.VibratoRate` | Wobble the pitch, as in `SoundSpec`. Default: no wobble. |
 | `Voice.Gap` | The silence at the end of every note, in seconds. Default: 0.04. 0 runs notes together; more makes a short, clipped sound, such as a drum. |
+| `Voice.Attack` | Seconds each note takes to swell to its full loudness, as a bowed string or a pad does: 0.1 to 0.5. Default: 0.005, at once. |
+| `Voice.Decay` | Each note fades away as a plucked or struck string does: `Decay` seconds after it starts it is at about a third of its loudness. 0.1 to 0.3 for a marimba or a pluck, 1 to 2 for a piano or a bell. Default: 0, a note holds its loudness. |
+| `Voice.Ring` | Seconds each note goes on sounding after it ends, fading out over the notes that follow, as a piano does with its pedal down, up to 10. The last notes ring on over the start of the loop. Default: 0, a note ends with its length. |
+| `Voice.LowPass` | Softens the voice above this many Hz, from 20 to 20000: around 3000 takes the edge off a square or saw wave, 800 muffles it. Default: 0, no filter. |
+| `Voice.Detune` | A second copy of the wave this many cents higher, up to 100, beating against the first for a fuller, warmer sound, like a chorus: 5 to 15 is subtle. Not for `WaveNoise`. Default: 0, one wave. |
 | `Voice.Notes` | The notes, separated by spaces. |
 
 A note is a letter from `a` to `g`, an optional `#` or `b`, and its octave: `c4` is middle C, `f#3` and `eb5`; capitals work too, and octaves go from 0 to 8. A dot is a silence, and a dash holds the note before it for another beat. `/` and a number give a length in beats: `c4/2` lasts two beats, `c4/0.5` half a beat. A tune lasts at most two minutes, and loops.
@@ -1030,20 +1037,36 @@ A note is a letter from `a` to `g`, an optional `#` or `b`, and its octave: `c4`
 ```go
 // Sixteen beats a voice, so every voice loops in step.
 var themeSpec = golib.TuneSpec{
-	Tempo: 264, // the tune is written in eighth notes, at 132 a minute
+	Tempo:  264, // the tune is written in eighth notes, at 132 a minute
+	Reverb: 0.3, // a room, so the notes don't sound dry
 	Voices: []golib.Voice{
-		{Notes: "c5 - g4 . a4 g4 e4 c4 d4/2 g4/2 c5/4"},                                    // the melody
-		{Wave: golib.WaveTriangle, Volume: 0.35, Notes: "c3/2 g3/2 c3/2 g3/2 f3/2 c4/2 g3/2 g3/2"}, // the bass
-		{Wave: golib.WaveNoise, Volume: 0.05, Gap: 0.1, Notes: ". a7 . a7 . a7 . a7 . a7 . a7 . a7 . a7"}, // a tick on the off-beats
+		{Wave: golib.WaveTriangle, Decay: 0.6, Ring: 0.3, Notes: "c5 - g4 . a4 g4 e4 c4 d4/2 g4/2 c5/4"},                // the melody, plucked
+		{Wave: golib.WaveTriangle, Volume: 0.35, LowPass: 600, Notes: "c3/2 g3/2 c3/2 g3/2 f3/2 c4/2 g3/2 g3/2"},          // the bass
+		{Wave: golib.WaveNoise, Volume: 0.05, Gap: 0.1, Decay: 0.03, Notes: ". a7 . a7 . a7 . a7 . a7 . a7 . a7 . a7"}, // a tick on the off-beats
 	},
 }
 
 var theme = golib.NewTune(themeSpec)
 ```
 
+A voice with only a wave and its notes sounds like an 8-bit console: every note starts at once, holds its loudness and stops. For anything softer, give each voice an instrument's settings, and the tune a `Reverb` from 0.2 to 0.4. These are starting points, to tune by ear:
+
+| Sounds like | Voice settings |
+| --- | --- |
+| A marimba or a kalimba, for arpeggios | `Wave: golib.WaveSine, Decay: 0.25, Ring: 0.3` |
+| A plucked string or a harp, for a melody | `Wave: golib.WaveTriangle, Decay: 0.6, Ring: 0.4, Detune: 5` |
+| An electric piano | `Wave: golib.WaveSine, Decay: 1.2, Ring: 0.5, Detune: 7` |
+| A soft lead | `Wave: golib.WaveSquare, Duty: 0.3, LowPass: 2500, Vibrato: 3, VibratoRate: 5` |
+| A warm pad, for long chords | `Wave: golib.WaveSaw, Attack: 0.4, LowPass: 1200, Detune: 10, Gap: 0` |
+| A round bass | `Wave: golib.WaveTriangle, LowPass: 500, Decay: 1.5` |
+| A drum's thud | `Wave: golib.WaveNoise, LowPass: 400, Decay: 0.08, Gap: 0.1` |
+| A snare or a clap | `Wave: golib.WaveNoise, LowPass: 5000, Decay: 0.05, Gap: 0.1` |
+
+A tune with none of these settings sounds as it did before they existed.
+
 - A mistake in the notes, or a tune longer than two minutes, stops `Run` with a message, under `golib shot` too, where nothing can be heard. In a test, where nothing calls `Run`, `Music.Err` returns it: keep the `TuneSpec` in a variable of its own and test the tune made from it.
 - Voices play together from the first beat; the longest one sets the tune's length, and the others end in silence. Make them add up to the same number of beats, or the loop falls out of step, and count those beats in a test.
-- The tune is made the first time it plays, which takes a moment: start it on a title screen rather than in the middle of the action.
+- The tune is made the first time it plays, which takes a moment, longer with `Ring` and `Reverb`: about a third of a second for a minute and a half of tune on a desktop, and up to a second in a browser. Call `Music.Preload` in `main` before `Run`, or on a title screen, so its first `Play` doesn't hold the game up.
 - Made music is a last resort: a tracker module or an OGG file from the user sounds better. Say so, and how to swap it in: only the `golib.NewTune` line changes.
 
 ## Window, fullscreen and screen effects
