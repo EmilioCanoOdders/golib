@@ -99,7 +99,7 @@ func main() {
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `Config.Title` | `"GoLib"` | Window title |
-| `Config.Width`, `Config.Height` | 1280, 720 | Size of the screen the game draws on, in pixels. It never changes, unless `Config.FillWindow` is set; the window scales it. |
+| `Config.Width`, `Config.Height` | 1280, 720 | Size of the screen the game draws on, in pixels. It never changes, unless `Config.FillWindow` is set; the window scales it. The window opens at this size, or, when that doesn't fit in nine tenths of the monitor, smaller with the same shape (1728 by 972 for 1920 by 1080 on a 1920 by 1080 monitor), so its title bar and the taskbar stay in sight. |
 | `Config.Fullscreen` | `false` | Start in fullscreen |
 | `Config.PauseUnfocused` | `false` | Stop the game while its window doesn't have the player's attention, such as while they work in another program, and carry on where it was. `Draw` keeps running, so the window still shows the game, and sound and music play on. Ask `WindowFocused` to draw a sign or quieten the music. |
 | `Config.PixelArt` | `false` | Scale the screen by whole numbers only, without smoothing, so pixels stay square and sharp. Use it with a small screen, such as 320 by 180: the window opens as many times larger as fits in most of the monitor, 1280 by 720 on a 1920 by 1080 monitor. |
@@ -195,9 +195,10 @@ s.world.step(moveX, jump, dt) // the rules see intentions, not keys
 | Modifiers | `KeyLeftShift` `KeyRightShift` `KeyLeftControl` `KeyRightControl` `KeyLeftAlt` `KeyRightAlt` |
 | Letters | `KeyA` `KeyB` `KeyC` `KeyD` `KeyE` `KeyF` `KeyG` `KeyH` `KeyI` `KeyJ` `KeyK` `KeyL` `KeyM` `KeyN` `KeyO` `KeyP` `KeyQ` `KeyR` `KeyS` `KeyT` `KeyU` `KeyV` `KeyW` `KeyX` `KeyY` `KeyZ` |
 | Digits (spelled out: there is no `Key0`) | `KeyZero` `KeyOne` `KeyTwo` `KeyThree` `KeyFour` `KeyFive` `KeySix` `KeySeven` `KeyEight` `KeyNine` |
+| Punctuation (where a US keyboard has it) | `KeyApostrophe` `KeyComma` `KeyMinus` `KeyPeriod` `KeySlash` `KeySemicolon` `KeyEqual` `KeyLeftBracket` `KeyBackslash` `KeyRightBracket` `KeyGrave` |
 | Function keys | `KeyF1` `KeyF2` `KeyF3` `KeyF4` `KeyF5` `KeyF6` `KeyF7` `KeyF8` `KeyF9` `KeyF10` `KeyF11` `KeyF12` |
 
-Only these keys are read. There is no numeric keypad or punctuation as keys, and a raylib key code converted to `Key` is never down: read what a punctuation key types with `TypedText`.
+Only these keys are read. There is no numeric keypad, and a raylib key code converted to `Key` is never down. The punctuation keys are places on the keyboard, for controls laid out by hand, such as a piano on the rows Z to M and A to J: on another layout `KeyComma` is the key where a US keyboard has its comma, whatever it types there. Read what a key types with `TypedText`.
 
 ### Mouse
 

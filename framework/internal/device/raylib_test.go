@@ -28,6 +28,11 @@ func TestKeyCodesAreRaylibs(t *testing.T) {
 		"KeyLeftAlt": {KeyLeftAlt, rl.KeyLeftAlt}, "KeyRightAlt": {KeyRightAlt, rl.KeyRightAlt},
 		"KeyA": {KeyA, rl.KeyA}, "KeyM": {KeyM, rl.KeyM}, "KeyZ": {KeyZ, rl.KeyZ},
 		"KeyZero": {KeyZero, rl.KeyZero}, "KeyFive": {KeyFive, rl.KeyFive}, "KeyNine": {KeyNine, rl.KeyNine},
+		"KeyApostrophe": {KeyApostrophe, rl.KeyApostrophe}, "KeyComma": {KeyComma, rl.KeyComma},
+		"KeyMinus": {KeyMinus, rl.KeyMinus}, "KeyPeriod": {KeyPeriod, rl.KeyPeriod}, "KeySlash": {KeySlash, rl.KeySlash},
+		"KeySemicolon": {KeySemicolon, rl.KeySemicolon}, "KeyEqual": {KeyEqual, rl.KeyEqual},
+		"KeyLeftBracket": {KeyLeftBracket, rl.KeyLeftBracket}, "KeyBackslash": {KeyBackslash, rl.KeyBackSlash},
+		"KeyRightBracket": {KeyRightBracket, rl.KeyRightBracket}, "KeyGrave": {KeyGrave, rl.KeyGrave},
 		"KeyF1": {KeyF1, rl.KeyF1}, "KeyF11": {KeyF11, rl.KeyF11}, "KeyF12": {KeyF12, rl.KeyF12},
 		"KeyCount": {KeyCount, rl.KeyKbMenu + 1},
 	}
