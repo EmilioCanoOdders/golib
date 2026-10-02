@@ -32,7 +32,7 @@ func TestWorldSpritesHaveEveryFacing(t *testing.T) {
 }
 
 func TestWorldSpritesMoveInScreenPixelsAtCloseZoom(t *testing.T) {
-	camera := golib.NewCamera(screenWidth, screenHeight)
+	camera := golib.NewCamera(float32(screenWidth), float32(screenHeight))
 	camera.Zoom = 32
 	camera.Target = golib.Vector2{X: 100, Y: 200}
 	camera.Snap()

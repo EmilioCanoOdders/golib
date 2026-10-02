@@ -37,7 +37,8 @@ func TestEdgeGuidePointsTowardOffscreenTargets(t *testing.T) {
 
 func TestEdgeGuideIsHiddenWhenTargetIsOnscreen(t *testing.T) {
 	position, direction, ok := edgeGuideAt(
-		golib.Vector2{X: 640, Y: 360}, screenWidth, screenHeight,
+		golib.Vector2{X: 640, Y: 360},
+		float32(screenWidth), float32(screenHeight),
 	)
 	if ok || position != (golib.Vector2{}) || direction != (golib.Vector2{}) {
 		t.Fatalf("onscreen target got guide %v pointing %v", position, direction)
@@ -55,7 +56,8 @@ func TestSeparateEdgeGuidesAtScreenCorner(t *testing.T) {
 			direction: golib.Vector2{X: -1, Y: -1}.Normalize(),
 		},
 	}
-	separateEdgeGuides(guides, screenWidth, screenHeight)
+	separateEdgeGuides(guides,
+		float32(screenWidth), float32(screenHeight))
 	if gap := guides[0].position.Distance(guides[1].position); gap <
 		2*guideRadius+4 {
 		t.Errorf("corner guides still overlap: %v and %v",
@@ -79,7 +81,7 @@ func TestOffscreenGuidesFollowReportsAndPendingSchematics(t *testing.T) {
 	s.camera.Target.X += 500
 	s.camera.Snap()
 
-	guides := edgeGuides(s, screenWidth, screenHeight)
+	guides := edgeGuides(s, float32(screenWidth), float32(screenHeight))
 	if len(guides) != 2 {
 		t.Fatalf("got %d guides, want report and schematics", len(guides))
 	}
@@ -94,13 +96,13 @@ func TestOffscreenGuidesFollowReportsAndPendingSchematics(t *testing.T) {
 
 	reportTick := s.state.Reports[0].Tick
 	s.state.Ticks = reportTick + reportShowTicks - 1
-	guides = edgeGuides(s, screenWidth, screenHeight)
+	guides = edgeGuides(s, float32(screenWidth), float32(screenHeight))
 	if len(guides) != 2 {
 		t.Fatalf("ordinary report expired before 15 seconds: %+v", guides)
 	}
 
 	s.state.Ticks = reportTick + reportShowTicks
-	guides = edgeGuides(s, screenWidth, screenHeight)
+	guides = edgeGuides(s, float32(screenWidth), float32(screenHeight))
 	if len(guides) != 1 || guides[0].mark != "S" {
 		t.Errorf("expired report still has a guide: %+v", guides)
 	}
@@ -114,7 +116,7 @@ func TestFirstIntruderGetsAnOffscreenGuideOnlyWhileOutOfView(t *testing.T) {
 	s.camera.Snap()
 	screenTarget := s.camera.ToScreen(target)
 
-	guides := edgeGuides(s, screenWidth, screenHeight)
+	guides := edgeGuides(s, float32(screenWidth), float32(screenHeight))
 	if len(guides) != 1 || guides[0].mark != "!" {
 		t.Fatalf("got intruder guides %+v, want one red guide", guides)
 	}
@@ -125,7 +127,7 @@ func TestFirstIntruderGetsAnOffscreenGuideOnlyWhileOutOfView(t *testing.T) {
 
 	s.camera.Target = target
 	s.camera.Snap()
-	if guides := edgeGuides(s, screenWidth, screenHeight); len(guides) != 0 {
+	if guides := edgeGuides(s, float32(screenWidth), float32(screenHeight)); len(guides) != 0 {
 		t.Errorf("the visible scout still has an edge guide: %+v", guides)
 	}
 }
@@ -137,7 +139,7 @@ func TestFirstIntruderGuideDisappearsWhenTheScoutIsDestroyed(t *testing.T) {
 	s.camera.Snap()
 	delete(s.state.Enemies, scout.ID)
 
-	if guides := edgeGuides(s, screenWidth, screenHeight); len(guides) != 0 {
+	if guides := edgeGuides(s, float32(screenWidth), float32(screenHeight)); len(guides) != 0 {
 		t.Errorf("destroyed scout still has an edge guide: %+v", guides)
 	}
 }
@@ -158,7 +160,7 @@ func TestFirstIntruderGuideSharesItsReportAndCoexistsWithOtherGuides(
 	s.camera.Target = golib.Vector2{X: x - 300, Y: y}
 	s.camera.Snap()
 
-	guides := edgeGuides(s, screenWidth, screenHeight)
+	guides := edgeGuides(s, float32(screenWidth), float32(screenHeight))
 	if len(guides) != 2 || guides[0].mark != "!" || guides[1].mark != "S" {
 		t.Fatalf("scout report and schematics got guides %+v, want one each",
 			guides)
@@ -168,7 +170,7 @@ func TestFirstIntruderGuideSharesItsReportAndCoexistsWithOtherGuides(
 	report.X += 1200
 	report.Y += 1200
 	s.state.Reports[0] = report
-	guides = edgeGuides(s, screenWidth, screenHeight)
+	guides = edgeGuides(s, float32(screenWidth), float32(screenHeight))
 	if len(guides) != 3 {
 		t.Fatalf(
 			"separated scout report, scout and schematics got %d guides, want 3: %+v",
@@ -178,7 +180,7 @@ func TestFirstIntruderGuideSharesItsReportAndCoexistsWithOtherGuides(
 
 	report.Kind = ReportRazed
 	s.state.Reports[0] = report
-	guides = edgeGuides(s, screenWidth, screenHeight)
+	guides = edgeGuides(s, float32(screenWidth), float32(screenHeight))
 	if len(guides) != 3 {
 		t.Fatalf("report, scout and schematics got %d guides, want 3: %+v",
 			len(guides), guides)
@@ -214,13 +216,13 @@ func TestOffscreenCityGuideExpiresAfterOneMinute(t *testing.T) {
 	s.camera.Snap()
 
 	s.state.Ticks = city.AnnounceUntil - 1
-	guides := edgeGuides(s, screenWidth, screenHeight)
+	guides := edgeGuides(s, float32(screenWidth), float32(screenHeight))
 	if len(guides) != 1 || guides[0].mark != "!" {
 		t.Fatalf("the city guide disappeared before its minute: %+v", guides)
 	}
 
 	s.state.Ticks = city.AnnounceUntil
-	guides = edgeGuides(s, screenWidth, screenHeight)
+	guides = edgeGuides(s, float32(screenWidth), float32(screenHeight))
 	if len(guides) != 0 {
 		t.Errorf("the city guide remained after its minute: %+v", guides)
 	}

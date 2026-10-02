@@ -500,7 +500,8 @@ func TestTheSquadsBoxesLieApartAndPickTheirSquad(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		rect := squadBoxRect(i)
 		if rect.X < 0 || rect.Y < 0 ||
-			rect.X+rect.Width > screenWidth || rect.Y+rect.Height > screenHeight {
+			rect.X+rect.Width > float32(screenWidth) ||
+			rect.Y+rect.Height > float32(screenHeight) {
 			t.Fatalf("box %d leaves the screen: %+v", i, rect)
 		}
 		for j := i + 1; j < 3; j++ {

@@ -42,19 +42,30 @@ type robotPanelLayout struct {
 }
 
 func robotPanelButtonRect() golib.Rectangle {
+	squad := squadBoxRect(0)
 	return golib.Rectangle{
-		X: screenWidth - 16 - 140, Y: 96,
+		X:     float32(screenWidth - 16 - 140),
+		Y:     squad.Y + squad.Height + squadBoxGap,
 		Width: 140, Height: 32,
 	}
 }
 
 func robotPanelRect() golib.Rectangle {
+	width := min(float32(robotPanelWidth), float32(screenWidth)-16)
+	height := min(float32(robotPanelHeight), float32(screenHeight)-16)
+	y := min(float32(136), float32(screenHeight)-height-8)
 	return golib.Rectangle{
-		X:      screenWidth - 16 - robotPanelWidth,
-		Y:      136,
-		Width:  robotPanelWidth,
-		Height: robotPanelHeight,
+		X:      float32(screenWidth) - 8 - width,
+		Y:      y,
+		Width:  width,
+		Height: height,
 	}
+}
+
+func robotPanelPageCapacity() int {
+	available := robotPanelRect().Height - 150
+	return max(1, min(robotPanelPageSize,
+		int(available/(robotPanelGroupHeight+robotPanelRowHeight))))
 }
 
 func (s *playScene) updateRobotPanel(input *golib.Input) bool {
@@ -130,7 +141,8 @@ func (s *playScene) clampRobotPanel() {
 	for _, group := range groups {
 		total += len(group.robots)
 	}
-	pages := max(1, (total+robotPanelPageSize-1)/robotPanelPageSize)
+	pageSize := robotPanelPageCapacity()
+	pages := max(1, (total+pageSize-1)/pageSize)
 	if s.robotsPage >= pages {
 		s.robotsPage = pages - 1
 	}
@@ -250,7 +262,8 @@ func robotPanelLayoutFor(s *playScene) robotPanelLayout {
 	for _, group := range groups {
 		entries += len(group.robots)
 	}
-	layout.pages = max(1, (entries+robotPanelPageSize-1)/robotPanelPageSize)
+	pageSize := robotPanelPageCapacity()
+	layout.pages = max(1, (entries+pageSize-1)/pageSize)
 	if layout.page >= layout.pages {
 		layout.page = layout.pages - 1
 	}
@@ -273,8 +286,8 @@ func robotPanelLayoutFor(s *playScene) robotPanelLayout {
 	if robot, ok := s.state.Robots[s.robotsPicked]; ok {
 		layout.selected, layout.hasSelected = robot, true
 	}
-	start := layout.page * robotPanelPageSize
-	end := min(start+robotPanelPageSize, entries)
+	start := layout.page * pageSize
+	end := min(start+pageSize, entries)
 	entryIndex := 0
 	y := box.Y + 38
 	lastGroup := ""

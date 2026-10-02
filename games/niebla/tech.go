@@ -226,11 +226,11 @@ func techWrap(screen *golib.Screen, text string, width, size float32) []string {
 func techCalloutRect(s *playScene, height float32) golib.Rectangle {
 	bx, by := techBadgeAt(s)
 	x := bx + techBadgeR + 10
-	if x+techCalloutW > screenWidth-8 {
+	if x+techCalloutW > float32(screenWidth)-8 {
 		x = bx - techBadgeR - 10 - techCalloutW
 	}
-	x = clampf(x, 8, screenWidth-8-techCalloutW)
-	y := clampf(by-height/2, 8, screenHeight-8-height)
+	x = clampf(x, 8, float32(screenWidth)-8-techCalloutW)
+	y := clampf(by-height/2, 8, float32(screenHeight)-8-height)
 	return golib.Rectangle{X: x, Y: y, Width: techCalloutW, Height: height}
 }
 

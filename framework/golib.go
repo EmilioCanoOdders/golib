@@ -61,9 +61,10 @@
 //
 // # Window, fullscreen and post-processing
 //
-// The game draws on a screen of Config.Width by Config.Height pixels, which Run
-// scales to fit the window, so games never deal with the window's size; with
-// Config.FillWindow it takes the window's shape instead, with no black bars.
+// By default the game draws on a screen of Config.Width by Config.Height
+// pixels, which Run scales to fit the window. Config.WindowScale can instead
+// keep the screen at a fraction of the window's drawing area; Config.FillWindow
+// lets it take the window's shape instead, with no black bars.
 // [SetFullscreen] switches to fullscreen and back. [SetPostProcess] runs
 // shaders made with [NewShader] over the whole picture, for effects such as
 // scanlines or a glow.
@@ -137,17 +138,30 @@ const (
 // Config describes the game window. Fields left at their zero value get the
 // default shown in their comment.
 //
-// Width and Height are the size of the screen the game draws on, which never
-// changes unless FillWindow is set. The window opens at that size, or with
-// PixelArt at the largest whole multiple of it that fits the monitor, and the
-// player can resize it or go fullscreen: Run scales the screen to fit, with
-// black bars where the shapes differ, and reports mouse positions in screen
-// pixels.
+// Width and Height set the screen's size, fixed unless WindowScale or
+// FillWindow is used.
+// The window opens at that size, or with PixelArt at the largest whole
+// multiple of it that fits the monitor. Run scales the screen to the window
+// and reports mouse positions in screen pixels.
 type Config struct {
 	Title      string // Window title. Default: "GoLib".
 	Width      int    // Screen width in pixels. Default: 1280.
 	Height     int    // Screen height in pixels. Default: 720.
 	Fullscreen bool   // Start in fullscreen (see SetFullscreen). Default: in a window.
+	// WindowScale makes the screen follow the window's drawing area: each
+	// screen pixel covers this many window pixels. For example, 2 renders at
+	// half the window width and height, including after a resize. Zero keeps
+	// Width and Height fixed unless FillWindow is set. Takes precedence over
+	// FillWindow. Screenshots always use Width and Height.
+	WindowScale int
+	// WindowScaleMinWidth uses native resolution below this drawing-area
+	// width, and WindowScale at or above it. Zero disables the threshold.
+	// Ignored when WindowScale is zero, and for screenshots.
+	WindowScaleMinWidth int
+	// OnScreenResize is called before the first Update or Draw, and again
+	// whenever WindowScale changes the screen size. A game can update its
+	// layout and camera here. It is not called for screenshots.
+	OnScreenResize func(width, height int)
 
 	// PauseUnfocused stops the game while its window doesn't have the
 	// player's attention, such as while they work in another program, and
@@ -176,7 +190,7 @@ type Config struct {
 	// screen's size. With PixelArt, the scale stays a whole number and the
 	// screen covers the window, cutting less than one of its pixels at the
 	// edges. Screenshots from golib shot are Width by Height. Default: the
-	// screen keeps its size and shape.
+	// screen keeps its size and shape. Ignored when WindowScale is positive.
 	FillWindow bool
 }
 
@@ -253,10 +267,22 @@ func runWindow(game Game, config Config) error {
 	lookAtMonitors()
 	audio.open()
 	defer audio.close()
-	render := newRenderer(config)
+	windowWidth, windowHeight := device.WindowSize()
+	width, height, _ := screenInWindow(
+		config, float32(windowWidth), float32(windowHeight),
+	)
+	renderConfig := config
+	renderConfig.Width, renderConfig.Height = int(width), int(height)
+	render := newRenderer(renderConfig)
 	defer render.close()
+	if config.WindowScale != 0 && config.OnScreenResize != nil {
+		config.OnScreenResize(int(width), int(height))
+	}
 
-	screen := &Screen{width: float32(config.Width), height: float32(config.Height), fills: config.FillWindow}
+	screen := &Screen{
+		width: width, height: height,
+		fills: config.FillWindow && config.WindowScale == 0,
+	}
 	var (
 		gameClock clock
 		queue     inputQueue
@@ -286,9 +312,22 @@ func runWindow(game Game, config Config) error {
 		windowUnfocused.Store(!focused)
 		device.MeasureWindow() // on macOS, raylib can keep a wrong size from while the window opened
 		windowWidth, windowHeight := device.WindowSize()
-		screenWidth, screenHeight, fit := screenInWindow(config, float32(windowWidth), float32(windowHeight))
-		screen.width, screen.height = screenWidth, screenHeight
-		render.resize(screenWidth, screenHeight)
+		screenWidth, screenHeight, fit := screenInWindow(
+			config, float32(windowWidth), float32(windowHeight),
+		)
+		if config.WindowScale != 0 && (windowWidth <= 0 || windowHeight <= 0) {
+			screenWidth, screenHeight = screen.width, screen.height
+			fit = fitScreen(screenWidth, screenHeight,
+				float32(windowWidth), float32(windowHeight), config.PixelArt,
+			)
+		}
+		if screenWidth != screen.width || screenHeight != screen.height {
+			render.resize(screenWidth, screenHeight)
+			screen.width, screen.height = screenWidth, screenHeight
+			if config.WindowScale != 0 && config.OnScreenResize != nil {
+				config.OnScreenResize(int(screenWidth), int(screenHeight))
+			}
+		}
 
 		now := device.Time()
 		counter.count(now)
@@ -344,6 +383,17 @@ func runWindow(game Game, config Config) error {
 	return nil
 }
 
+func windowScreenSize(config Config, windowWidth, windowHeight int) (int, int) {
+	if config.WindowScale == 0 {
+		return config.Width, config.Height
+	}
+	scale := config.WindowScale
+	if windowWidth < config.WindowScaleMinWidth {
+		scale = 1
+	}
+	return max(1, windowWidth/scale), max(1, windowHeight/scale)
+}
+
 // runUpdates runs updates updates of scene. Before each one, fill sets the
 // input it sees. After each one, runUpdates switches to the scene passed to
 // SwitchScene, if any, and stops if the game called Quit: no update runs after
@@ -375,8 +425,16 @@ func openWindow(config Config, hidden bool) error {
 		return fmt.Errorf("golib.Run: could not open a %dx%d window: see the raylib warnings above", config.Width, config.Height)
 	}
 	if !hidden {
+		if config.WindowScale != 0 {
+			_, _, monitorWidth, monitorHeight := device.MonitorBounds()
+			if monitorWidth > 0 && monitorHeight > 0 {
+				width := min(config.Width, monitorWidth*4/5)
+				height := min(config.Height, monitorHeight*4/5)
+				device.SetWindowSize(max(2, width), max(2, height))
+			}
+		}
 		device.SetWindowMinSize(max(config.Width/4, 1), max(config.Height/4, 1))
-		if config.PixelArt {
+		if config.PixelArt && config.WindowScale == 0 {
 			enlargeWindow(config.Width, config.Height)
 		} else {
 			shrinkWindow(config.Width, config.Height)
@@ -399,6 +457,16 @@ func (c Config) resolve() (Config, error) {
 	}
 	if c.Width < 0 || c.Height < 0 {
 		return c, fmt.Errorf("golib.Run: invalid window size %dx%d: use positive sizes, or 0 for the default", c.Width, c.Height)
+	}
+	if c.WindowScale < 0 {
+		return c, fmt.Errorf("golib.Run: invalid window scale %d: use a positive scale, or 0 for a fixed screen", c.WindowScale)
+	}
+	if c.WindowScaleMinWidth < 0 {
+		return c, fmt.Errorf(
+			"golib.Run: invalid window scale minimum width %d: "+
+				"use a positive width, or 0 for no threshold",
+			c.WindowScaleMinWidth,
+		)
 	}
 	return c, nil
 }

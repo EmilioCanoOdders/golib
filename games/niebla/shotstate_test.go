@@ -230,7 +230,7 @@ func TestWriteRobotPortraitShotState(t *testing.T) {
 	if !ok {
 		t.Fatal("the region has no lilac for the robot portrait shot")
 	}
-	camera := golib.NewCamera(screenWidth, screenHeight)
+	camera := golib.NewCamera(float32(screenWidth), float32(screenHeight))
 	camera.Bounds = regionOnScreen()
 	camera.Snap()
 	patchX, patchY := tileCenterUnits(col, row)

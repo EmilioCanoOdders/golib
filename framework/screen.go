@@ -39,13 +39,13 @@ const (
 )
 
 // Width returns the screen width in pixels: Config.Width, or with
-// Config.FillWindow, what the window's shape makes it in this Draw.
+// Config.WindowScale or Config.FillWindow, the size in this Draw.
 func (s *Screen) Width() float32 {
 	return s.width
 }
 
 // Height returns the screen height in pixels: Config.Height, or with
-// Config.FillWindow, what the window's shape makes it in this Draw.
+// Config.WindowScale or Config.FillWindow, the size in this Draw.
 func (s *Screen) Height() float32 {
 	return s.height
 }

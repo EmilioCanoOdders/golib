@@ -50,6 +50,7 @@ type devTools struct {
 	clickedAt int64 // the update of the last Control click on the name
 	placing   bool  // the next click on the region puts a robot there
 	fast      bool  // the simulation runs devFastTicks to the update
+	stripY    float32
 }
 
 // ticksPerUpdate returns how many ticks of simulation an update sends:
@@ -71,6 +72,12 @@ func devButtonBounds(index int) golib.Rectangle {
 		Width:  devButtonWidth,
 		Height: devButtonHeight,
 	}
+}
+
+func (d *devTools) buttonBounds(index int) golib.Rectangle {
+	button := devButtonBounds(index)
+	button.Y += max(devStripY, d.stripY) - devStripY
+	return button
 }
 
 // update handles the strip's clicks and reports whether it took this
@@ -101,54 +108,54 @@ func (d *devTools) update(s *playScene, input *golib.Input) bool {
 	if !devOpen {
 		return false
 	}
-	if devButtonBounds(devSwellButton).Contains(mx, my) {
+	if d.buttonBounds(devSwellButton).Contains(mx, my) {
 		Apply(s.state, DevHoldSwell{On: !s.state.Fog.Held})
 		return true
 	}
-	if devButtonBounds(devRobotButton).Contains(mx, my) {
+	if d.buttonBounds(devRobotButton).Contains(mx, my) {
 		d.placing = !d.placing
 		return true
 	}
-	if devButtonBounds(devResetButton).Contains(mx, my) {
+	if d.buttonBounds(devResetButton).Contains(mx, my) {
 		d.resetWorld(s, distinctWorldSeed(
 			s.state.Seed,
 			int64(golib.RandomInt(1, math.MaxInt32)),
 		))
 		return true
 	}
-	if devButtonBounds(devReplayButton).Contains(mx, my) {
+	if d.buttonBounds(devReplayButton).Contains(mx, my) {
 		d.resetWorld(s, s.state.Seed)
 		return true
 	}
-	if devButtonBounds(devVisitButton).Contains(mx, my) {
+	if d.buttonBounds(devVisitButton).Contains(mx, my) {
 		Apply(s.state, DevNextVisit{})
 		return true
 	}
-	if devButtonBounds(devCityButton).Contains(mx, my) {
+	if d.buttonBounds(devCityButton).Contains(mx, my) {
 		Apply(s.state, DevNewCity{})
 		return true
 	}
-	if devButtonBounds(devHurryButton).Contains(mx, my) {
+	if d.buttonBounds(devHurryButton).Contains(mx, my) {
 		Apply(s.state, DevHurryRivals{})
 		return true
 	}
-	if devButtonBounds(devFastButton).Contains(mx, my) {
+	if d.buttonBounds(devFastButton).Contains(mx, my) {
 		d.fast = !d.fast
 		return true
 	}
-	if devButtonBounds(devTechButton).Contains(mx, my) {
+	if d.buttonBounds(devTechButton).Contains(mx, my) {
 		Apply(s.state, DevNextTech{})
 		return true
 	}
-	if devButtonBounds(devBuildCityButton).Contains(mx, my) {
+	if d.buttonBounds(devBuildCityButton).Contains(mx, my) {
 		Apply(s.state, DevFinishCityBuilding{})
 		return true
 	}
-	if devButtonBounds(devFinishBattalionButton).Contains(mx, my) {
+	if d.buttonBounds(devFinishBattalionButton).Contains(mx, my) {
 		Apply(s.state, DevFinishCityBattalion{})
 		return true
 	}
-	if devButtonBounds(devSendBattalionButton).Contains(mx, my) {
+	if d.buttonBounds(devSendBattalionButton).Contains(mx, my) {
 		Apply(s.state, DevSendCityBattalion{})
 		return true
 	}
@@ -238,7 +245,7 @@ func (d *devTools) draw(s *playScene, screen *golib.Screen) {
 		devSendBattalionButton:   false,
 	}
 	for i, label := range labels {
-		rect := devButtonBounds(i)
+		rect := d.buttonBounds(i)
 		fill := buttonColor
 		if lit[i] || rect.Contains(s.mouse.X, s.mouse.Y) {
 			fill = buttonHoverColor

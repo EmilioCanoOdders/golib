@@ -35,7 +35,7 @@ const (
 // Where the region's top corner lands on the screen, so the whole diamond
 // fits with a margin.
 const (
-	regionOriginX = screenWidth / 2
+	regionOriginX = 640
 	regionOriginY = 72
 )
 
