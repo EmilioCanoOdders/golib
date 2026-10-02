@@ -711,6 +711,8 @@ void main() {
 		Delete: 261, Home: 268, End: 269, PageUp: 266, PageDown: 267,
 		ShiftLeft: 340, ShiftRight: 344, ControlLeft: 341, ControlRight: 345,
 		AltLeft: 342, AltRight: 346,
+		Quote: 39, Comma: 44, Minus: 45, Period: 46, Slash: 47, Semicolon: 59, Equal: 61,
+		BracketLeft: 91, Backslash: 92, BracketRight: 93, Backquote: 96,
 	};
 	for (let i = 0; i < 26; i++) KEYS['Key' + String.fromCharCode(65 + i)] = 65 + i;
 	for (let i = 0; i < 10; i++) { KEYS['Digit' + i] = 48 + i; KEYS['Numpad' + i] = 48 + i; }

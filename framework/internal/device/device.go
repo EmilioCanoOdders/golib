@@ -104,6 +104,20 @@ const (
 	KeyEight = KeyZero + 8
 	KeyNine  = KeyZero + 9
 
+	// The punctuation keys are named after their place on a US keyboard,
+	// as the letters are, and their codes are what they type there.
+	KeyApostrophe   = 39
+	KeyComma        = 44
+	KeyMinus        = 45
+	KeyPeriod       = 46
+	KeySlash        = 47
+	KeySemicolon    = 59
+	KeyEqual        = 61
+	KeyLeftBracket  = 91
+	KeyBackslash    = 92
+	KeyRightBracket = 93
+	KeyGrave        = 96
+
 	KeyF1  = 290
 	KeyF2  = KeyF1 + 1
 	KeyF3  = KeyF1 + 2

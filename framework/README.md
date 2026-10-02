@@ -194,9 +194,10 @@ s.world.step(moveX, jump, dt) // the rules see intentions, not keys
 | Modifiers | `KeyLeftShift` `KeyRightShift` `KeyLeftControl` `KeyRightControl` `KeyLeftAlt` `KeyRightAlt` |
 | Letters | `KeyA` `KeyB` `KeyC` `KeyD` `KeyE` `KeyF` `KeyG` `KeyH` `KeyI` `KeyJ` `KeyK` `KeyL` `KeyM` `KeyN` `KeyO` `KeyP` `KeyQ` `KeyR` `KeyS` `KeyT` `KeyU` `KeyV` `KeyW` `KeyX` `KeyY` `KeyZ` |
 | Digits (spelled out: there is no `Key0`) | `KeyZero` `KeyOne` `KeyTwo` `KeyThree` `KeyFour` `KeyFive` `KeySix` `KeySeven` `KeyEight` `KeyNine` |
+| Punctuation (where a US keyboard has it) | `KeyApostrophe` `KeyComma` `KeyMinus` `KeyPeriod` `KeySlash` `KeySemicolon` `KeyEqual` `KeyLeftBracket` `KeyBackslash` `KeyRightBracket` `KeyGrave` |
 | Function keys | `KeyF1` `KeyF2` `KeyF3` `KeyF4` `KeyF5` `KeyF6` `KeyF7` `KeyF8` `KeyF9` `KeyF10` `KeyF11` `KeyF12` |
 
-Only these keys are read. There is no numeric keypad or punctuation as keys, and a raylib key code converted to `Key` is never down: read what a punctuation key types with `TypedText`.
+Only these keys are read. There is no numeric keypad, and a raylib key code converted to `Key` is never down. The punctuation keys are places on the keyboard, for controls laid out by hand, such as a piano on the rows Z to M and A to J: on another layout `KeyComma` is the key where a US keyboard has its comma, whatever it types there. Read what a key types with `TypedText`.
 
 ### Mouse
 

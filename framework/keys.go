@@ -76,6 +76,18 @@ const (
 	KeyEight Key = device.KeyEight
 	KeyNine  Key = device.KeyNine
 
+	KeyApostrophe   Key = device.KeyApostrophe
+	KeyComma        Key = device.KeyComma
+	KeyMinus        Key = device.KeyMinus
+	KeyPeriod       Key = device.KeyPeriod
+	KeySlash        Key = device.KeySlash
+	KeySemicolon    Key = device.KeySemicolon
+	KeyEqual        Key = device.KeyEqual
+	KeyLeftBracket  Key = device.KeyLeftBracket
+	KeyBackslash    Key = device.KeyBackslash
+	KeyRightBracket Key = device.KeyRightBracket
+	KeyGrave        Key = device.KeyGrave
+
 	KeyF1  Key = device.KeyF1
 	KeyF2  Key = device.KeyF2
 	KeyF3  Key = device.KeyF3
@@ -103,6 +115,9 @@ var keyNames = func() map[Key]string {
 		KeyDelete: "Delete", KeyHome: "Home", KeyEnd: "End", KeyPageUp: "PageUp", KeyPageDown: "PageDown",
 		KeyLeftShift: "LeftShift", KeyRightShift: "RightShift", KeyLeftControl: "LeftControl",
 		KeyRightControl: "RightControl", KeyLeftAlt: "LeftAlt", KeyRightAlt: "RightAlt",
+		KeyApostrophe: "Apostrophe", KeyComma: "Comma", KeyMinus: "Minus", KeyPeriod: "Period", KeySlash: "Slash",
+		KeySemicolon: "Semicolon", KeyEqual: "Equal", KeyLeftBracket: "LeftBracket", KeyBackslash: "Backslash",
+		KeyRightBracket: "RightBracket", KeyGrave: "Grave",
 	}
 	for key := KeyA; key <= KeyZ; key++ {
 		names[key] = string(rune('A' + (key - KeyA)))
