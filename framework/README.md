@@ -207,9 +207,21 @@ Only these keys are read. There is no numeric keypad or punctuation as keys, and
 | `Input.MouseDown` | `MouseDown(button MouseButton) bool`: the button is held down. |
 | `Input.MousePressed` | `MousePressed(button MouseButton) bool`: the button went down since the previous update; true in one update per click. |
 | `Input.MouseWheel` | `MouseWheel() float32`: notches the wheel turned since the previous update. Positive is up, away from the player; 0 means it didn't move. |
-| `SetMouseVisible` | `SetMouseVisible(visible bool)`: shows or hides the pointer over the window, from the next frame, such as to draw a crosshair in its place. `MousePosition` still works. |
+| `SetMouseVisible` | `SetMouseVisible(visible bool)`: shows or hides the pointer over the window, from the next frame, such as to draw a crosshair in its place: the system's pointer or the game's sprite. `MousePosition` still works. |
+| `SetMouseSprite` | `SetMouseSprite(sprite *Sprite, frame int, x, y float32)`: a frame of a sprite in place of the system's pointer, from the next frame, with its pixel x, y, from the frame's top-left corner, where the pointer points: 0, 0 for an arrow whose tip is that corner. `nil` brings the system's pointer back; call it again with another frame for another pointer, such as a hand over a button. Call it once, in `main` or in `Update`, not in `Draw`. |
 | `IsMouseVisible` | `IsMouseVisible() bool`: whether the pointer shows, or will from the next frame. |
 | `MouseButton` | `MouseLeft`, `MouseRight` or `MouseMiddle`. |
+
+- **A pointer of the game's own is a sprite, not a drawing in `Draw`.** `SetMouseSprite` draws it over everything, post-processing included, where the system's pointer would be, at the window's resolution, so it moves as smoothly as the system's, and as many whole times larger as the screen is, so a pixel art pointer stays sharp. It hides by itself while the pointer is outside the window and while the player plays with a gamepad or with fingers, and comes back when the mouse moves. `golib shot` draws it once `--input` has moved the mouse.
+
+```go
+var pointer = golib.NewSprite("sprites/pointer.png")
+
+func main() {
+	golib.SetMouseSprite(pointer, 0, 0, 0) // its tip is the top-left pixel
+	// ...
+}
+```
 
 ```go
 x, y := input.MousePosition()
@@ -440,6 +452,7 @@ A sprite is a picture from the game's assets folder, made of frames of one size:
 | `DrawOptions.Rotation` | 0 | Degrees, clockwise, around the origin. |
 | `DrawOptions.OriginX`, `DrawOptions.OriginY` | 0, 0 | The point of the frame, in its own pixels from its top-left corner, that goes at x, y and that `Rotation` turns around. The middle of a 32 by 32 frame is 16, 16. |
 | `DrawOptions.Tint` | `White` | Multiplies the frame's colors; its `A` makes the frame see-through: `golib.Color{R: 255, G: 255, B: 255, A: 128}` is half. |
+| `DrawOptions.FullResolution` | `false` | Draw the frame at the window's own resolution, smoothed, instead of in the screen's pixels: for a picture with more detail than the screen has room for, such as a studio's logo or art painted at high resolution, in a game whose small screen the window enlarges. See below. |
 
 An `Animation` is a list of frames, each shown for a while. It keeps no time of its own: keep the seconds it has played in the game's state, add `dt` in `Update`, and ask which frame to draw.
 
@@ -503,6 +516,7 @@ var (
 - Keep the `.aseprite` file in the assets folder: the game reads it as it is, so there is no export step to forget.
 - For a PNG sheet with no animation data, write the animations in code, as above. Only frames on a grid can be drawn; there is no way yet to draw a part of an image of another size.
 - Pixels stay sharp: sprites are drawn without smoothing, at whole pixels, rounding x and y, as maps and text are. For pixel art, also set `Config.PixelArt` with a small screen, and round the camera's position too, so everything moves together.
+- **A large picture drawn small loses its detail on a small screen; `FullResolution` keeps it.** Everything is drawn into the screen, `Config.Width` by `Config.Height` pixels, which the window then enlarges, so a 1500-pixel logo drawn at `Scale: 0.2` on a 640 by 360 screen keeps one pixel in five and is then enlarged blocky. With `DrawOptions.FullResolution` the frame is drawn after the screen is in the window, smoothed, at the window's pixels: x, y and `Scale` are still in screen pixels and need not be whole, and a camera still moves it. It goes over everything else the frame draws, in the order such frames are drawn, after the post-processing shaders, which don't reach it, and it always blends normally. `golib shot` pictures are the screen's size, so they show it at that size.
 - `Width`, `Height`, `Frames` and `Animation` read the file, so they work in tests and before `Run`.
 - Only use art the user provides, and write where it came from, and its license, in `assets/ATTRIBUTION.md`, as `games/platformer` does.
 

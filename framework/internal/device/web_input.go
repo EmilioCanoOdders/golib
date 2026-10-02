@@ -76,6 +76,14 @@ func MousePosition() (x, y float32) {
 	return number(inMouseX), number(inMouseY)
 }
 
+// MouseInWindow reports whether the mouse pointer is over the canvas.
+func MouseInWindow() bool {
+	if !js_().Truthy() {
+		return false
+	}
+	return js_().Call("mouseInside").Bool()
+}
+
 // MouseWheel returns how far the wheel turned since the last frame, in
 // notches.
 func MouseWheel() float32 {

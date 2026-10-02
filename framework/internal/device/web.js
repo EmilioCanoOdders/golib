@@ -16,7 +16,7 @@ window.golib = (function () {
 		BEGIN_CAMERA = 11, END_CAMERA = 12, BLEND = 13, BEGIN_SHADER = 14,
 		END_SHADER = 15, SHADER_VALUES = 16, BEGIN_FRAME = 17, END_FRAME = 18;
 
-	const BLEND_NORMAL = 0, BLEND_ADD = 1, BLEND_COPY = 2;
+	const BLEND_NORMAL = 0, BLEND_ADD = 1, BLEND_COPY = 2, BLEND_PREMULTIPLIED = 3;
 
 	// How many vertices a batch holds before it goes to the graphics card.
 	const BATCH_VERTICES = 24576;
@@ -510,6 +510,7 @@ void main() {
 		gl.blendEquation(gl.FUNC_ADD);
 		if (mode === BLEND_ADD) gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
 		else if (mode === BLEND_COPY) gl.blendFunc(gl.ONE, gl.ZERO);
+		else if (mode === BLEND_PREMULTIPLIED) gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 		else gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	}
 
@@ -633,12 +634,21 @@ void main() {
 
 	// -------------------------------------------------------------- pictures
 
-	function newTexture(width, height, pixels) {
+	// newTexture loads a picture, unsmoothed as raylib loads one, or smoothed
+	// with mipmaps, as raylib's trilinear filter does, so a large picture drawn
+	// small keeps its detail.
+	function newTexture(width, height, pixels, smooth) {
 		const id = nextID++;
 		const made = gl.createTexture();
 		gl.bindTexture(gl.TEXTURE_2D, made);
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-		clampAndFilter(gl.NEAREST); // raylib's own default for a new picture
+		if (smooth) {
+			clampAndFilter(gl.LINEAR);
+			gl.generateMipmap(gl.TEXTURE_2D);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+		} else {
+			clampAndFilter(gl.NEAREST); // raylib's own default for a new picture
+		}
 		textures.set(id, made);
 		boundTexture = -1;
 		return id;
@@ -734,6 +744,9 @@ void main() {
 	const keysDown = new Uint8Array(349), keysPressed = new Uint8Array(349);
 	const mouseDown = new Uint8Array(3), mousePressed = new Uint8Array(3);
 	let mouseX = 0, mouseY = 0, wheel = 0;
+	// Whether the mouse pointer is over the canvas: from its first move there
+	// until it leaves.
+	let mouseOver = false;
 	// The characters typed since the last frame, which Input.TypedText gives.
 	let typed = '';
 	const MAX_TYPED = 256;
@@ -836,7 +849,9 @@ void main() {
 			const scale = canvas.width / Math.max(1, box.width);
 			mouseX = (e.clientX - box.left) * scale;
 			mouseY = (e.clientY - box.top) * (canvas.height / Math.max(1, box.height));
+			mouseOver = true;
 		});
+		canvas.addEventListener('mouseleave', function () { mouseOver = false; });
 		canvas.addEventListener('mousedown', function (e) {
 			const button = domButton(e.button);
 			if (button >= 0) {
@@ -1540,6 +1555,8 @@ void main() {
 
 	function cursorVisible() { return cursorShown; }
 
+	function mouseInside() { return mouseOver; }
+
 	function close() { closed = true; }
 
 	// showError puts a message over the game. A player in a browser never
@@ -1571,7 +1588,7 @@ void main() {
 		touchScreen: touchScreen,
 		onFrame: onFrame, askForFrame: askForFrame, setFrameRate: setFrameRate,
 		setFullscreen: setFullscreen, fullscreenLost: fullscreenLost,
-		setCursorVisible: setCursorVisible, cursorVisible: cursorVisible,
+		setCursorVisible: setCursorVisible, cursorVisible: cursorVisible, mouseInside: mouseInside,
 		showError: showError,
 		postPicture: postPicture,
 		newShader: newShader, unloadShader: unloadShader, shaderLocation: shaderLocation,

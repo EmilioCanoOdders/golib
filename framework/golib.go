@@ -296,6 +296,7 @@ func runWindow(game Game, config Config) error {
 		queue.readText(device.TypedText())
 		pointerX, pointerY := device.MousePosition()
 		mouseX, mouseY := toScreen(pointerX, pointerY, fit, screenWidth, screenHeight)
+		spriteX, spriteY := mouseX, mouseY // the mouse sprite follows the mouse, not a finger
 		// The oldest finger on a touch screen moves the mouse pointer and holds
 		// its left button, so a tap works a game written for a mouse.
 		touches = deviceTouches(touches, fit, screenWidth, screenHeight)
@@ -337,6 +338,7 @@ func runWindow(game Game, config Config) error {
 		if err := render.drawScene(scene, screen); err != nil {
 			return err
 		}
+		render.pointer = pointerAt(spriteX, spriteY, device.MouseInWindow())
 		if err := render.present(nil, fit, float32(updates)*updateStep); err != nil {
 			return err
 		}

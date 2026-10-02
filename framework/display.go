@@ -1,7 +1,9 @@
 package golib
 
 import (
+	"fmt"
 	"math"
+	"sync"
 	"sync/atomic"
 
 	"golib/internal/device"
@@ -56,10 +58,57 @@ var mouseHiddenWanted atomic.Bool
 
 // SetMouseVisible shows or hides the mouse pointer over the game's window,
 // from the next frame, such as to draw a crosshair of the game's own in its
-// place. The pointer still moves, and [Input.MousePosition] still reports it.
-// It shows again outside the window.
+// place: the system's pointer, or the sprite SetMouseSprite draws instead.
+// The pointer still moves, and [Input.MousePosition] still reports it. It
+// shows again outside the window.
 func SetMouseVisible(visible bool) {
 	mouseHiddenWanted.Store(!visible)
+}
+
+// mouseSprite is what SetMouseSprite draws in place of the mouse pointer: a
+// nil sprite for the system's own pointer.
+var mouseSprite struct {
+	sync.Mutex
+	sprite     *Sprite
+	frame      int
+	tipX, tipY float32
+}
+
+// SetMouseSprite draws frame number frame of sprite in place of the system's
+// mouse pointer, from the next frame, with its pixel x, y, counted from the
+// frame's top-left corner, where the pointer points: 0, 0 for an arrow whose
+// tip is that corner. nil goes back to the system's pointer. Call it again
+// with another frame to change the pointer, such as to a hand over a button.
+//
+// The sprite goes over everything, post-processing included, at the
+// window's resolution, so it moves as smoothly as the system's pointer, and
+// as many whole times larger as the screen is, so pixel art stays sharp. It
+// doesn't show while the pointer is outside the window, while
+// SetMouseVisible hides it, or while the player plays with a gamepad or with
+// fingers (see PlayingWithGamepad and PlayingWithTouch): moving the mouse
+// brings it back. A frame the sprite doesn't have stops Run with an error.
+func SetMouseSprite(sprite *Sprite, frame int, x, y float32) {
+	if sprite != nil {
+		count, err := sprite.frameCount()
+		if err != nil {
+			return // reported
+		}
+		if frame < 0 || frame >= count {
+			reportError(fmt.Errorf("golib.SetMouseSprite got frame %d of %s, which has %d frame(s), numbered from 0 to %d", frame, sprite.call(), count, count-1))
+			return
+		}
+	}
+	mouseSprite.Lock()
+	defer mouseSprite.Unlock()
+	mouseSprite.sprite, mouseSprite.frame, mouseSprite.tipX, mouseSprite.tipY = sprite, frame, x, y
+}
+
+// mouseSpriteSet reports whether SetMouseSprite replaced the system's mouse
+// pointer, which is then hidden over the window.
+func mouseSpriteSet() bool {
+	mouseSprite.Lock()
+	defer mouseSprite.Unlock()
+	return mouseSprite.sprite != nil
 }
 
 // IsMouseVisible reports whether the mouse pointer shows over the game's
@@ -108,7 +157,7 @@ type window struct {
 // button was down when the input was last read.
 func (w *window) apply(held bool) {
 	w.placeWindow(held)
-	if hide := mouseHiddenWanted.Load(); hide != w.mouseHidden {
+	if hide := mouseHiddenWanted.Load() || mouseSpriteSet(); hide != w.mouseHidden {
 		device.SetCursorVisible(!hide)
 		w.mouseHidden = hide
 	}
