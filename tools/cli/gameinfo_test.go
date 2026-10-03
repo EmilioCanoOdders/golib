@@ -76,7 +76,7 @@ func TestReadGameInfoMistakes(t *testing.T) {
 	tests := []struct {
 		name, content, want string
 	}{
-		{"unknown field", `{"verison": "1.0.0"}`, `unknown field "verison": game.json takes "title", "version", "author" and "copyright"`},
+		{"unknown field", `{"verison": "1.0.0"}`, `unknown field "verison": game.json takes "title", "version", "author", "copyright" and "besideExecutable"`},
 		{"syntax error", "{\n  \"title\": \"Rocks\",\n}", "line 3: "},
 		{"number instead of text", "{\n  \"version\": 1.0\n}", `line 2: "version" must be text`},
 		{"empty file", " ", "the file is empty or cut short"},
@@ -87,6 +87,12 @@ func TestReadGameInfoMistakes(t *testing.T) {
 		{"empty title", `{"title": " "}`, `"title" is empty`},
 		{"line break", `{"author": "Ada\nLovelace"}`, `"author" holds a line break`},
 		{"long copyright", `{"copyright": "` + strings.Repeat("c", maxInfoText+1) + `"}`, `"copyright" is longer than 200 characters`},
+		{"beside not a list", "{\n  \"besideExecutable\": \"assets/locale\"\n}", `line 2: "besideExecutable" must be a list of paths`},
+		{"beside backslash", `{"besideExecutable": ["assets\\locale"]}`, "forward slashes"},
+		{"beside outside", `{"besideExecutable": ["../other"]}`, "a path inside the game's folder"},
+		{"beside absolute", `{"besideExecutable": ["/etc"]}`, "a path inside the game's folder"},
+		{"beside the folder", `{"besideExecutable": ["."]}`, "a path inside the game's folder"},
+		{"beside twice", `{"besideExecutable": ["assets/locale", "docs/locale"]}`, `"assets/locale" and "docs/locale", which would both be copied as locale`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

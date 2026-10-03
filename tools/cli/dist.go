@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -138,6 +139,9 @@ func (c *cli) distGame(game string) string {
 		titles = append(titles, n.title)
 	}
 	c.check("ok", fmt.Sprintf("wrote %s next to it, with the licenses of %s", noticesFile, joinWords(titles)))
+	if !c.copyBeside(game, folder, info.BesideExecutable) {
+		return ""
+	}
 
 	osName := c.goos
 	if osName == "darwin" {
@@ -160,6 +164,57 @@ func (c *cli) distGame(game string) string {
 		c.check("info", fmt.Sprintf("players unzip it and open %s, which carries %s inside, and copies them into the player's ~/Library/Caches folder when it first starts. What the game saves with golib.SaveData goes in ~/Library/Application Support/GoLib games/%s. No Apple developer account signs the app, so the first time macOS stops it: players open it from System Settings, Privacy & Security, Open Anyway", built, joinWords(names), game))
 	}
 	return exePath
+}
+
+// copyBeside copies the files and folders of game's folder that game.json's
+// "besideExecutable" lists into folder, next to the executable, each under
+// its own name: assets/locale becomes locale. It returns false after
+// reporting a failure.
+func (c *cli) copyBeside(game, folder string, paths []string) bool {
+	if len(paths) == 0 {
+		return true
+	}
+	shown := "games/" + game
+	var names []string
+	for _, p := range paths {
+		source := filepath.Join(c.path("games", game), filepath.FromSlash(p))
+		name := path.Base(path.Clean(p))
+		target := filepath.Join(folder, name)
+		if _, err := os.Stat(source); err != nil {
+			c.check("fail", fmt.Sprintf("%s/%s, which %s's \"besideExecutable\" lists, isn't there: add it, or take it off the list", shown, p, gameInfoFile))
+			return false
+		}
+		if _, err := os.Lstat(target); err == nil {
+			c.check("fail", fmt.Sprintf("%s, from %s's \"besideExecutable\", would replace the %s that dist puts next to the executable: rename it", p, gameInfoFile, name))
+			return false
+		}
+		if err := copyTree(source, target); err != nil {
+			c.check("fail", fmt.Sprintf("cannot copy %s/%s next to the executable: %v", shown, p, err))
+			return false
+		}
+		names = append(names, p)
+	}
+	c.check("ok", fmt.Sprintf("copied %s next to it, as %s's \"besideExecutable\" asks: players see them there", joinWords(names), gameInfoFile))
+	return true
+}
+
+// copyTree copies the file or folder at source, and everything in it, to
+// target.
+func copyTree(source, target string) error {
+	return filepath.WalkDir(source, func(name string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(source, name)
+		if err != nil {
+			return err
+		}
+		to := filepath.Join(target, relative)
+		if entry.IsDir() {
+			return os.MkdirAll(to, 0o755)
+		}
+		return copyFile(name, to)
+	})
 }
 
 // buildExecutable builds game's executable into output with the build tags

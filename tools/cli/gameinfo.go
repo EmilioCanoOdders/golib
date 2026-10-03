@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -26,6 +27,10 @@ type gameInfo struct {
 	Version   string `json:"version"`   // major.minor.patch, such as "1.2.0" or "1.2.0-beta"; default: "0.0.0"
 	Author    string `json:"author"`    // who makes the game; default: none
 	Copyright string `json:"copyright"` // such as "Copyright 2026 Ada Lovelace"; default: none
+	// Files and folders of the game's folder that dist builds copy next to
+	// the executable, where players see them, such as "assets/locale" for
+	// translations to read and change; default: none.
+	BesideExecutable []string `json:"besideExecutable"`
 
 	version version // Version, parsed
 }
@@ -70,6 +75,9 @@ func readGameInfo(dir string) (info gameInfo, found bool, err error) {
 	if strings.TrimSpace(info.Title) == "" {
 		return info, true, errors.New(`"title" is empty: write the game's name, or leave "title" out to use the folder name`)
 	}
+	if err := checkBeside(info.BesideExecutable); err != nil {
+		return info, true, err
+	}
 	info.version, err = parseVersion(info.Version)
 	return info, true, err
 }
@@ -85,6 +93,27 @@ func checkText(field, value string) error {
 	return nil
 }
 
+// checkBeside reports whether the paths of "besideExecutable" are inside
+// the game's folder, written with forward slashes, and copy to different
+// names.
+func checkBeside(paths []string) error {
+	names := map[string]string{}
+	for _, p := range paths {
+		switch {
+		case strings.Contains(p, `\`):
+			return fmt.Errorf(`"besideExecutable" has %q: write paths with forward slashes, such as "assets/locale"`, p)
+		case p == "" || path.IsAbs(p) || path.Clean(p) == "." || path.Clean(p) == ".." || strings.HasPrefix(path.Clean(p), "../"):
+			return fmt.Errorf(`"besideExecutable" has %q: write a path inside the game's folder, such as "assets/locale"`, p)
+		}
+		name := path.Base(path.Clean(p))
+		if other, taken := names[name]; taken {
+			return fmt.Errorf(`"besideExecutable" has %q and %q, which would both be copied as %s: keep one`, other, p, name)
+		}
+		names[name] = p
+	}
+	return nil
+}
+
 // explainJSONError turns an error from decoding game.json into a message that
 // says where the mistake is and how to fix it.
 func explainJSONError(data []byte, err error) error {
@@ -93,13 +122,15 @@ func explainJSONError(data []byte, err error) error {
 	switch {
 	case errors.As(err, &syntaxErr):
 		return fmt.Errorf("line %d: %v: game.json must be valid JSON, such as {\"title\": \"Rocks\", \"version\": \"1.0.0\"}", lineAt(data, syntaxErr.Offset), syntaxErr)
+	case errors.As(err, &typeErr) && typeErr.Field == "besideExecutable":
+		return fmt.Errorf(`line %d: "besideExecutable" must be a list of paths, such as ["assets/locale"]`, lineAt(data, typeErr.Offset))
 	case errors.As(err, &typeErr):
 		return fmt.Errorf("line %d: %q must be text, in double quotes", lineAt(data, typeErr.Offset), typeErr.Field)
 	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
 		return errors.New(`the file is empty or cut short: game.json must be valid JSON, such as {"title": "Rocks", "version": "1.0.0"}`)
 	case strings.HasPrefix(err.Error(), "json: unknown field "):
 		field := strings.TrimPrefix(err.Error(), "json: unknown field ")
-		return fmt.Errorf(`unknown field %s: game.json takes "title", "version", "author" and "copyright"`, field)
+		return fmt.Errorf(`unknown field %s: game.json takes "title", "version", "author", "copyright" and "besideExecutable"`, field)
 	}
 	return err
 }
