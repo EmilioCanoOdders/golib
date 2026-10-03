@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -151,6 +152,59 @@ dist: 0 failed, 0 warning(s)
 	}
 	if got := len(readResources(t, section)); got != 1+len(iconSizes)+1 {
 		t.Errorf("%d resources, want the version, %d icons and their group", got, len(iconSizes))
+	}
+}
+
+// TestDistBesideExecutable copies what game.json's "besideExecutable" lists
+// next to the executable, and into the zip: a folder under its own name, and
+// a file.
+func TestDistBesideExecutable(t *testing.T) {
+	tp := newTestProject(t, "windows", "rocks")
+	writeFile(t, tp.c.path("games", "rocks", gameInfoFile), `{"title": "Rocks", "version": "1.0.0", "besideExecutable": ["assets/locale", "README.txt"]}`)
+	writeFile(t, tp.c.path("games", "rocks", "assets", "locale", "en.txt"), "language = English\n")
+	writeFile(t, tp.c.path("games", "rocks", "assets", "locale", "fonts", "note.txt"), "a folder inside\n")
+	writeFile(t, tp.c.path("games", "rocks", "README.txt"), "How to play\n")
+	tp.embeds = []string{"all:assets"}
+
+	if code := tp.c.dist(nil); code != 0 {
+		t.Fatalf("exit code %d, output:\n%s%s", code, tp.stdout.String(), tp.stderr.String())
+	}
+	want := "[ok]   copied assets/locale and README.txt next to it, as game.json's \"besideExecutable\" asks: players see them there\n"
+	if !strings.Contains(tp.stdout.String(), want) {
+		t.Errorf("output:\n%s\nwant it to contain:\n%s", tp.stdout.String(), want)
+	}
+	folder := tp.c.path("build", "rocks", "dist", "rocks")
+	for name, content := range map[string]string{
+		"locale/en.txt":         "language = English\n",
+		"locale/fonts/note.txt": "a folder inside\n",
+		"README.txt":            "How to play\n",
+	} {
+		if data, err := os.ReadFile(filepath.Join(folder, filepath.FromSlash(name))); err != nil || string(data) != content {
+			t.Errorf("%s next to the executable: %q, %v; want %q", name, data, err, content)
+		}
+	}
+	_, contents := readZip(t, tp.c.path("build", "rocks", "dist", "rocks-1.0.0-windows-amd64.zip"))
+	if contents["rocks/locale/en.txt"] != "language = English\n" || contents["rocks/README.txt"] != "How to play\n" {
+		t.Errorf("the zip lacks the copies: %q", slices.Collect(maps.Keys(contents)))
+	}
+}
+
+func TestDistBesideExecutableFailures(t *testing.T) {
+	for _, tt := range []struct{ name, beside, want string }{
+		{"missing", `["assets/locale"]`, "[fail] games/rocks/assets/locale, which game.json's \"besideExecutable\" lists, isn't there: add it, or take it off the list\n"},
+		{"taken name", `["docs/THIRD-PARTY-LICENSES.txt"]`, "[fail] docs/THIRD-PARTY-LICENSES.txt, from game.json's \"besideExecutable\", would replace the THIRD-PARTY-LICENSES.txt that dist puts next to the executable: rename it\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tp := newTestProject(t, "windows", "rocks")
+			writeFile(t, tp.c.path("games", "rocks", gameInfoFile), `{"besideExecutable": `+tt.beside+`}`)
+			writeFile(t, tp.c.path("games", "rocks", "docs", "THIRD-PARTY-LICENSES.txt"), "mine\n")
+			if code := tp.c.dist(nil); code != 1 {
+				t.Errorf("exit code %d, want 1", code)
+			}
+			if !strings.Contains(tp.stdout.String(), tt.want) {
+				t.Errorf("output:\n%s\nwant it to contain:\n%s", tp.stdout.String(), tt.want)
+			}
+		})
 	}
 }
 

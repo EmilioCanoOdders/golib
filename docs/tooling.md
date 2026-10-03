@@ -168,6 +168,7 @@ build/<game>/dist/                  emptied first
     <title>.app/                    on macOS, instead: the app players open, with the executable inside (see below)
     raylib.dll, libffi-8.dll        the libraries it loads when it starts (Windows; see below)
     THIRD-PARTY-LICENSES.txt        the licenses of the software and files in the game made by others
+    locale/, ...                    what game.json's "besideExecutable" lists, copied from the game's folder (see below)
   <game>-<version>-<os>-<arch>.zip  the folder, zipped: the file to share
 ```
 
@@ -262,6 +263,7 @@ Every field of `game.json` is optional. Save it as UTF-8; the byte order mark th
 | `version` | `"1.2.0"`, `"1.2.0-beta"` | The file and product version: major.minor.patch, each from 0 to 65535, optionally followed by a label after `-`, which marks a pre-release. Default: `0.0.0`. |
 | `author` | `"Ada Lovelace"` | The company name |
 | `copyright` | `"Copyright 2026 Ada Lovelace"` | The copyright |
+| `besideExecutable` | `["assets/locale"]` | Not a detail of the executable: files and folders of the game's folder, written with forward slashes, that `dist` copies next to the executable (next to the app on macOS), each under its own name, so `assets/locale` becomes `locale/`. They are for players to see and change, such as translations a game reads from beside its executable; whatever is in `assets/` stays inside the executable too. `dist --web` leaves them out, since a browser has no folder beside the game. Default: none. |
 
 ```json
 {
@@ -271,7 +273,7 @@ Every field of `game.json` is optional. Save it as UTF-8; the byte order mark th
 }
 ```
 
-A mistake in either file stops the build with a `[fail]` line that says what to fix: invalid JSON (with its line), an unknown field, a version that isn't major.minor.patch, an icon that isn't a square PNG of at least 16 pixels. `dist` reports what it found, and checks both files on Linux too, so a mistake shows up wherever the game is built; debug builds say nothing while both files are fine, and don't check them on Linux and macOS.
+A mistake in either file stops the build with a `[fail]` line that says what to fix: invalid JSON (with its line), an unknown field, a version that isn't major.minor.patch, an icon that isn't a square PNG of at least 16 pixels, a `besideExecutable` path outside the game's folder or two that would be copied under the same name. `dist` also stops when a `besideExecutable` path isn't there, or would replace a file it writes, such as `THIRD-PARTY-LICENSES.txt`. `dist` reports what it found, and checks both files on Linux too, so a mistake shows up wherever the game is built; debug builds say nothing while both files are fine, and don't check them on Linux and macOS.
 
 How it works, in `tools/cli` (`dist.go`, `gameinfo.go`, `icon.go` and `winres.go`): golib resizes the icon to 16, 20, 24, 32, 40, 48, 64 and 256 pixels, averaging pixels to shrink and repeating them to grow, so pixel art stays sharp. It writes those images and the version information as Windows resources into a `.syso` file, the object file format the Go linker reads. The linker only picks up `.syso` files from the package's own folder, and `go build -overlay` doesn't cover them, so golib puts the file in the game's folder as `golib_windows_<arch>.syso` while it builds, then deletes it, even when the build fails. Debug and dist builds use the same name, so a file left by an interrupted build is replaced rather than linked twice, and `.gitignore` lists it. The same resources give the same file, so an unchanged game isn't linked again. The icon resource is named `GLFW_ICON`: GLFW, the library raylib opens windows with, gives an icon with that name to the game's window.
 
