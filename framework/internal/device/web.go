@@ -230,8 +230,10 @@ func SetWindowPosition(x, y int) {}
 func SetWindowMinSize(width, height int) {}
 
 // SetWindowBorder asks the browser for fullscreen, without a border, or for
-// the page again. Browsers only allow it while handling a key or a click, so
-// web.js remembers the request and makes it at the next one.
+// the page again. Browsers grant fullscreen only for a moment after a key, a
+// click or a touch, so web.js makes the request at once when one came a moment
+// ago, such as the key the game is answering, and at the next one otherwise.
+// It leaves fullscreen at once.
 func SetWindowBorder(on bool) {
 	js_().Call("setFullscreen", !on)
 }
@@ -364,4 +366,25 @@ func enlarge(picture *image.NRGBA, scale int) *image.NRGBA {
 // CursorVisible reports whether the mouse pointer shows over the canvas.
 func CursorVisible() bool {
 	return js_().Call("cursorVisible").Bool()
+}
+
+// SystemLanguages returns the languages the browser is set to, most
+// preferred first, as it names them, such as "es-ES": navigator.languages,
+// or navigator.language in a browser without the list. It reads the browser
+// itself, not the page's glue, so a game can ask before golib.Run.
+func SystemLanguages() []string {
+	navigator := js.Global().Get("navigator")
+	if !navigator.Truthy() {
+		return nil
+	}
+	var languages []string
+	if list := navigator.Get("languages"); list.Truthy() {
+		for i := range list.Length() {
+			languages = append(languages, list.Index(i).String())
+		}
+	}
+	if one := navigator.Get("language"); len(languages) == 0 && one.Truthy() {
+		languages = append(languages, one.String())
+	}
+	return languages
 }

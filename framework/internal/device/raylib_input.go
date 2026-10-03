@@ -40,6 +40,11 @@ func MousePosition() (x, y float32) {
 	return position.X, position.Y
 }
 
+// MouseInWindow reports whether the mouse pointer is over the window.
+func MouseInWindow() bool {
+	return rl.IsCursorOnScreen()
+}
+
 // MouseWheel returns how far the wheel turned since the last frame.
 func MouseWheel() float32 {
 	return rl.GetMouseWheelMove()

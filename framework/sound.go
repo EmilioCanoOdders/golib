@@ -54,6 +54,11 @@ type SoundSpec struct {
 	Duty        float32  // Part of each square wave that is high, from 0 to 1: 0.5 is even, 0.2 thin and nasal. Default: 0.5.
 	Vibrato     float32  // Hz the pitch wobbles up and down. Default: 0, no wobble.
 	VibratoRate float32  // Wobbles per second. Default: 12.
+
+	// A tune's notes also fade as they sound, and can have a second wave a
+	// little higher: see Voice.Decay and Voice.Detune.
+	decay  float32 // seconds after which the sound is at a third of its loudness; 0 holds it
+	detune float32 // cents higher a second wave sounds; 0 for none
 }
 
 // resolve returns the recipe with defaults applied and values kept in range.
@@ -97,6 +102,16 @@ func (spec SoundSpec) samples() []int16 {
 	phase := 0.0
 	noise := 0.0
 	noiseState := uint32(0x2545f491) // a fixed seed keeps the hiss the same every time
+	detuned := spec.detune != 0 && spec.Wave != WaveNoise
+	ratio := math.Pow(2, float64(spec.detune)/1200)
+	phase2 := 0.5 // the second wave starts half a cycle on, so the two don't start as one
+	// Decay leaves the same share of the loudness at every sample: fade is
+	// what it has left, and falls by fadeStep each sample, which comes to
+	// e^(-seconds/decay) without an exponential every sample.
+	fade, fadeStep := 1.0, 1.0
+	if spec.decay > 0 {
+		fadeStep = math.Exp(-step / float64(spec.decay))
+	}
 	for i := range samples {
 		seconds := float64(i) * step
 
@@ -114,7 +129,18 @@ func (spec SoundSpec) samples() []int16 {
 			noise = float64(noiseState>>8)/float64(1<<24)*2 - 1
 		}
 
-		samples[i] = int16(spec.shape(phase, noise) * spec.envelope(seconds) * float64(spec.Volume) * math.MaxInt16)
+		value := spec.shape(phase, noise)
+		if detuned {
+			phase2 += min(frequency*ratio, soundSampleRate/2) * step
+			phase2 -= math.Floor(phase2)
+			value = (value + spec.shape(phase2, noise)) / 2
+		}
+		loudness := spec.envelope(seconds)
+		if spec.decay > 0 {
+			loudness *= fade
+			fade *= fadeStep
+		}
+		samples[i] = int16(value * loudness * float64(spec.Volume) * math.MaxInt16)
 	}
 	return samples
 }

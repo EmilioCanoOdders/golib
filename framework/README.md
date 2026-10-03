@@ -24,6 +24,7 @@ For AI agents writing game code with GoLib, and for anyone who wants the whole f
 | Play music | `golib.NewMusic` | [Music](#music) |
 | Go fullscreen, add a CRT look | `golib.SetFullscreen`, `golib.NewShader`, `golib.SetPostProcess` | [Window, fullscreen and screen effects](#window-fullscreen-and-screen-effects) |
 | Remember high scores, settings and progress | `golib.SaveData`, `golib.LoadData` | [Saving data](#saving-data) |
+| Start in the player's language | `golib.ChooseLanguage`, `golib.SystemLanguages` | [The player's language](#the-players-language) |
 | Read a data file | `golib.ReadAsset` | [Files: the assets folder](#files-the-assets-folder) |
 | End the game | `golib.Quit` | [Quitting](#quitting) |
 
@@ -211,9 +212,21 @@ Only these keys are read. There is no numeric keypad, and a raylib key code conv
 | `Input.MouseDown` | `MouseDown(button MouseButton) bool`: the button is held down. |
 | `Input.MousePressed` | `MousePressed(button MouseButton) bool`: the button went down since the previous update; true in one update per click. |
 | `Input.MouseWheel` | `MouseWheel() float32`: notches the wheel turned since the previous update. Positive is up, away from the player; 0 means it didn't move. |
-| `SetMouseVisible` | `SetMouseVisible(visible bool)`: shows or hides the pointer over the window, from the next frame, such as to draw a crosshair in its place. `MousePosition` still works. |
+| `SetMouseVisible` | `SetMouseVisible(visible bool)`: shows or hides the pointer over the window, from the next frame, such as to draw a crosshair in its place: the system's pointer or the game's sprite. `MousePosition` still works. |
+| `SetMouseSprite` | `SetMouseSprite(sprite *Sprite, frame int, x, y float32)`: a frame of a sprite in place of the system's pointer, from the next frame, with its pixel x, y, from the frame's top-left corner, where the pointer points: 0, 0 for an arrow whose tip is that corner. `nil` brings the system's pointer back; call it again with another frame for another pointer, such as a hand over a button. Call it once, in `main` or in `Update`, not in `Draw`. |
 | `IsMouseVisible` | `IsMouseVisible() bool`: whether the pointer shows, or will from the next frame. |
 | `MouseButton` | `MouseLeft`, `MouseRight` or `MouseMiddle`. |
+
+- **A pointer of the game's own is a sprite, not a drawing in `Draw`.** `SetMouseSprite` draws it over everything, post-processing included, where the system's pointer would be, at the window's resolution, so it moves as smoothly as the system's, and as many whole times larger as the screen is, so a pixel art pointer stays sharp. It hides by itself while the pointer is outside the window and while the player plays with a gamepad or with fingers, and comes back when the mouse moves. `golib shot` draws it once `--input` has moved the mouse.
+
+```go
+var pointer = golib.NewSprite("sprites/pointer.png")
+
+func main() {
+	golib.SetMouseSprite(pointer, 0, 0, 0) // its tip is the top-left pixel
+	// ...
+}
+```
 
 ```go
 x, y := input.MousePosition()
@@ -444,6 +457,7 @@ A sprite is a picture from the game's assets folder, made of frames of one size:
 | `DrawOptions.Rotation` | 0 | Degrees, clockwise, around the origin. |
 | `DrawOptions.OriginX`, `DrawOptions.OriginY` | 0, 0 | The point of the frame, in its own pixels from its top-left corner, that goes at x, y and that `Rotation` turns around. The middle of a 32 by 32 frame is 16, 16. |
 | `DrawOptions.Tint` | `White` | Multiplies the frame's colors; its `A` makes the frame see-through: `golib.Color{R: 255, G: 255, B: 255, A: 128}` is half. |
+| `DrawOptions.FullResolution` | `false` | Draw the frame at the window's own resolution, smoothed, instead of in the screen's pixels: for a picture with more detail than the screen has room for, such as a studio's logo or art painted at high resolution, in a game whose small screen the window enlarges. See below. |
 
 An `Animation` is a list of frames, each shown for a while. It keeps no time of its own: keep the seconds it has played in the game's state, add `dt` in `Update`, and ask which frame to draw.
 
@@ -507,6 +521,7 @@ var (
 - Keep the `.aseprite` file in the assets folder: the game reads it as it is, so there is no export step to forget.
 - For a PNG sheet with no animation data, write the animations in code, as above. Only frames on a grid can be drawn; there is no way yet to draw a part of an image of another size.
 - Pixels stay sharp: sprites are drawn without smoothing, at whole pixels, rounding x and y, as maps and text are. For pixel art, also set `Config.PixelArt` with a small screen, and round the camera's position too, so everything moves together.
+- **A large picture drawn small loses its detail on a small screen; `FullResolution` keeps it.** Everything is drawn into the screen, `Config.Width` by `Config.Height` pixels, which the window then enlarges, so a 1500-pixel logo drawn at `Scale: 0.2` on a 640 by 360 screen keeps one pixel in five and is then enlarged blocky. With `DrawOptions.FullResolution` the frame is drawn after the screen is in the window, smoothed, at the window's pixels: x, y and `Scale` are still in screen pixels and need not be whole, and a camera still moves it. It goes over everything else the frame draws, in the order such frames are drawn, after the post-processing shaders, which don't reach it, and it always blends normally. `golib shot` pictures are the screen's size, so they show it at that size.
 - `Width`, `Height`, `Frames` and `Animation` read the file, so they work in tests and before `Run`.
 - Only use art the user provides, and write where it came from, and its license, in `assets/ATTRIBUTION.md`, as `games/platformer` does.
 
@@ -988,6 +1003,7 @@ The settings, with the labels jfxr shows for them. "Over the sound" means from i
 | `Music.Stop` | `Stop()`: ends it; the next `Play` starts from the beginning. |
 | `Music.Playing` | `Playing() bool`: it is playing now, not paused, stopped or waiting for a sound device. |
 | `Music.SetVolume` | `SetVolume(volume float32)`: how loud this music is, from 0 to 1, under `SetVolume`. Around 0.2 to 0.4 keeps it under the sound effects. |
+| `Music.Preload` | `Preload()`: makes the tune, or reads the file, now rather than the first time it plays, which would hold the game up for a moment then. Call it on a title or loading screen, or in `main` before `Run`. A mistake it finds stops `Run`, as playing would. |
 | `Music.Err` | `Err() error`: what stopped the music from playing, or nil. For a tune it makes the tune, so a test can check its notes; for a file it tells only what playing it has found so far. |
 
 ```go
@@ -1021,12 +1037,18 @@ Music can also be made from notes, with no file at all, for a game whose user ha
 | `TuneSpec` | The recipe: the speed, and the voices that play together. |
 | `TuneSpec.Tempo` | Beats per minute, from 20 to 400. A beat is what a note with no length lasts, so a tune written in eighth notes at 110 beats per minute has a `Tempo` of 220. Default: 120. |
 | `TuneSpec.Voices` | The lines that play together, at most 8. |
+| `TuneSpec.Reverb` | The room the tune plays in, from 0 to 1: 0.2 a small room, 0.5 a hall, 1 a cave. Its echoes soften notes made in code, which sound dry on their own, and the echoes at the end carry over into the start, so the loop has no seam. Default: 0, no room. |
 | `Voice` | One line of the tune. |
 | `Voice.Wave` | Its sound, as in `SoundSpec`. Default: `WaveSquare`. |
 | `Voice.Volume` | How loud it is, from 0 to 1, before the music's own volume. Default: 0.5. |
 | `Voice.Duty` | Shapes a square wave, from 0.05 to 0.95, as in `SoundSpec`. Default: 0.5. |
 | `Voice.Vibrato`, `Voice.VibratoRate` | Wobble the pitch, as in `SoundSpec`. Default: no wobble. |
 | `Voice.Gap` | The silence at the end of every note, in seconds. Default: 0.04. 0 runs notes together; more makes a short, clipped sound, such as a drum. |
+| `Voice.Attack` | Seconds each note takes to swell to its full loudness, as a bowed string or a pad does: 0.1 to 0.5. Default: 0.005, at once. |
+| `Voice.Decay` | Each note fades away as a plucked or struck string does: `Decay` seconds after it starts it is at about a third of its loudness. 0.1 to 0.3 for a marimba or a pluck, 1 to 2 for a piano or a bell. Default: 0, a note holds its loudness. |
+| `Voice.Ring` | Seconds each note goes on sounding after it ends, fading out over the notes that follow, as a piano does with its pedal down, up to 10. The last notes ring on over the start of the loop. Default: 0, a note ends with its length. |
+| `Voice.LowPass` | Softens the voice above this many Hz, from 20 to 20000: around 3000 takes the edge off a square or saw wave, 800 muffles it. Default: 0, no filter. |
+| `Voice.Detune` | A second copy of the wave this many cents higher, up to 100, beating against the first for a fuller, warmer sound, like a chorus: 5 to 15 is subtle. Not for `WaveNoise`. Default: 0, one wave. |
 | `Voice.Notes` | The notes, separated by spaces. |
 
 A note is a letter from `a` to `g`, an optional `#` or `b`, and its octave: `c4` is middle C, `f#3` and `eb5`; capitals work too, and octaves go from 0 to 8. A dot is a silence, and a dash holds the note before it for another beat. `/` and a number give a length in beats: `c4/2` lasts two beats, `c4/0.5` half a beat. A tune lasts at most two minutes, and loops.
@@ -1034,20 +1056,36 @@ A note is a letter from `a` to `g`, an optional `#` or `b`, and its octave: `c4`
 ```go
 // Sixteen beats a voice, so every voice loops in step.
 var themeSpec = golib.TuneSpec{
-	Tempo: 264, // the tune is written in eighth notes, at 132 a minute
+	Tempo:  264, // the tune is written in eighth notes, at 132 a minute
+	Reverb: 0.3, // a room, so the notes don't sound dry
 	Voices: []golib.Voice{
-		{Notes: "c5 - g4 . a4 g4 e4 c4 d4/2 g4/2 c5/4"},                                    // the melody
-		{Wave: golib.WaveTriangle, Volume: 0.35, Notes: "c3/2 g3/2 c3/2 g3/2 f3/2 c4/2 g3/2 g3/2"}, // the bass
-		{Wave: golib.WaveNoise, Volume: 0.05, Gap: 0.1, Notes: ". a7 . a7 . a7 . a7 . a7 . a7 . a7 . a7"}, // a tick on the off-beats
+		{Wave: golib.WaveTriangle, Decay: 0.6, Ring: 0.3, Notes: "c5 - g4 . a4 g4 e4 c4 d4/2 g4/2 c5/4"},                // the melody, plucked
+		{Wave: golib.WaveTriangle, Volume: 0.35, LowPass: 600, Notes: "c3/2 g3/2 c3/2 g3/2 f3/2 c4/2 g3/2 g3/2"},          // the bass
+		{Wave: golib.WaveNoise, Volume: 0.05, Gap: 0.1, Decay: 0.03, Notes: ". a7 . a7 . a7 . a7 . a7 . a7 . a7 . a7"}, // a tick on the off-beats
 	},
 }
 
 var theme = golib.NewTune(themeSpec)
 ```
 
+A voice with only a wave and its notes sounds like an 8-bit console: every note starts at once, holds its loudness and stops. For anything softer, give each voice an instrument's settings, and the tune a `Reverb` from 0.2 to 0.4. These are starting points, to tune by ear:
+
+| Sounds like | Voice settings |
+| --- | --- |
+| A marimba or a kalimba, for arpeggios | `Wave: golib.WaveSine, Decay: 0.25, Ring: 0.3` |
+| A plucked string or a harp, for a melody | `Wave: golib.WaveTriangle, Decay: 0.6, Ring: 0.4, Detune: 5` |
+| An electric piano | `Wave: golib.WaveSine, Decay: 1.2, Ring: 0.5, Detune: 7` |
+| A soft lead | `Wave: golib.WaveSquare, Duty: 0.3, LowPass: 2500, Vibrato: 3, VibratoRate: 5` |
+| A warm pad, for long chords | `Wave: golib.WaveSaw, Attack: 0.4, LowPass: 1200, Detune: 10, Gap: 0` |
+| A round bass | `Wave: golib.WaveTriangle, LowPass: 500, Decay: 1.5` |
+| A drum's thud | `Wave: golib.WaveNoise, LowPass: 400, Decay: 0.08, Gap: 0.1` |
+| A snare or a clap | `Wave: golib.WaveNoise, LowPass: 5000, Decay: 0.05, Gap: 0.1` |
+
+A tune with none of these settings sounds as it did before they existed.
+
 - A mistake in the notes, or a tune longer than two minutes, stops `Run` with a message, under `golib shot` too, where nothing can be heard. In a test, where nothing calls `Run`, `Music.Err` returns it: keep the `TuneSpec` in a variable of its own and test the tune made from it.
 - Voices play together from the first beat; the longest one sets the tune's length, and the others end in silence. Make them add up to the same number of beats, or the loop falls out of step, and count those beats in a test.
-- The tune is made the first time it plays, which takes a moment: start it on a title screen rather than in the middle of the action.
+- The tune is made the first time it plays, which takes a moment, longer with `Ring` and `Reverb`: about a third of a second for a minute and a half of tune on a desktop, and up to a second in a browser. Call `Music.Preload` in `main` before `Run`, or on a title screen, so its first `Play` doesn't hold the game up.
 - Made music is a last resort: a tracker module or an OGG file from the user sounds better. Say so, and how to swap it in: only the `golib.NewTune` line changes.
 
 ## Window, fullscreen and screen effects
@@ -1078,7 +1116,7 @@ For a game's graphics settings, the window's monitor, size and frame rate, and a
 | `DisplayScale` | `DisplayScale() float32`: how many of the screen's own pixels, across, one unit of `Monitors`' sizes and of `SetWindowSize` is: 2 on a Mac's Retina screen, where macOS measures in points, 1 on other Macs, on Windows and on Linux, and the browser's `devicePixelRatio` in a browser. Multiply by it to show a window's size in the screen's pixels. 1 under `golib shot` and in tests. |
 | `SetMonitor` | `SetMonitor(i int)`: moves the window to monitor `i`: in a window, centered on it at its size; in fullscreen, covering it. On macOS, a game in fullscreen leaves it, moves, and enters it again. An index no monitor has is ignored, and so is the call in a browser. |
 | `SetWindowSize` | `SetWindowSize(width, height int)`: makes the window's drawing area that many pixels, centered on its monitor and no larger than it; in fullscreen, the size it comes back to. The screen keeps its size, and `Run` scales it to fit, unless `Config.WindowScale` makes it this size divided by the scale (the way to offer resolutions) or `Config.FillWindow` gives it the window's shape. The system may make the window smaller, to fit it between its menu bar, taskbar or Dock and the title bar (a 1440-high window on a 2560 by 1440 Mac gets 1296), and with `PixelArt` on a screen of fixed size the screen then drops a whole size, with black borders: offer sizes up to about four fifths of the monitor, as `Run`'s first window is. Ignored in a browser, where the canvas follows the page. |
-| `SetFrameRate` | `SetFrameRate(fps int)`: draws that many frames a second at most, from 15 to 360; a game starts at 60. Updates stay at 60 a second of game time: at 30 every frame runs two, above 60 some frames run none and draw the same state again. |
+| `SetFrameRate` | `SetFrameRate(fps int)`: draws that many frames a second at most, from 15 to 360; a game starts at 60. Updates stay at 60 a second of game time: at 30 every frame runs two, above 60 some frames run none and draw the same state again. Each frame waits for the monitor to refresh (V-Sync), so the picture never tears, and a cap above the monitor's refresh rate draws no faster than it. |
 | `FPS` | `FPS() int`: the frames `Run` drew in the last second, for a game to show. 0 under `golib shot`, in tests and in the game's first second. |
 | `OpenURL` | `OpenURL(url string) error`: opens a web page, in the browser, or a mail to write, for a `mailto:` link. Only links that start with `https://`, `http://` or `mailto:`, with no spaces or quotes, open; any other is an error, so a game can't run anything else by mistake. Nothing opens under `golib shot` and in tests. |
 
@@ -1144,6 +1182,29 @@ func main() {
 ```
 
 Let the player turn effects off, with `golib.SetPostProcess()`. `games/asteroids` has a glow and a CRT shader, switched with F2.
+
+## The player's language
+
+A game translated to several languages can start in the one the player's system speaks, until the player chooses another in its settings. GoLib says which languages those are; the text itself, and how to translate it, is the game's.
+
+| Name | What it does |
+| --- | --- |
+| `SystemLanguages` | `SystemLanguages() []string`: the languages the system shows its own text in, most preferred first, as tags: the language in lowercase, then its script and region when the system says them, such as `"es-ES"`, `"en"`, `"pt-BR"` or `"zh-Hans-CN"`. Windows's display languages, macOS's preferred languages, Linux's `LANGUAGE` and then `LC_ALL`, `LC_MESSAGES` or `LANG`, a browser's `navigator.languages`. Empty when the system says none, and under `golib shot`. |
+| `ChooseLanguage` | `ChooseLanguage(have []string, fallback string) string`: which of the game's languages, by their tags, to start in: the first of the system's it has, whole or by its language alone, so `"es-MX"` chooses `"es"`; or `fallback` with none. |
+
+```go
+func main() {
+	settings := loadSettings()
+	if settings.Language == "" { // the player hasn't chosen one yet
+		settings.Language = golib.ChooseLanguage([]string{"es", "en"}, "en")
+	}
+	// ...
+}
+```
+
+- Both work before `Run`, so the first screen is already in the right language. Save the language only once the player chooses one, so a game keeps following the system until then.
+- `golib shot` sees no system language, so its pictures are the same on every machine: shots show the game's fallback. Start a shot in another language with `--save` and the game's saved settings.
+- The built-in font draws the Latin alphabet: a language in another script needs a font from a file (see [Fonts](#fonts)).
 
 ## Saving data
 
@@ -1296,7 +1357,7 @@ A game that calls raylib directly (see above) doesn't build for the browser at a
 A web build is what a phone plays, so a game meant for one is a game meant for the browser:
 
 - **Fingers, not keys.** A phone has no keyboard: everything the player does has to be reachable by tapping. A tap already works the mouse (see [Touch screen](#touch-screen)); a game whose only way into play is "press Enter" can't be started on a phone at all.
-- **Fullscreen comes from a tap.** A browser only grants fullscreen while it handles a key, a click or a touch, so `SetFullscreen(true)` takes effect at the next one of those. The whole page goes fullscreen and the game fills the screen, however the phone is turned.
+- **Fullscreen comes from a tap.** A browser only grants fullscreen for a moment after a key, a click or a touch, so `SetFullscreen(true)` takes effect at once when the game calls it on one of those, as a settings screen's fullscreen row does, and at the next one otherwise, as `Config.Fullscreen` does at the start. Leaving fullscreen is at once. The whole page goes fullscreen and the game fills the screen, however the phone is turned.
 - **The screen is landscape or portrait, and the player chooses.** The screen the game draws on keeps its size and is scaled to fit, with black bars where the shapes differ, so a game designed for 1280 by 720 played in portrait gets thick bars; with `Config.FillWindow` it grows taller instead, and the game lays itself out for it. Put the controls inside the screen, not against the window's edges, and they stay where the thumbs are either way.
 - **`golib web <game> --lan`** serves the game to the network, so a phone on the same Wi-Fi can open it and play while the game is still being written; the terminal prints the address to type.
 

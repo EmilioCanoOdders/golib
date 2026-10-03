@@ -16,7 +16,7 @@ window.golib = (function () {
 		BEGIN_CAMERA = 11, END_CAMERA = 12, BLEND = 13, BEGIN_SHADER = 14,
 		END_SHADER = 15, SHADER_VALUES = 16, BEGIN_FRAME = 17, END_FRAME = 18;
 
-	const BLEND_NORMAL = 0, BLEND_ADD = 1, BLEND_COPY = 2;
+	const BLEND_NORMAL = 0, BLEND_ADD = 1, BLEND_COPY = 2, BLEND_PREMULTIPLIED = 3;
 
 	// How many vertices a batch holds before it goes to the graphics card.
 	const BATCH_VERTICES = 24576;
@@ -510,6 +510,7 @@ void main() {
 		gl.blendEquation(gl.FUNC_ADD);
 		if (mode === BLEND_ADD) gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
 		else if (mode === BLEND_COPY) gl.blendFunc(gl.ONE, gl.ZERO);
+		else if (mode === BLEND_PREMULTIPLIED) gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 		else gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	}
 
@@ -633,12 +634,21 @@ void main() {
 
 	// -------------------------------------------------------------- pictures
 
-	function newTexture(width, height, pixels) {
+	// newTexture loads a picture, unsmoothed as raylib loads one, or smoothed
+	// with mipmaps, as raylib's trilinear filter does, so a large picture drawn
+	// small keeps its detail.
+	function newTexture(width, height, pixels, smooth) {
 		const id = nextID++;
 		const made = gl.createTexture();
 		gl.bindTexture(gl.TEXTURE_2D, made);
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-		clampAndFilter(gl.NEAREST); // raylib's own default for a new picture
+		if (smooth) {
+			clampAndFilter(gl.LINEAR);
+			gl.generateMipmap(gl.TEXTURE_2D);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+		} else {
+			clampAndFilter(gl.NEAREST); // raylib's own default for a new picture
+		}
 		textures.set(id, made);
 		boundTexture = -1;
 		return id;
@@ -736,6 +746,9 @@ void main() {
 	const keysDown = new Uint8Array(349), keysPressed = new Uint8Array(349);
 	const mouseDown = new Uint8Array(3), mousePressed = new Uint8Array(3);
 	let mouseX = 0, mouseY = 0, wheel = 0;
+	// Whether the mouse pointer is over the canvas: from its first move there
+	// until it leaves.
+	let mouseOver = false;
 	// The characters typed since the last frame, which Input.TypedText gives.
 	let typed = '';
 	const MAX_TYPED = 256;
@@ -838,7 +851,9 @@ void main() {
 			const scale = canvas.width / Math.max(1, box.width);
 			mouseX = (e.clientX - box.left) * scale;
 			mouseY = (e.clientY - box.top) * (canvas.height / Math.max(1, box.height));
+			mouseOver = true;
 		});
+		canvas.addEventListener('mouseleave', function () { mouseOver = false; });
 		canvas.addEventListener('mousedown', function (e) {
 			const button = domButton(e.button);
 			if (button >= 0) {
@@ -1456,6 +1471,10 @@ void main() {
 		if (fullscreenHeld) {
 			fullscreenHeld = false;
 			fullscreenLeft = true;
+			// The ask is over: the player answered it. Nothing is wanted until
+			// the game asks again, and then that is a new ask.
+			wantFullscreen = false;
+			fullscreenAsked = false;
 		}
 	}
 
@@ -1466,8 +1485,9 @@ void main() {
 	}
 
 	// takeFullscreen makes the request golib.SetFullscreen asked for. A
-	// browser only allows it while it is handling a key, a click or a touch,
-	// which is why it waits here for one.
+	// browser only grants fullscreen for a moment after a key, a click or a
+	// touch, so the handlers of those call it, and setFullscreen does when one
+	// came a moment ago. Leaving needs none.
 	//
 	// The whole page goes fullscreen, not the canvas. A fullscreen canvas on a
 	// phone keeps the shape its box had when the phone turns, so the game ends
@@ -1480,6 +1500,7 @@ void main() {
 		fullscreenAsked = wantFullscreen;
 		if (!wantFullscreen) {
 			fullscreenTarget = null;
+			fullscreenHeld = false; // the game leaves, not the player
 			const leave = document.exitFullscreen || document.webkitExitFullscreen;
 			if (leave && fullscreenNow()) call(leave, document);
 			return;
@@ -1490,24 +1511,43 @@ void main() {
 		// the page, which is the whole screen there anyway.
 		if (!ask) return;
 		// A browser that says no leaves fullscreenNow as it was, so it is not
-		// the element asked for, and nothing here thinks the game is fullscreen.
+		// the element asked for, and nothing here thinks the game is fullscreen;
+		// the next key, click or touch asks again.
 		fullscreenTarget = whole;
-		call(ask, whole);
+		call(ask, whole, function () {
+			if (fullscreenAsked && fullscreenNow() !== whole) fullscreenAsked = false;
+		});
 	}
 
 	// call runs a method a browser may not have and may refuse, and swallows
-	// both: a browser that says no to fullscreen is no reason to stop the game.
-	function call(method, on) {
+	// both, after calling refused when there is one: a browser that says no to
+	// fullscreen is no reason to stop the game.
+	function call(method, on, refused) {
 		try {
 			const answer = method.call(on);
-			if (answer && answer.catch) answer.catch(function () { });
-		} catch (e) { /* nothing to do about it */ }
+			if (answer && answer.catch) answer.catch(function () { if (refused) refused(); });
+		} catch (e) {
+			if (refused) refused();
+		}
 	}
 
+	// setFullscreen is what golib.SetFullscreen asks for, a frame after the key
+	// or the click the game read it on, when that event's handler is over. The
+	// browser still counts that key or click for a moment, so the request is
+	// made at once, as it is to leave; otherwise it waits for the next one.
 	function setFullscreen(on) {
 		wantFullscreen = !!on;
 		// Asked again, whatever the player did before is past.
 		if (wantFullscreen) fullscreenLeft = false;
+		if (!wantFullscreen || justActed()) takeFullscreen();
+	}
+
+	// justActed reports whether the player pressed a key, clicked or touched a
+	// moment ago, which is when a browser grants fullscreen. A browser that
+	// can't say is answered by waiting for the next one.
+	function justActed() {
+		const activation = navigator.userActivation;
+		return !!(activation && activation.isActive);
 	}
 
 	function setCursorVisible(visible) {
@@ -1516,6 +1556,8 @@ void main() {
 	}
 
 	function cursorVisible() { return cursorShown; }
+
+	function mouseInside() { return mouseOver; }
 
 	function close() { closed = true; }
 
@@ -1548,7 +1590,7 @@ void main() {
 		touchScreen: touchScreen,
 		onFrame: onFrame, askForFrame: askForFrame, setFrameRate: setFrameRate,
 		setFullscreen: setFullscreen, fullscreenLost: fullscreenLost,
-		setCursorVisible: setCursorVisible, cursorVisible: cursorVisible,
+		setCursorVisible: setCursorVisible, cursorVisible: cursorVisible, mouseInside: mouseInside,
 		showError: showError,
 		postPicture: postPicture,
 		newShader: newShader, unloadShader: unloadShader, shaderLocation: shaderLocation,

@@ -52,6 +52,8 @@ type Music struct {
 	name    string
 	tune    *TuneSpec // notes to make the music from, instead of reading a file
 	data    []byte    // raylib streams from this, so it has to stay reachable
+	ready   []byte    // the music made or read by Preload, for load to stream
+	format  string    // ready's format, such as ".wav"
 	stream  device.Music
 	loaded  bool
 	silent  bool // this machine plays neither the file nor anything beside it
@@ -137,6 +139,31 @@ func (m *Music) Err() error {
 	return m.err
 }
 
+// Preload makes the tune, or reads the music file, now, rather than the first
+// time the music plays, which would hold the game up for a moment then: up to
+// a second or two in a browser for a long tune with [Voice.Ring] and
+// [TuneSpec.Reverb]. Call it while a title or a loading screen shows, or in
+// main before [Run]. A mistake it finds stops Run, as playing would, and Err
+// returns it. Music already made, read or playing is left as it is.
+func (m *Music) Preload() {
+	if m.loaded || m.ready != nil || m.err != nil || m.silent {
+		return
+	}
+	if m.tune != nil {
+		m.checked = true // Err needs to make it no more
+	}
+	format, data, err := m.read()
+	switch {
+	case err != nil:
+		m.err = err
+		reportError(err)
+	case data == nil:
+		m.silent = true // this machine plays nothing for this music, and has said so
+	default:
+		m.format, m.ready = format, data
+	}
+}
+
 // Playing reports whether the music is playing now: false while it is paused,
 // stopped, or waiting for a sound device.
 func (m *Music) Playing() bool {
@@ -159,34 +186,21 @@ func (m *Music) load() bool {
 	if m.loaded || m.err != nil || m.silent {
 		return m.loaded
 	}
-	var data []byte
-	format := ".wav"
-	if m.tune != nil {
-		samples, err := m.tune.samples()
-		if err != nil {
+	format, data := m.format, m.ready
+	if data == nil {
+		var err error
+		if format, data, err = m.read(); err != nil {
 			m.err = err
 			return false
 		}
-		data = wav(samples)
-	} else {
-		file, err := m.playableFile()
-		if err != nil {
-			m.err = err
-			return false
-		}
-		if file == "" {
+		if data == nil {
 			// This machine plays nothing for this music, and has said so.
 			// The game carries on in silence rather than stopping.
 			m.silent = true
 			return false
 		}
-		read, err := ReadAsset(file)
-		if err != nil {
-			m.err = fmt.Errorf("golib.NewMusic(%q): %w", m.name, err)
-			return false
-		}
-		format, data = strings.ToLower(path.Ext(file)), read
 	}
+	m.ready = nil
 	stream, err := device.NewMusic(format, data, true)
 	if err != nil {
 		m.err = fmt.Errorf("golib: %s could not be played: %w", m.describe(), err)
@@ -195,6 +209,28 @@ func (m *Music) load() bool {
 	m.data, m.stream, m.loaded = data, stream, true
 	device.SetMusicVolume(stream, m.volume)
 	return true
+}
+
+// read makes the tune, or reads the file to play, and returns it with its
+// format, such as ".wav". It returns no data and no error when this machine
+// plays nothing for this music, having said so on the console.
+func (m *Music) read() (string, []byte, error) {
+	if m.tune != nil {
+		samples, err := m.tune.samples()
+		if err != nil {
+			return "", nil, err
+		}
+		return ".wav", wav(samples), nil
+	}
+	file, err := m.playableFile()
+	if err != nil || file == "" {
+		return "", nil, err
+	}
+	data, err := ReadAsset(file)
+	if err != nil {
+		return "", nil, fmt.Errorf("golib.NewMusic(%q): %w", m.name, err)
+	}
+	return strings.ToLower(path.Ext(file)), data, nil
 }
 
 // playableFile returns the file to play for this music: the one the game
@@ -292,6 +328,7 @@ func (m *Music) unload() {
 		device.StopMusic(m.stream)
 		device.UnloadMusic(m.stream)
 	}
-	m.data, m.loaded, m.silent, m.tracked, m.checked = nil, false, false, false, false
+	m.data, m.ready, m.format = nil, nil, ""
+	m.loaded, m.silent, m.tracked, m.checked = false, false, false, false
 	m.playing, m.paused, m.err = false, false, nil
 }

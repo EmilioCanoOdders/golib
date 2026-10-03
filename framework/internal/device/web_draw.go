@@ -37,9 +37,10 @@ const (
 
 // The blend modes, for opBlend.
 const (
-	blendNormal = 0
-	blendAdd    = 1
-	blendCopy   = 2
+	blendNormal        = 0
+	blendAdd           = 1
+	blendCopy          = 2
+	blendPremultiplied = 3
 )
 
 // commands holds the frame being built, as the bytes that go to the page, and
@@ -198,7 +199,21 @@ func NewTexture(pixels []byte, width, height int) Texture {
 	flush()
 	buffer := js.Global().Get("Uint8Array").New(len(pixels))
 	js.CopyBytesToJS(buffer, pixels)
-	id := js_().Call("newTexture", width, height, buffer).Int()
+	id := js_().Call("newTexture", width, height, buffer, false).Int()
+	return Texture{ID: uint32(id), Width: int32(width), Height: int32(height)}
+}
+
+// NewSmoothTexture puts a picture on the graphics card as NewTexture does,
+// but smoothed wherever it is drawn larger or smaller than it is, with
+// mipmaps, so that a large picture drawn small keeps its detail instead of
+// skipping pixels. Its colors should be premultiplied by their opacity, and
+// drawn with BeginBlendPremultiplied, so its see-through edges don't darken
+// as they are smoothed.
+func NewSmoothTexture(pixels []byte, width, height int) Texture {
+	flush()
+	buffer := js.Global().Get("Uint8Array").New(len(pixels))
+	js.CopyBytesToJS(buffer, pixels)
+	id := js_().Call("newTexture", width, height, buffer, true).Int()
 	return Texture{ID: uint32(id), Width: int32(width), Height: int32(height)}
 }
 
@@ -288,6 +303,13 @@ func BeginBlendAdd() {
 // instead of blending them over what is underneath, until EndBlend.
 func BeginBlendCopy() {
 	push(opBlend, blendCopy)
+}
+
+// BeginBlendPremultiplied blends what is drawn next over what is underneath
+// as normal blending does, for a texture whose colors are premultiplied by
+// their opacity, such as one from NewSmoothTexture, until EndBlend.
+func BeginBlendPremultiplied() {
+	push(opBlend, blendPremultiplied)
 }
 
 // EndBlend goes back to blending normally.

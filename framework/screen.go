@@ -20,6 +20,8 @@ type Screen struct {
 	camera *Camera
 	view   Rectangle
 	blend  BlendMode // how SetBlendMode mixes colors in this Draw
+
+	over []overDraw // the frames drawn with DrawOptions.FullResolution in this Draw
 }
 
 // BlendMode says how the colors a game draws mix with what is on the screen

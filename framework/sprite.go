@@ -48,6 +48,11 @@ type Sprite struct {
 	pixels     *image.NRGBA // the picture, until it becomes a texture
 	texture    device.Texture
 	loaded     bool
+
+	// smooth is the texture DrawOptions.FullResolution draws with: smoothed,
+	// with mipmaps, its colors premultiplied by their opacity.
+	smooth       device.Texture
+	smoothLoaded bool
 }
 
 // NewSprite returns the sprite in the game's assets folder named name, which
@@ -279,16 +284,89 @@ func (s *Sprite) frameTexture(frame int) (device.Texture, image.Rectangle, error
 		return device.Texture{}, image.Rectangle{}, fmt.Errorf("golib: Screen.DrawSprite got frame %d of %s, which has %d frame(s), numbered from 0 to %d", frame, s.call(), len(s.frames), len(s.frames)-1)
 	}
 	if !s.loaded {
-		pixels := s.pixels
-		texture := device.NewTexture(pixels.Pix, pixels.Rect.Dx(), pixels.Rect.Dy())
-		if texture.ID == 0 {
-			s.err = fmt.Errorf("%s: raylib could not load the %d by %d pixel image as a texture: see the raylib warnings above; it may be larger than the graphics card allows", s.call(), pixels.Rect.Dx(), pixels.Rect.Dy())
-			return device.Texture{}, image.Rectangle{}, s.err
+		pixels, err := s.picture()
+		if err != nil {
+			return device.Texture{}, image.Rectangle{}, err
 		}
-		s.texture, s.loaded, s.pixels = texture, true, nil
-		loadedSprites.add(s)
+		texture := device.NewTexture(pixels.Pix, pixels.Rect.Dx(), pixels.Rect.Dy())
+		if err := s.loadedAs(texture, pixels); err != nil {
+			return device.Texture{}, image.Rectangle{}, err
+		}
+		s.texture, s.loaded = texture, true
 	}
 	return s.texture, s.frames[frame], nil
+}
+
+// smoothFrameTexture returns the texture DrawOptions.FullResolution draws
+// with and the place of frame, loading the texture the first time. The window
+// must be open.
+func (s *Sprite) smoothFrameTexture(frame int) (device.Texture, image.Rectangle, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.prepare(); err != nil {
+		return device.Texture{}, image.Rectangle{}, err
+	}
+	if frame < 0 || frame >= len(s.frames) {
+		return device.Texture{}, image.Rectangle{}, fmt.Errorf("golib: Screen.DrawSprite got frame %d of %s, which has %d frame(s), numbered from 0 to %d", frame, s.call(), len(s.frames), len(s.frames)-1)
+	}
+	if !s.smoothLoaded {
+		pixels, err := s.picture()
+		if err != nil {
+			return device.Texture{}, image.Rectangle{}, err
+		}
+		texture := device.NewSmoothTexture(premultiplied(pixels), pixels.Rect.Dx(), pixels.Rect.Dy())
+		if err := s.loadedAs(texture, pixels); err != nil {
+			return device.Texture{}, image.Rectangle{}, err
+		}
+		s.smooth, s.smoothLoaded = texture, true
+	}
+	return s.smooth, s.frames[frame], nil
+}
+
+// picture returns the sprite's pixels, to make a texture of. They are kept
+// only until the first texture is made, so a second kind of texture reads the
+// file again. Call it with s.mu held, after prepare.
+func (s *Sprite) picture() (*image.NRGBA, error) {
+	if s.pixels != nil {
+		return s.pixels, nil
+	}
+	again := &Sprite{name: s.name, gridWidth: s.gridWidth, gridHeight: s.gridHeight, label: s.label, generate: s.generate}
+	if err := again.readFile(); err != nil {
+		s.err = fmt.Errorf("%s: %w", s.call(), err)
+		return nil, s.err
+	}
+	return again.pixels, nil
+}
+
+// loadedAs checks that texture, made from pixels, loaded, and lists the
+// sprite for Run to free, the first time one of its textures loads. The
+// pixels are dropped: the texture has them now.
+func (s *Sprite) loadedAs(texture device.Texture, pixels *image.NRGBA) error {
+	if texture.ID == 0 {
+		s.err = fmt.Errorf("%s: raylib could not load the %d by %d pixel image as a texture: see the raylib warnings above; it may be larger than the graphics card allows", s.call(), pixels.Rect.Dx(), pixels.Rect.Dy())
+		return s.err
+	}
+	if !s.loaded && !s.smoothLoaded {
+		loadedSprites.add(s)
+	}
+	s.pixels = nil
+	return nil
+}
+
+// premultiplied returns the bytes of pixels with each color multiplied by
+// its opacity, which a smoothed texture needs: blending a see-through pixel
+// with its neighbours then weighs its color by how much of it shows, so the
+// edges of a picture don't darken.
+func premultiplied(pixels *image.NRGBA) []byte {
+	out := make([]byte, len(pixels.Pix))
+	for i := 0; i+3 < len(out); i += 4 {
+		a := uint32(pixels.Pix[i+3])
+		out[i] = uint8((uint32(pixels.Pix[i])*a + 127) / 255)
+		out[i+1] = uint8((uint32(pixels.Pix[i+1])*a + 127) / 255)
+		out[i+2] = uint8((uint32(pixels.Pix[i+2])*a + 127) / 255)
+		out[i+3] = uint8(a)
+	}
+	return out
 }
 
 // frameCount returns how many frames s has, reading its file if needed.
@@ -309,9 +387,12 @@ func (s *Sprite) unload() {
 	if s.loaded {
 		device.UnloadTexture(s.texture)
 	}
-	s.read, s.err, s.loaded = false, nil, false
+	if s.smoothLoaded {
+		device.UnloadTexture(s.smooth)
+	}
+	s.read, s.err, s.loaded, s.smoothLoaded = false, nil, false, false
 	s.width, s.height, s.frames, s.animations = 0, 0, nil, nil
-	s.pixels, s.texture = nil, device.Texture{}
+	s.pixels, s.texture, s.smooth = nil, device.Texture{}, device.Texture{}
 }
 
 // loadedSprites are the sprites whose textures are loaded, for Run to free
@@ -363,6 +444,16 @@ type DrawOptions struct {
 	// such as Color{R: 255, G: 255, B: 255, A: 128} for half. Default: White,
 	// which changes nothing.
 	Tint Color
+
+	// FullResolution draws the frame at the window's own resolution,
+	// smoothed, instead of in the screen's pixels, so a picture larger than
+	// it is drawn, such as a studio's logo or art painted at high resolution,
+	// stays sharp in a game whose small screen the window enlarges, as one
+	// with Config.PixelArt: x, y and Scale are still in screen pixels, and
+	// need not be whole. It goes over everything else the frame draws, after
+	// the post-processing shaders, which don't reach it, in the order such
+	// frames are drawn, and it always blends normally.
+	FullResolution bool
 }
 
 // DrawSprite draws frame number frame of sprite with its top-left corner at x,
@@ -383,30 +474,82 @@ func (s *Screen) DrawSprite(sprite *Sprite, frame int, x, y float32, options ...
 		reportError(fmt.Errorf("golib: Screen.DrawSprite got %d DrawOptions: pass at most one", len(options)))
 		return
 	}
+	var option DrawOptions
+	if len(options) == 1 {
+		option = options[0]
+	}
+	if option.FullResolution {
+		texture, place, err := sprite.smoothFrameTexture(frame)
+		if err != nil {
+			reportError(err)
+			return
+		}
+		s.over = append(s.over, option.over(texture, place, x, y, s.camera))
+		return
+	}
 	texture, place, err := sprite.frameTexture(frame)
 	if err != nil {
 		reportError(err)
 		return
-	}
-	var option DrawOptions
-	if len(options) == 1 {
-		option = options[0]
 	}
 	option.draw(texture, place, x, y)
 }
 
 // draw draws the part of texture at place with its origin at x, y.
 func (o DrawOptions) draw(texture device.Texture, place image.Rectangle, x, y float32) {
-	scale := o.Scale
-	if scale == 0 {
-		scale = 1
+	scale := o.scale()
+	width, height := float32(place.Dx()), float32(place.Dy())
+	dest := device.Rectangle{X: wholePixel(x), Y: wholePixel(y), Width: width * scale, Height: height * scale}
+	origin := device.Vector2{X: o.OriginX * scale, Y: o.OriginY * scale}
+	device.DrawTexture(texture, o.source(place), dest, origin, o.Rotation, o.tint())
+}
+
+// over returns the part of texture at place, drawn with its origin at x, y
+// and seen through camera unless it is nil, as it waits to be drawn over the
+// screen at the window's resolution: unrounded, and with the tint
+// premultiplied by its opacity, as the smooth texture's colors are.
+func (o DrawOptions) over(texture device.Texture, place image.Rectangle, x, y float32, camera *Camera) overDraw {
+	scale := o.scale()
+	if camera != nil {
+		at := camera.ToScreen(Vector2{X: x, Y: y})
+		x, y, scale = at.X, at.Y, scale*camera.zoom()
 	}
-	tint := o.Tint
-	if tint == (Color{}) {
-		tint = White
+	tint := o.tint()
+	opacity := uint32(tint.A)
+	for _, channel := range []*uint8{&tint.R, &tint.G, &tint.B} {
+		*channel = uint8((uint32(*channel)*opacity + 127) / 255)
 	}
 	width, height := float32(place.Dx()), float32(place.Dy())
-	// raylib flips a part whose width or height is negative.
+	return overDraw{
+		texture:  texture,
+		source:   o.source(place),
+		dest:     device.Rectangle{X: x, Y: y, Width: width * scale, Height: height * scale},
+		origin:   device.Vector2{X: o.OriginX * scale, Y: o.OriginY * scale},
+		rotation: o.Rotation,
+		tint:     tint,
+	}
+}
+
+// scale returns Scale, with 0 counting as 1.
+func (o DrawOptions) scale() float32 {
+	if o.Scale == 0 {
+		return 1
+	}
+	return o.Scale
+}
+
+// tint returns Tint, with the zero Color counting as White.
+func (o DrawOptions) tint() Color {
+	if o.Tint == (Color{}) {
+		return White
+	}
+	return o.Tint
+}
+
+// source returns the part of a texture at place, flipped as asked: raylib
+// flips a part whose width or height is negative.
+func (o DrawOptions) source(place image.Rectangle) device.Rectangle {
+	width, height := float32(place.Dx()), float32(place.Dy())
 	source := device.Rectangle{X: float32(place.Min.X), Y: float32(place.Min.Y), Width: width, Height: height}
 	if o.FlipX {
 		source.Width = -width
@@ -414,9 +557,7 @@ func (o DrawOptions) draw(texture device.Texture, place image.Rectangle, x, y fl
 	if o.FlipY {
 		source.Height = -height
 	}
-	dest := device.Rectangle{X: wholePixel(x), Y: wholePixel(y), Width: width * scale, Height: height * scale}
-	origin := device.Vector2{X: o.OriginX * scale, Y: o.OriginY * scale}
-	device.DrawTexture(texture, source, dest, origin, o.Rotation, tint)
+	return source
 }
 
 // Animation is a sequence of a sprite's frames, each shown for a while. Keep

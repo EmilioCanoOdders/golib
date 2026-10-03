@@ -103,6 +103,21 @@ func NewTexture(pixels []byte, width, height int) Texture {
 	return rl.LoadTextureFromImage(picture)
 }
 
+// NewSmoothTexture puts a picture on the graphics card as NewTexture does,
+// but smoothed wherever it is drawn larger or smaller than it is, with
+// mipmaps, so that a large picture drawn small keeps its detail instead of
+// skipping pixels. Its colors should be premultiplied by their opacity, and
+// drawn with BeginBlendPremultiplied, so its see-through edges don't darken
+// as they are smoothed.
+func NewSmoothTexture(pixels []byte, width, height int) Texture {
+	texture := NewTexture(pixels, width, height)
+	if texture.ID != 0 {
+		rl.GenTextureMipmaps(&texture)
+		rl.SetTextureFilter(texture, rl.FilterTrilinear)
+	}
+	return texture
+}
+
 // UpdateTexture replaces every pixel of a texture: pixels are RGBA, one byte
 // a channel, the top row first, as many as the texture has.
 func UpdateTexture(texture Texture, pixels []byte) {
@@ -172,6 +187,13 @@ func BeginBlendAdd() {
 func BeginBlendCopy() {
 	rl.SetBlendFactors(glOne, glZero, glFuncAdd)
 	rl.BeginBlendMode(rl.BlendCustom)
+}
+
+// BeginBlendPremultiplied blends what is drawn next over what is underneath
+// as normal blending does, for a texture whose colors are premultiplied by
+// their opacity, such as one from NewSmoothTexture, until EndBlend.
+func BeginBlendPremultiplied() {
+	rl.BeginBlendMode(rl.BlendAlphaPremultiply)
 }
 
 // EndBlend goes back to blending normally.

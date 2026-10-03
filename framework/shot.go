@@ -318,6 +318,12 @@ func (s inputScript) pointerAt(update int) (x, y float32) {
 	return x, y
 }
 
+// mouseMovedBy reports whether a Mouse item has moved the pointer in or
+// before update number update.
+func (s inputScript) mouseMovedBy(update int) bool {
+	return len(s.moves) > 0 && s.moves[0].update <= update
+}
+
 // at returns the input update number update sees: the keys and buttons the
 // script holds down, which of those were up in the update before, where the
 // latest moves so far put the mouse pointer and the sticks, whether the
@@ -459,7 +465,10 @@ func runShots(game Game, config Config, plan *shotPlan) error {
 		}
 		if frame == plan.frames[next] {
 			// The screenshot shows the picture after post-processing, at the
-			// screen's size.
+			// screen's size, with the mouse sprite once the script has moved
+			// the mouse.
+			x, y := plan.input.pointerAt(frame)
+			render.pointer = pointerAt(x, y, plan.input.mouseMovedBy(frame))
 			if err := render.present(&picture, whole, float32(frame)*updateStep); err != nil {
 				return err
 			}
