@@ -73,7 +73,7 @@ func main() {
 
 ## Rules the names don't tell you
 
-1. **`dt` is always 1/60 of a second.** Time everything with it (`timer -= dt`), never with `time.Now`. Games then play the same at any frame rate, on any machine and in `golib shot`.
+1. **`dt` is always 1/60 of a second.** Time everything with it (`timer -= dt`), never with `time.Now`. Games then play the same at any frame rate, on any machine and in `golib shot`. A world that must follow the wall clock reads `Now` instead (see [Time](#time)).
 2. **`Update` changes the game; `Draw` only draws.** `Run` draws once per frame, after zero, one or several updates, so a `Draw` that changed the game would make it play differently at each frame rate.
 3. **A scene must be ready to draw as soon as it is made.** Set its state in its constructor, not in its first `Update`: `Run` can draw a scene before updating it, on the first frame and on the frame a `SwitchScene` lands.
 4. **Pressed happens once, Down lasts.** `KeyPressed`, `MousePressed` and `GamepadPressed` are true in exactly one update per press: use them for jumping, firing and menus. `KeyDown`, `MouseDown` and `GamepadDown` stay true while held: use them for walking and thrust.
@@ -161,6 +161,20 @@ func (s *playScene) Update(input *golib.Input, dt float32) {
 ```
 
 A paused game stops counting because its scene stops getting updates.
+
+A world that follows the wall clock instead, such as one that keeps going while the player is in another program, reads it with `Now`, never with `time.Now`. Under `golib shot`, which runs updates as fast as it can, `Now` moves 1/60 of a second per update, so the world moves in screenshots as it does when played, and they repeat.
+
+| Name | What it does |
+| --- | --- |
+| `Now` | `Now() time.Time`: the time, as `time.Now` gives it; under `golib shot`, the time the program started plus 1/60 of a second for every update run so far. |
+
+```go
+func (w *world) Update(input *golib.Input, dt float32) {
+	now := golib.Now()
+	w.grow(now.Sub(w.last)) // the seconds that passed, even while the player was away
+	w.last = now
+}
+```
 
 ## Input
 

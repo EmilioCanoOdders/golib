@@ -452,6 +452,9 @@ func runShots(game Game, config Config, plan *shotPlan) error {
 			quit bool
 			err  error
 		)
+		// Now reads 1/60 s later for every update, whatever time the
+		// pictures take to make.
+		shotClock.updates.Store(int64(frame))
 		scene, quit, err = runUpdates(scene, &input, fill, 1)
 		if err != nil {
 			return err
