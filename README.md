@@ -70,7 +70,7 @@ GoLib reads Tiled maps, Aseprite files, PNG images, fonts, jfxr sounds and sound
 | `golib clean` | Deletes build outputs. Add `--all` to also delete the downloaded tools. |
 | `golib help` | Lists all commands. |
 
-Type `.\golib` on Windows (PowerShell or cmd) and `./golib` in bash or zsh. `[game]` is a folder name in `games/`; leave it out when there is only one game.
+Type `.\golib` on Windows (PowerShell or cmd) and `./golib` in bash or zsh. `[game]` is a folder name in `games/`; leave it out when there is only one game. `build`, `run`, `shot`, `test`, `dist` and `web` also take `--tags demo`, for a game that builds in more than one way, such as a demo beside the full game (see [docs/tooling.md](docs/tooling.md#build-tags)).
 
 ## What's inside
 

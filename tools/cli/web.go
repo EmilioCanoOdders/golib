@@ -32,6 +32,10 @@ const (
 // of the web build: no sound and no post-processing shaders yet (see
 // docs/roadmap.md).
 func (c *cli) web(options []string) int {
+	options, exitCode := c.takeTags("web", options)
+	if exitCode != 0 {
+		return exitCode
+	}
 	var names []string
 	port := defaultWebPort
 	open, lan := true, false
@@ -62,6 +66,7 @@ func (c *cli) web(options []string) int {
 	if game == "" {
 		return exitCode
 	}
+	c.reportTags()
 	folder := c.buildWeb(game)
 	if folder == "" {
 		return c.summary("web")
@@ -89,7 +94,7 @@ func (c *cli) buildWeb(game string) string {
 func (c *cli) buildWebInto(game, folder string) (gameInfo, bool) {
 	dir := c.path("games", game)
 	shown := "games/" + game
-	const tags = webTags
+	tags := c.withTags(webTags)
 
 	info, _, err := readGameInfo(dir)
 	if err != nil {
@@ -259,7 +264,7 @@ func pluralThem(count int) string {
 // listWebPackages lists what a web build is made of, which is not what a
 // desktop build is made of: raylib and the libraries it calls stay out.
 func (c *cli) listWebPackages(dir string) ([]goPackage, error) {
-	return c.listPackagesWith(dir, webTags, webEnv)
+	return c.listPackagesWith(dir, c.withTags(webTags), webEnv)
 }
 
 // distWeb builds game for the browser to share: the page and its files in
@@ -301,7 +306,7 @@ func (c *cli) distWeb(game string) bool {
 	}
 	c.check("ok", fmt.Sprintf("wrote %s next to it, with the licenses of %s", noticesFile, joinWords(titles)))
 
-	zipName := fmt.Sprintf("%s-%s-web.zip", game, info.Version)
+	zipName := fmt.Sprintf("%s-%s%s-web.zip", game, info.Version, c.tagsInName())
 	zipPath := filepath.Join(distDir, zipName)
 	if err := os.Remove(zipPath); err != nil && !os.IsNotExist(err) {
 		c.check("fail", fmt.Sprintf("cannot replace %s: %v", c.shown(zipPath), err))

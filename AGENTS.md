@@ -12,8 +12,7 @@ The promise: someone downloads the template, runs a couple of commands, and buil
 
 Keep this section true: update it in the same change that lands or removes a feature. Never describe planned work as if it existed.
 
-Last updated: 2026-10-02 (the languages the player's system speaks, `golib.SystemLanguages` and `golib.ChooseLanguage`, for a translated game to start in the player's; sprites drawn at the window's resolution, `DrawOptions.FullResolution`, so a high-resolution logo stays sharp on a small screen, and a mouse pointer of the game's own, `golib.SetMouseSprite`; on the desktop, frames wait for the monitor's refresh, V-Sync, so a moving picture doesn't tear; tunes from notes get instruments' sounds and a room, and `Music.Preload` makes music before it plays); before it, 2026-10-01 (the punctuation keys, `golib.KeyComma` and the rest, as places on the keyboard; `Config.WindowScale`, a screen that follows the window's size at a fraction of it, with `Config.WindowScaleMinWidth` and `Config.OnScreenResize`); before it, 2026-09-30 (the window's monitor, size and frame rate, `golib.DisplayScale`, `golib.FPS` and `golib.OpenURL`, for a game's graphics settings; `Config.FillWindow`, a screen that takes the window's shape, with no black bars; on Linux and macOS, `build` and `shot` work while `run` has the game open).
-Last updated: 2026-10-03 (`game.json`'s `besideExecutable`: files of the game that `golib dist` copies next to the executable, such as translations for players to read and change); before it, 2026-10-01 (the punctuation keys, `golib.KeyComma` and the rest, as places on the keyboard; `Config.WindowScale`, a screen that follows the window's size at a fraction of it, with `Config.WindowScaleMinWidth` and `Config.OnScreenResize`); before it, 2026-09-30 (the window's monitor, size and frame rate, `golib.DisplayScale`, `golib.FPS` and `golib.OpenURL`, for a game's graphics settings; `Config.FillWindow`, a screen that takes the window's shape, with no black bars; on Linux and macOS, `build` and `shot` work while `run` has the game open); before it, 2026-09-29 (gamepad prompts, `golib.PlayingWithGamepad` and `Input.GamepadType`; typed text, `Input.TypedText`; milestones M5, Shipping, and M6, 2D essentials, done; Linux and macOS ran GoLib for the first time; the web build is at stage 4, phones, after a game published on itch.io was played on one; M7, 3D, comes after it).
+Last updated: 2026-10-04 (`--tags` for `build`, `run`, `shot`, `test`, `dist` and `web`: Go build tags, so one game builds in more than one way, such as a demo and the full game); before it, 2026-10-03 (`game.json`'s `besideExecutable`: files of the game that `golib dist` copies next to the executable, such as translations for players to read and change); before it, 2026-10-02 (the languages the player's system speaks, `golib.SystemLanguages` and `golib.ChooseLanguage`, for a translated game to start in the player's; sprites drawn at the window's resolution, `DrawOptions.FullResolution`, so a high-resolution logo stays sharp on a small screen, and a mouse pointer of the game's own, `golib.SetMouseSprite`; on the desktop, frames wait for the monitor's refresh, V-Sync, so a moving picture doesn't tear; tunes from notes get instruments' sounds and a room, and `Music.Preload` makes music before it plays).
 
 | Area | State |
 | --- | --- |
@@ -52,6 +51,7 @@ Last updated: 2026-10-03 (`game.json`'s `besideExecutable`: files of the game th
 | Scenes: `golib.SwitchScene` moves between title, play, pause and other screens | Done (M2) |
 | Reading files from the game's `assets/` folder (`golib.ReadAsset`), embedded in dist builds | Done (M2) |
 | `golib new <name>`: a new game, ready to run, from `tools/template/game/` | Done (M2) |
+| Build tags: `--tags` for `build`, `run`, `shot`, `test`, `dist` and `web`, added to GoLib's own, so one game builds in more than one way, such as a demo beside the full game; a zip made with them carries them in its name | Done (2026-10-04), tried on macOS, where every command built with the tags; untried on Windows and Linux |
 | Private games: `games/_<name>/`, which `.gitignore` keeps out of this repository, so a game can live in one of its own | Done (2026-09-19); every command treats it as any other game |
 | API guide for agents, `framework/README.md`: every exported name by task, checked against the code by `golib test` | Done (M2) |
 | Sprites from PNG images, PNG sprite sheets and Aseprite files, with animations: `golib.NewSprite`, `golib.NewSpriteSheet`, `Screen.DrawSprite`, `golib.Animation` | Done (M4); drawn at the window's resolution, smoothed, with `DrawOptions.FullResolution`, on 2026-10-02, for pictures with more detail than a small screen has room for, tried on Windows and in a browser |
@@ -113,11 +113,13 @@ Run from the project root. The command name is the same everywhere; only the pre
 | `clean --all` | Also deletes `.tools/`. Run `setup` again afterwards. |
 | `help` | Lists commands. |
 
+`build`, `run`, `shot`, `test`, `dist` and `web` also take `--tags <tags>`: Go build tags, separated by commas, such as `--tags demo`, for the game's files that start with `//go:build demo`. They go after GoLib's own, and a zip made with them carries them in its name, `<game>-<version>-demo-<os>-<arch>.zip` (see [docs/tooling.md](docs/tooling.md#build-tags)).
+
 `[game]` is a folder name in `games/`; leave it out when there is only one game. Check lines start with `[ok]`, `[info]`, `[warn]` or `[fail]`, followed by a summary line. Exit codes: `0` success, `1` failure, `2` usage error. When anything behaves unexpectedly, run `doctor` and read its output before trying fixes.
 
 People who would rather click can double-click `golib-ui.cmd` (Windows) for a window with a button per command; it runs this same CLI and shows its output. Agents use the CLI.
 
-In PowerShell, quote arguments that start with `-` and contain a dot, such as `'-replace=golib=../../framework'`: Windows PowerShell 5.1 splits them before `golib` receives them.
+In PowerShell, quote arguments that start with `-` and contain a dot, such as `'-replace=golib=../../framework'`: Windows PowerShell 5.1 splits them before `golib` receives them. Quote a list of build tags too, `--tags 'demo,steam'`: PowerShell reads words joined by commas as a list.
 
 ## Repository layout
 
