@@ -28,6 +28,7 @@ type Monitor struct {
 var (
 	monitorWanted    atomic.Int32  // the monitor SetMonitor asked for, plus one; 0 for none
 	windowSizeWanted atomic.Uint64 // the width and height SetWindowSize asked for, packed; 0 for none
+	windowSizeSeen   atomic.Uint64 // the window's size out of fullscreen, as Run last saw it, packed; 0 before
 	frameRateWanted  atomic.Int32  // the frames a second SetFrameRate asked for; 0 for no change
 	monitorsSeen     atomic.Pointer[[]Monitor]
 	monitorNow       atomic.Int32
@@ -79,8 +80,8 @@ func DisplayScale() float32 {
 }
 
 // SetMonitor moves the game's window to monitor i of Monitors, from the next
-// frame: in a window, centered on it at the size it has; in fullscreen,
-// covering it. On macOS, whose fullscreen is the system's own, a game in
+// frame, or from the first one when called before Run: in a window, centered
+// on it at the size it has; in fullscreen, covering it. On macOS, whose fullscreen is the system's own, a game in
 // fullscreen leaves it, moves, and enters it again on that monitor. An index
 // no monitor has is ignored, and so is the call in a browser, where the page
 // stays where it is.
@@ -91,8 +92,8 @@ func SetMonitor(i int) {
 }
 
 // SetWindowSize makes the game's window width by height pixels, the area it
-// draws in, from the next frame, centered on its monitor and no larger than
-// it. In fullscreen it is the size the window comes back to. The screen the
+// draws in, from the next frame, or from the first one when called before
+// Run, centered on its monitor and no larger than it. In fullscreen it is the size the window comes back to. The screen the
 // game draws on keeps its size, and Run scales it to fit the window, unless
 // Config.WindowScale makes it this size divided by the scale, the way to offer
 // resolutions, or Config.FillWindow gives it the window's shape.
@@ -108,6 +109,33 @@ func SetMonitor(i int) {
 func SetWindowSize(width, height int) {
 	if width >= 1 && height >= 1 {
 		windowSizeWanted.Store(uint64(width)<<32 | uint64(uint32(height)))
+	}
+}
+
+// WindowSize returns the size of the game's window, the area it draws in, in
+// the units SetWindowSize takes, as Run saw it at the start of the last frame.
+// In fullscreen it is the size the window had before, which it comes back to.
+// A minimized window keeps the size it had. It is 0, 0 before Run opens the
+// window and under golib shot, and keeps its last value after Run returns, so
+// a game can keep the player's window in its settings when the window closes:
+//
+//	err := golib.Run(game, config)
+//	width, height := golib.WindowSize()
+//	golib.SaveData("window", window{width, height, golib.CurrentMonitor(), golib.IsFullscreen()})
+//
+// and open it so at the next start, with SetWindowSize, SetMonitor and
+// Config.Fullscreen before Run, which applies them from the first frame. In a
+// browser it is the canvas's size, which follows the page.
+func WindowSize() (width, height int) {
+	size := windowSizeSeen.Load()
+	return int(size >> 32), int(uint32(size))
+}
+
+// noteWindowSize keeps a window's size for WindowSize, unless it is in
+// fullscreen or minimized, with no room to draw in.
+func noteWindowSize(fullscreen bool, width, height int) {
+	if !fullscreen && width > 0 && height > 0 {
+		windowSizeSeen.Store(uint64(width)<<32 | uint64(uint32(height)))
 	}
 }
 
@@ -218,6 +246,8 @@ func centered(width, height, x, y, monitorWidth, monitorHeight int) (int, int, i
 // placeWindow applies what SetFrameRate, SetWindowSize and SetMonitor asked
 // for since the last frame, to the window w.
 func (w *window) placeWindow(held bool) {
+	width, height := device.WindowSize()
+	noteWindowSize(w.fullscreen, width, height)
 	if fps := frameRateWanted.Swap(0); fps > 0 {
 		device.SetTargetFPS(int(fps))
 	}
@@ -231,6 +261,9 @@ func (w *window) placeWindow(held bool) {
 			device.SetWindowSize(width, height)
 			device.SetWindowPosition(x, y)
 		}
+		// The size to come back to, even when fullscreen starts before the
+		// window is seen at it, as Config.Fullscreen's first frame does.
+		noteWindowSize(false, width, height)
 	}
 	if wanted := int(monitorWanted.Swap(0)) - 1; wanted >= 0 && wanted < device.MonitorCount() && wanted != device.CurrentMonitor() {
 		w.moveTo = wanted + 1
