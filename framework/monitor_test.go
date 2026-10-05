@@ -73,6 +73,22 @@ func TestTheWindowsRequestsKeepWithinLimits(t *testing.T) {
 	}
 }
 
+// WindowSize keeps the window's size out of fullscreen, for a game to
+// remember: neither fullscreen nor a minimized window changes it.
+func TestWindowSizeKeepsTheWindowOutOfFullscreen(t *testing.T) {
+	defer windowSizeSeen.Store(windowSizeSeen.Load())
+	windowSizeSeen.Store(0) // as before Run: other tests run games
+	if w, h := WindowSize(); w != 0 || h != 0 {
+		t.Errorf("WindowSize() is %d by %d before Run, want 0 by 0", w, h)
+	}
+	noteWindowSize(false, 1600, 900)
+	noteWindowSize(true, 2560, 1440) // fullscreen on a 2560 by 1440 monitor
+	noteWindowSize(false, 0, 0)      // minimized
+	if w, h := WindowSize(); w != 1600 || h != 900 {
+		t.Errorf("WindowSize() is %d by %d, want the window's 1600 by 900", w, h)
+	}
+}
+
 func TestDisplayScaleIsOneUntilRunLooks(t *testing.T) {
 	if got := DisplayScale(); got != 1 {
 		t.Errorf("DisplayScale() is %v with no window, want 1", got)

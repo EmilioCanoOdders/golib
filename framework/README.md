@@ -23,6 +23,7 @@ For AI agents writing game code with GoLib, and for anyone who wants the whole f
 | Play sound effects | `golib.NewSound`, `golib.Laser` and the other recipes, `golib.NewSoundFile` for sound files and sounds designed in jfxr, `golib.NewSoundJfxr` for jfxr settings in code | [Sound effects](#sound-effects) |
 | Play music | `golib.NewMusic` | [Music](#music) |
 | Go fullscreen, add a CRT look | `golib.SetFullscreen`, `golib.NewShader`, `golib.SetPostProcess` | [Window, fullscreen and screen effects](#window-fullscreen-and-screen-effects) |
+| Open the window as the player left it | `golib.WindowSize`, `golib.SetWindowSize`, `golib.SetMonitor` | [Window, fullscreen and screen effects](#window-fullscreen-and-screen-effects) |
 | Remember high scores, settings and progress | `golib.SaveData`, `golib.LoadData` | [Saving data](#saving-data) |
 | Start in the player's language | `golib.ChooseLanguage`, `golib.SystemLanguages` | [The player's language](#the-players-language) |
 | Read a data file | `golib.ReadAsset` | [Files: the assets folder](#files-the-assets-folder) |
@@ -1103,7 +1104,7 @@ if input.KeyPressed(golib.KeyF11) || altEnter {
 }
 ```
 
-For a game's graphics settings, the window's monitor, size and frame rate, and a link to open, such as a contact in an About screen. Like `SetFullscreen`, what a game asks for is applied at the start of the next frame.
+For a game's graphics settings, the window's monitor, size and frame rate, and a link to open, such as a contact in an About screen. Like `SetFullscreen`, what a game asks for is applied at the start of the next frame. `SetMonitor` and `SetWindowSize` called before `Run` apply from the first frame, so a game that kept the player's window opens it as they left it (see `WindowSize`).
 
 | Name | What it does |
 | --- | --- |
@@ -1116,6 +1117,7 @@ For a game's graphics settings, the window's monitor, size and frame rate, and a
 | `DisplayScale` | `DisplayScale() float32`: how many of the screen's own pixels, across, one unit of `Monitors`' sizes and of `SetWindowSize` is: 2 on a Mac's Retina screen, where macOS measures in points, 1 on other Macs, on Windows and on Linux, and the browser's `devicePixelRatio` in a browser. Multiply by it to show a window's size in the screen's pixels. 1 under `golib shot` and in tests. |
 | `SetMonitor` | `SetMonitor(i int)`: moves the window to monitor `i`: in a window, centered on it at its size; in fullscreen, covering it. On macOS, a game in fullscreen leaves it, moves, and enters it again. An index no monitor has is ignored, and so is the call in a browser. |
 | `SetWindowSize` | `SetWindowSize(width, height int)`: makes the window's drawing area that many pixels, centered on its monitor and no larger than it; in fullscreen, the size it comes back to. The screen keeps its size, and `Run` scales it to fit, unless `Config.WindowScale` makes it this size divided by the scale (the way to offer resolutions) or `Config.FillWindow` gives it the window's shape. The system may make the window smaller, to fit it between its menu bar, taskbar or Dock and the title bar (a 1440-high window on a 2560 by 1440 Mac gets 1296), and with `PixelArt` on a screen of fixed size the screen then drops a whole size, with black borders: offer sizes up to about four fifths of the monitor, as `Run`'s first window is. Ignored in a browser, where the canvas follows the page. |
+| `WindowSize` | `WindowSize() (width, height int)`: the window's drawing area, in the units `SetWindowSize` takes, as `Run` saw it at the start of the last frame. In fullscreen, the size the window had before, which it comes back to; a minimized window keeps the size it had. 0, 0 before `Run` opens the window and under `golib shot`; it keeps its last value after `Run` returns, for a game to save the window when it closes. The canvas's size in a browser. |
 | `SetFrameRate` | `SetFrameRate(fps int)`: draws that many frames a second at most, from 15 to 360; a game starts at 60. Updates stay at 60 a second of game time: at 30 every frame runs two, above 60 some frames run none and draw the same state again. Each frame waits for the monitor to refresh (V-Sync), so the picture never tears, and a cap above the monitor's refresh rate draws no faster than it. |
 | `FPS` | `FPS() int`: the frames `Run` drew in the last second, for a game to show. 0 under `golib shot`, in tests and in the game's first second. |
 | `OpenURL` | `OpenURL(url string) error`: opens a web page, in the browser, or a mail to write, for a `mailto:` link. Only links that start with `https://`, `http://` or `mailto:`, with no spaces or quotes, open; any other is an error, so a game can't run anything else by mistake. Nothing opens under `golib shot` and in tests. |
@@ -1126,6 +1128,31 @@ For a game's graphics settings, the window's monitor, size and frame rate, and a
 golib.SetMonitor((golib.CurrentMonitor() + 1) % max(1, len(golib.Monitors())))
 golib.SetWindowSize(1280, 720)
 golib.SetFrameRate(30)
+```
+
+```go
+// Opening the window as the player left it, and keeping it when it closes.
+type window struct {
+	Width, Height, Monitor int
+	Fullscreen             bool
+}
+
+func main() {
+	config := golib.Config{Title: "My game", FillWindow: true}
+	var w window
+	if found, _ := golib.LoadData("window", &w); found {
+		golib.SetMonitor(w.Monitor)
+		golib.SetWindowSize(w.Width, w.Height)
+		config.Fullscreen = w.Fullscreen
+	}
+	err := golib.Run(newGame(), config)
+	if width, height := golib.WindowSize(); width > 0 {
+		golib.SaveData("window", window{width, height, golib.CurrentMonitor(), golib.IsFullscreen()})
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+}
 ```
 
 Screen effects, such as scanlines, a glow or a color grade, are post-processing shaders: GLSL 330 fragment shaders that run over the whole picture after `Draw`. Screenshots from `golib shot` include them.
