@@ -70,6 +70,7 @@ type cli struct {
 	*project
 	stdout, stderr     io.Writer
 	failures, warnings int
+	tags               string // the build tags --tags added, separated by commas
 }
 
 // check prints one fact. level is ok, info, warn or fail.

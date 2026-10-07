@@ -89,7 +89,7 @@ Every `go` command that golib starts gets this environment, and so do the progra
 | `GOENV` | `off` | Ignore settings saved globally with `go env -w` |
 | `GOTOOLCHAIN` | `local` | Never switch to another Go version |
 | `CGO_ENABLED` | `0` | raylib-go in purego mode: no C compiler |
-| `GOFLAGS` | `-tags=raylib_no_embed,ffi_no_embed` | Debug builds load raylib and libffi from files golib provides, instead of extracting embedded copies into the user's cache folder when a game starts. `golib dist` replaces these tags: see [Dist builds](#dist-builds) |
+| `GOFLAGS` | `-tags=raylib_no_embed,ffi_no_embed` | Debug builds load raylib and libffi from files golib provides, instead of extracting embedded copies into the user's cache folder when a game starts. `golib dist` replaces these tags, and `--tags` names them again with its own: see [Dist builds](#dist-builds) and [Build tags](#build-tags) |
 | `APPDATA` (Windows), `XDG_CONFIG_HOME` (Linux), `HOME` (macOS) | `.tools/config` (`.tools/home` on macOS) | Go writes telemetry counters to the user's config folder; this keeps them in the project. `golib run` restores the real value before starting the game. |
 
 The scripts set these variables for themselves and the programs they start, except the Go program, which starts with the user's environment and sets them for each `go` command it runs. The three lists must stay the same: `Set-GoEnvironment` in `golib.ps1`, `set_go_environment` in `golib.sh` and `goEnv` in `tools/cli/project.go`.
@@ -126,7 +126,7 @@ To update raylib-go, run `golib go -C framework get github.com/gen2brain/raylib-
 | `GOLIB_SHOT_SAVE` | The whole path of the `--save` file, or unset |
 | `GOLIB_SHOT_SCALE` | The `--scale` value, or unset for pictures at the screen's size |
 
-`golib.Run` reads them, so games need no code for screenshots. It opens a hidden window, runs exactly one update per frame without waiting, draws each frame into an off-screen texture, runs the post-processing shaders over the requested frames and saves them as `frame-NNNNNN.png` (RGB, no alpha channel). Screenshots are always the screen's size, `Config.Width` by `Config.Height`, and ignore fullscreen. Then `Run` returns and the game exits. Frame N always shows the game after N updates, so the same code gives the same pictures on any machine, as long as the game bases its timing on `dt`.
+`golib.Run` reads them, so games need no code for screenshots. It opens a hidden window, runs exactly one update per frame without waiting, draws each frame into an off-screen texture, runs the post-processing shaders over the requested frames and saves them as `frame-NNNNNN.png` (RGB, no alpha channel). Screenshots are always the screen's size, `Config.Width` by `Config.Height`, and ignore fullscreen. Then `Run` returns and the game exits. Frame N always shows the game after N updates, so the same code gives the same pictures on any machine, as long as the game bases its timing on `dt`. A game whose world follows the wall clock instead reads it with `golib.Now`, which under `golib shot` is the time the program started plus 1/60 of a second for every update run, so its world moves in the pictures as it does when played, and they repeat too; with `time.Now` it would move by however long the pictures took to make.
 
 The CLI stops a game that is still running after 120 seconds. It then prints an `[ok]` line for each saved file and a `[fail]` line for each missing one.
 
@@ -172,7 +172,7 @@ build/<game>/dist/                  emptied first
   <game>-<version>-<os>-<arch>.zip  the folder, zipped: the file to share
 ```
 
-`<version>` comes from the game's `game.json`, and is `0.0.0` without one; `<os>` is `windows`, `linux` or `macos`, and `<arch>` is `amd64` or `arm64`. For example, `rocks-1.2.0-windows-amd64.zip` holds the `rocks/` folder, so unzipping it gives players one folder with everything in it. `dist` builds for the machine it runs on; there is no cross-compiling yet.
+`<version>` comes from the game's `game.json`, and is `0.0.0` without one; `<os>` is `windows`, `linux` or `macos`, and `<arch>` is `amd64` or `arm64`. For example, `rocks-1.2.0-windows-amd64.zip` holds the `rocks/` folder, so unzipping it gives players one folder with everything in it. A build with `--tags` carries them in the zip's name, after the version: `rocks-1.2.0-demo-windows-amd64.zip` (see [Build tags](#build-tags)). `dist` builds for the machine it runs on; there is no cross-compiling yet.
 
 | | Debug build: `build`, `run`, `shot`, `test`, F5 | Dist build: `dist`, `run --dist` |
 | --- | --- | --- |
@@ -290,6 +290,35 @@ The app is named after `title`, with `/` and `:`, which macOS keeps out of file 
 
 Dist builds on Linux and macOS don't use the two files yet.
 
+## Build tags
+
+`build`, `run`, `shot`, `test`, `dist` and `web` take `--tags <tags>`: Go build tags, separated by commas, such as `--tags demo` or `--tags demo,steam`. A file of the game that starts with `//go:build demo` is built only with that tag, and one with `//go:build !demo` only without it, so one game builds in more than one way: a demo beside the full game, or a version for one store.
+
+```go
+// edition_demo.go
+//go:build demo
+
+package main
+
+const demo = true
+```
+
+```go
+// edition_full.go
+//go:build !demo
+
+package main
+
+const demo = false
+```
+
+`./golib run --tags demo` plays the demo, `./golib dist --tags demo` and `./golib dist --web --tags demo` make it to share, and `./golib test --tags demo` vets and tests the files it is built from.
+
+- **Where they go.** After GoLib's own: a debug build gets `-tags=raylib_no_embed,ffi_no_embed,<tags>`, since `-tags` replaces the tags in `GOFLAGS` (see [Go toolchain and environment](#go-toolchain-and-environment)), a dist build `-tags=golib_dist,raylib_no_embed,ffi_no_embed,<tags>` (`golib_dist,<tags>` on macOS), a web build `-tags=golib_dist,<tags>`, and `golib test` gives them to `go vet` and `go test`. The command's first line names them: `[info] building with the build tags demo, from --tags`.
+- **What they can be.** Each tag is letters, digits, `_` and `.`, and is listed once. In PowerShell, quote a list of them, `--tags 'demo,steam'` (see [PowerShell argument splitting](#powershell-argument-splitting)). GoLib's own tags, `golib_dist`, `raylib_no_embed` and `ffi_no_embed`, are set by the commands, and `--tags` can't name them.
+- **What changes.** Only the files built, and the zip's name, which carries the tags after the version, so a demo's zip is never taken for the full game's: `rocks-1.2.0-demo-windows-amd64.zip`, `rocks-1.2.0-demo-web.zip`. The rest is the same as without them: the folders the builds go in, which a build with other tags replaces (`golib dist` empties `build/<game>/dist/` first, the zips of earlier builds included, so copy a zip elsewhere before making the other), the executable's name, the app's title, the icon and the version from `game.json`, and the folder `golib.SaveData` saves in, named after the game's folder in `games/`. A demo that should keep its saved data apart from the full game's on the same machine saves it under names of its own.
+- **Where they don't reach.** VS Code's F5 and tasks and the GoLib window build without tags: use the CLI.
+
 ## New games
 
 `golib new <name>` creates `games/<name>/` from the files in `tools/template/game/`:
@@ -309,6 +338,8 @@ Go is fine with the name: it ignores folders starting with `_` while it walks a 
 ## PowerShell argument splitting
 
 Windows PowerShell 5.1 splits arguments that start with `-` and contain a dot before they reach a native program. `.\golib go -C games/platformer mod edit -replace=golib=../../framework` arrives with `-replace=golib=` and `../../framework` as separate arguments. Quote such arguments: `'-replace=golib=../../framework'`. cmd and Git Bash pass them unchanged.
+
+PowerShell also reads words joined by commas as a list, so `--tags demo,steam` doesn't reach golib as one argument. Quote the list: `.\golib dist --tags 'demo,steam'`. A single tag needs no quotes.
 
 ## Folders owned by the tooling
 
@@ -382,7 +413,7 @@ build/<game>/dist/
     index.html                  at the top of the zip, where a page host looks for it
     <game>.wasm, wasm_exec.js, golib.js
     THIRD-PARTY-LICENSES.txt    Go's license and jfxr's; a web build has no raylib in it
-  <game>-<version>-web.zip      the file to upload to itch.io
+  <game>-<version>-web.zip      the file to upload to itch.io; <game>-<version>-demo-web.zip with --tags demo
 ```
 
 ## Adding a command

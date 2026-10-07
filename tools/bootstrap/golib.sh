@@ -80,6 +80,10 @@ Commands:
 A game whose folder starts with _ is private: git ignores it, so it stays out
 of the GoLib repository and can have a repository of its own.
 
+build, run, shot, test, dist and web also take --tags <tags>: Go build tags,
+separated by commas, for the game's files that say //go:build <tag>, such as
+a demo's. A zip made with them carries them in its name (see docs/tooling.md).
+
 Invoke from the project root:
   Windows (PowerShell, cmd)    .\golib <command>
   Linux, macOS, Git Bash       ./golib <command>
