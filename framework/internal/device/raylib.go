@@ -69,8 +69,9 @@ func LoadFromStore(name string) ([]byte, bool, error) { return nil, false, nil }
 
 func DeleteFromStore(name string) error { return nil }
 
-// OpenWindow opens the game window, hidden when hidden is true and resizable
-// otherwise, and reports whether it opened. No key closes it: Run decides when
+// OpenWindow opens the game window, hidden when hidden is true, and
+// otherwise one the player can resize by its edges when resizable is true,
+// and reports whether it opened. No key closes it: Run decides when
 // the game ends.
 //
 // A window the player sees shows each frame when the monitor refreshes
@@ -78,12 +79,15 @@ func DeleteFromStore(name string) error { return nil }
 // bottom of the next, cut along a line across the screen that flickers while
 // the picture moves, most of all in fullscreen. A hidden window, for golib
 // shot, has no monitor to wait for.
-func OpenWindow(width, height int, title string, hidden bool) bool {
+func OpenWindow(width, height int, title string, hidden, resizable bool) bool {
 	rl.SetTraceLogLevel(rl.LogWarning)
-	if hidden {
+	switch {
+	case hidden:
 		rl.SetConfigFlags(rl.FlagWindowHidden)
-	} else {
+	case resizable:
 		rl.SetConfigFlags(rl.FlagWindowResizable | rl.FlagVsyncHint)
+	default:
+		rl.SetConfigFlags(rl.FlagVsyncHint)
 	}
 	rl.InitWindow(int32(width), int32(height), title)
 	if !rl.IsWindowReady() {

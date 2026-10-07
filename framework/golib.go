@@ -193,6 +193,13 @@ type Config struct {
 	// edges. Screenshots from golib shot are Width by Height. Default: the
 	// screen keeps its size and shape. Ignored when WindowScale is positive.
 	FillWindow bool
+
+	// FixedWindowSize stops the player resizing the window by its edges or
+	// maximizing it, for a game that offers window sizes in its settings
+	// with SetWindowSize. SetWindowSize and SetFullscreen still change it.
+	// Ignored in a browser, where the canvas follows the page. Default: the
+	// player resizes the window freely.
+	FixedWindowSize bool
 }
 
 // Game is the interface every GoLib game implements.
@@ -423,8 +430,9 @@ func runUpdates(scene Game, input *Input, fill func(*Input), updates int) (Game,
 
 // openWindow opens the game window, hidden if asked to.
 func openWindow(config Config, hidden bool) error {
-	// Run scales the screen to fit, so the player may resize the window.
-	if !device.OpenWindow(config.Width, config.Height, config.Title, hidden) {
+	// Run scales the screen to fit, so the player may resize the window,
+	// unless the game offers its own sizes.
+	if !device.OpenWindow(config.Width, config.Height, config.Title, hidden, !config.FixedWindowSize) {
 		return fmt.Errorf("golib.Run: could not open a %dx%d window: see the raylib warnings above", config.Width, config.Height)
 	}
 	if !hidden {

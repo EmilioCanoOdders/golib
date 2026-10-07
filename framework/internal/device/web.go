@@ -158,8 +158,9 @@ func DeleteFromStore(name string) error {
 
 // OpenWindow prepares the canvas for a game of width by height pixels and
 // reports whether it is ready. hidden has no meaning in a browser: a page is
-// shown or it isn't, and golib shot doesn't run here.
-func OpenWindow(width, height int, title string, hidden bool) bool {
+// shown or it isn't, and golib shot doesn't run here; nor has resizable: the
+// canvas follows the page.
+func OpenWindow(width, height int, title string, hidden, resizable bool) bool {
 	if !js_().Truthy() {
 		return false
 	}
