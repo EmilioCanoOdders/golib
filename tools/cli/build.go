@@ -10,10 +10,15 @@ import (
 // build makes a debug build of a game: build/<game>/<game>.exe, next to
 // copies of the libraries it loads (see docs/tooling.md#dist-builds).
 func (c *cli) build(options []string) int {
+	options, exitCode := c.takeTags("build", options)
+	if exitCode != 0 {
+		return exitCode
+	}
 	game, exitCode := c.resolveGame("build", options)
 	if game == "" {
 		return exitCode
 	}
+	c.reportTags()
 	c.buildGame(game)
 	return c.summary("build")
 }
@@ -21,6 +26,10 @@ func (c *cli) build(options []string) int {
 // run makes a debug build of a game, then runs it from its folder, with the
 // user's environment. With --dist it runs the build players get instead.
 func (c *cli) run(options []string) int {
+	options, exitCode := c.takeTags("run", options)
+	if exitCode != 0 {
+		return exitCode
+	}
 	var names []string
 	dist := false
 	for _, option := range options {
@@ -37,6 +46,7 @@ func (c *cli) run(options []string) int {
 	if game == "" {
 		return exitCode
 	}
+	c.reportTags()
 	if dist {
 		return c.runDist(game)
 	}
@@ -115,7 +125,8 @@ func (c *cli) buildGame(game string) string {
 	if c.goos != "windows" {
 		target = filepath.Join(outDir, "."+filepath.Base(exe)+".new")
 	}
-	err := c.goRun(dir, "build", "-o", target, ".")
+	args := append([]string{"build"}, c.tagsArgs()...)
+	err := c.goRun(dir, append(args, "-o", target, ".")...)
 	removeResources()
 	if err != nil {
 		if c.goos != "windows" {

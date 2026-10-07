@@ -184,7 +184,7 @@ func (p *project) goEnv() []string {
 		"CGO_ENABLED=0",     // raylib-go without a C compiler
 		// Debug builds load raylib and libffi from build/ or .tools/ instead
 		// of extracting them into a user folder. dist replaces these tags.
-		"GOFLAGS=-tags=raylib_no_embed,ffi_no_embed",
+		"GOFLAGS=-tags="+debugTags,
 		"PATH="+filepath.Join(goRoot, "bin")+string(os.PathListSeparator)+os.Getenv("PATH"),
 	)
 	// Go writes telemetry counters to the user's config folder: keep them in

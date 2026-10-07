@@ -22,6 +22,10 @@ import (
 // share. On Windows the executable carries the game's icon and version
 // information; on macOS it goes inside an app that carries them.
 func (c *cli) dist(options []string) int {
+	options, exitCode := c.takeTags("dist", options)
+	if exitCode != 0 {
+		return exitCode
+	}
 	var names []string
 	web := false
 	for _, option := range options {
@@ -38,6 +42,7 @@ func (c *cli) dist(options []string) int {
 	if game == "" {
 		return exitCode
 	}
+	c.reportTags()
 	if web {
 		c.distWeb(game)
 	} else {
@@ -60,8 +65,9 @@ func (c *cli) distGame(game string) string {
 	beside := c.goos != "darwin"
 	tags := "golib_dist"
 	if beside {
-		tags += ",raylib_no_embed,ffi_no_embed"
+		tags += "," + debugTags
 	}
+	tags = c.withTags(tags)
 
 	packages, err := c.listPackages(dir, tags)
 	if err != nil {
@@ -147,7 +153,7 @@ func (c *cli) distGame(game string) string {
 	if osName == "darwin" {
 		osName = "macos"
 	}
-	zipName := fmt.Sprintf("%s-%s-%s-%s.zip", game, info.Version, osName, c.goarch)
+	zipName := fmt.Sprintf("%s-%s%s-%s-%s.zip", game, info.Version, c.tagsInName(), osName, c.goarch)
 	size, err := zipFolder(folder, filepath.Join(distDir, zipName))
 	if err != nil {
 		c.check("fail", "cannot zip "+shownFolder+": "+err.Error())

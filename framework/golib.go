@@ -44,7 +44,9 @@
 // Run calls Update 60 times per second of game time, always with dt = 1/60,
 // and Draw once per frame, whatever the display's refresh rate. Base all
 // timing on dt, never on the wall clock, so the game plays the same on every
-// machine and in screenshots.
+// machine and in screenshots. A world that must follow the wall clock, such as
+// one that goes on while the player is in another program, reads it with
+// [Now], which follows the updates under golib shot.
 //
 // # Screenshots
 //

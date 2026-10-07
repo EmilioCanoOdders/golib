@@ -20,8 +20,13 @@ const (
 
 // shot runs a debug build of a game in a hidden window and saves screenshots
 // of chosen frames (see docs/tooling.md#screenshots). Its options are frame
-// numbers, --input, --save, --scale and a game name, in any order.
+// numbers, --input, --save, --scale, --web, --tags and a game name, in any
+// order.
 func (c *cli) shot(options []string) int {
+	options, exitCode := c.takeTags("shot", options)
+	if exitCode != 0 {
+		return exitCode
+	}
 	var names []string
 	var frames []int
 	input, save := "", ""
@@ -94,10 +99,11 @@ func (c *cli) shot(options []string) int {
 	if game == "" {
 		return exitCode
 	}
+	if web && savePath != "" {
+		return c.usage("shot --web cannot use --save yet: a page cannot read a file from this machine")
+	}
+	c.reportTags()
 	if web {
-		if savePath != "" {
-			return c.usage("shot --web cannot use --save yet: a page cannot read a file from this machine")
-		}
 		return c.shotWeb(game, frames, input, scale)
 	}
 	exe := c.buildGame(game)
